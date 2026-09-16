@@ -31,7 +31,7 @@ export function AddStaffForm({ onSave, onCancel, notify, effectiveBranch = 'Cent
 
   // Auto-fetch sequential Employee ID starting from EMP-0001 from backend
   React.useEffect(() => {
-    fetch('http://localhost:5000/api/v1/staff/next-empid')
+    fetch('/api/v1/staff/next-empid')
       .then((res) => res.json())
       .then((data) => {
         if (data.success && data.data?.nextEmpId) {
@@ -89,7 +89,7 @@ export function AddStaffForm({ onSave, onCancel, notify, effectiveBranch = 'Cent
     let savedObj = newStaffMember;
 
     try {
-      const res = await fetch('http://localhost:5000/api/v1/staff', {
+      const res = await fetch('/api/v1/staff', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

@@ -81,7 +81,7 @@ export function StaffPage({ staff = initialStaff, onAddStaff, onNotify, effectiv
 
       if (targetId && String(targetId).length > 10) {
         try {
-          await fetch(`http://localhost:5000/api/v1/staff/${targetId}`, {
+          await fetch(`/api/v1/staff/${targetId}`, {
             method: 'DELETE',
             headers: {
               ...(token ? { 'Authorization': `Bearer ${token}` } : {}),
@@ -105,7 +105,7 @@ export function StaffPage({ staff = initialStaff, onAddStaff, onNotify, effectiv
 
     if (staffId && String(staffId).length > 10) {
       try {
-        await fetch(`http://localhost:5000/api/v1/staff/${staffId}`, {
+        await fetch(`/api/v1/staff/${staffId}`, {
           method: 'PUT',
           headers: {
             'Content-Type': 'application/json',

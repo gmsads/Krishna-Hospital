@@ -46,7 +46,7 @@ export function WhatsAppTemplatesPage({ notify, effectiveBranch = 'All' }) {
 
   const fetchTemplates = () => {
     setLoading(true);
-    fetch('http://localhost:5000/api/v1/marketing/templates/sync')
+    fetch('/api/v1/marketing/templates/sync')
       .then((res) => res.json())
       .then((data) => {
         if (data.success && Array.isArray(data.data)) {
@@ -96,7 +96,7 @@ export function WhatsAppTemplatesPage({ notify, effectiveBranch = 'All' }) {
 
     setSubmitting(true);
     try {
-      const res = await fetch('http://localhost:5000/api/v1/marketing/templates/create', {
+      const res = await fetch('/api/v1/marketing/templates/create', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({

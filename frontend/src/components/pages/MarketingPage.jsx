@@ -50,7 +50,7 @@ export function MarketingPage({ notify, effectiveBranch = 'All' }) {
   }, [effectiveBranch]);
 
   const fetchAIConfig = () => {
-    fetch('http://localhost:5000/api/v1/marketing/ai-config')
+    fetch('/api/v1/marketing/ai-config')
       .then((res) => res.json())
       .then((data) => {
         if (data.success && data.data) {
@@ -64,7 +64,7 @@ export function MarketingPage({ notify, effectiveBranch = 'All' }) {
   };
 
   const fetchChatLogs = () => {
-    fetch(`http://localhost:5000/api/v1/marketing/chat-history?branch=${encodeURIComponent(effectiveBranch)}`)
+    fetch(`/api/v1/marketing/chat-history?branch=${encodeURIComponent(effectiveBranch)}`)
       .then((res) => res.json())
       .then((data) => {
         if (data.success && Array.isArray(data.data)) {
@@ -78,7 +78,7 @@ export function MarketingPage({ notify, effectiveBranch = 'All' }) {
     if (e) e.preventDefault();
     setSavingAiConfig(true);
     try {
-      const res = await fetch('http://localhost:5000/api/v1/marketing/ai-config', {
+      const res = await fetch('/api/v1/marketing/ai-config', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -107,7 +107,7 @@ export function MarketingPage({ notify, effectiveBranch = 'All' }) {
     setTestingAi(true);
     setAiTestReply('');
     try {
-      const res = await fetch('http://localhost:5000/api/v1/marketing/ai-test', {
+      const res = await fetch('/api/v1/marketing/ai-test', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -130,7 +130,7 @@ export function MarketingPage({ notify, effectiveBranch = 'All' }) {
   };
 
   const fetchConfig = () => {
-    fetch('http://localhost:5000/api/v1/marketing/config')
+    fetch('/api/v1/marketing/config')
       .then((res) => res.json())
       .then((data) => {
         if (data.success && data.data) {
@@ -144,7 +144,7 @@ export function MarketingPage({ notify, effectiveBranch = 'All' }) {
   };
 
   const fetchTemplates = () => {
-    fetch('http://localhost:5000/api/v1/marketing/templates')
+    fetch('/api/v1/marketing/templates')
       .then((res) => res.json())
       .then((data) => {
         if (data.success && Array.isArray(data.data) && data.data.length > 0) {
@@ -155,7 +155,7 @@ export function MarketingPage({ notify, effectiveBranch = 'All' }) {
   };
 
   const fetchAudienceStats = () => {
-    fetch(`http://localhost:5000/api/v1/marketing/stats?branch=${encodeURIComponent(effectiveBranch)}`)
+    fetch(`/api/v1/marketing/stats?branch=${encodeURIComponent(effectiveBranch)}`)
       .then((res) => res.json())
       .then((data) => {
         if (data.success && data.data) {
@@ -166,7 +166,7 @@ export function MarketingPage({ notify, effectiveBranch = 'All' }) {
   };
 
   const fetchCampaignLogs = () => {
-    fetch(`http://localhost:5000/api/v1/marketing/campaigns?branch=${encodeURIComponent(effectiveBranch)}`)
+    fetch(`/api/v1/marketing/campaigns?branch=${encodeURIComponent(effectiveBranch)}`)
       .then((res) => res.json())
       .then((data) => {
         if (data.success && Array.isArray(data.data)) {
@@ -180,7 +180,7 @@ export function MarketingPage({ notify, effectiveBranch = 'All' }) {
     e.preventDefault();
     setSavingConfig(true);
     try {
-      const res = await fetch('http://localhost:5000/api/v1/marketing/config', {
+      const res = await fetch('/api/v1/marketing/config', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -225,7 +225,7 @@ export function MarketingPage({ notify, effectiveBranch = 'All' }) {
 
     setSending(true);
     try {
-      const res = await fetch('http://localhost:5000/api/v1/marketing/broadcast', {
+      const res = await fetch('/api/v1/marketing/broadcast', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -555,7 +555,7 @@ export function MarketingPage({ notify, effectiveBranch = 'All' }) {
               onClick={() => {
                 const nextState = !isAiEnabled;
                 setIsAiEnabled(nextState);
-                fetch('http://localhost:5000/api/v1/marketing/ai-config', {
+                fetch('/api/v1/marketing/ai-config', {
                   method: 'POST',
                   headers: { 'Content-Type': 'application/json' },
                   body: JSON.stringify({ isAiEnabled: nextState }),

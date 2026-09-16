@@ -66,7 +66,7 @@ export function EnterLabResultForm({
       const targetBranch = effectiveBranch === 'All' ? (branchesList[0]?.name || 'Central Campus') : effectiveBranch;
       const branchQuery = targetBranch ? `?branch=${encodeURIComponent(targetBranch)}` : '';
 
-      fetch(`http://localhost:5000/api/v1/laboratory/next-labno${branchQuery}`)
+      fetch(`/api/v1/laboratory/next-labno${branchQuery}`)
         .then((res) => res.json())
         .then((data) => {
           if (data.success && data.data?.nextLabNo) {
@@ -83,7 +83,7 @@ export function EnterLabResultForm({
     const branchQuery = targetBranch ? `?branch=${encodeURIComponent(targetBranch)}` : '';
     const token = localStorage.getItem('kh_auth_token');
 
-    fetch(`http://localhost:5000/api/v1/doctors${branchQuery}`, {
+    fetch(`/api/v1/doctors${branchQuery}`, {
       headers: {
         ...(token ? { 'Authorization': `Bearer ${token}` } : {}),
       },
@@ -226,7 +226,7 @@ export function EnterLabResultForm({
 
     const token = localStorage.getItem('kh_auth_token');
     try {
-      const res = await fetch('http://localhost:5000/api/v1/laboratory', {
+      const res = await fetch('/api/v1/laboratory', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

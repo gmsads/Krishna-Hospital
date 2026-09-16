@@ -87,7 +87,7 @@ export function ExpensesPage({
     const assignedBranch = effectiveBranch === 'All' ? profile?.branch || 'Central Campus' : effectiveBranch;
     const branchQuery = assignedBranch ? `?branch=${encodeURIComponent(assignedBranch)}` : '';
 
-    fetch(`http://localhost:5000/api/v1/expenses/next-expenseno${branchQuery}`)
+    fetch(`/api/v1/expenses/next-expenseno${branchQuery}`)
       .then((res) => res.json())
       .then((data) => {
         if (data.success && data.data?.nextExpenseNo) {

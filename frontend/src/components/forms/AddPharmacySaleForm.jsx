@@ -21,7 +21,7 @@ export function AddPharmacySaleForm({ onSave, notify, effectiveBranch = 'All', b
     const targetBranch = effectiveBranch === 'All' ? selectedBranch : effectiveBranch;
     const branchQuery = targetBranch ? `?branch=${encodeURIComponent(targetBranch)}` : '';
 
-    fetch(`http://localhost:5000/api/v1/pharmacy/next-saleno${branchQuery}`)
+    fetch(`/api/v1/pharmacy/next-saleno${branchQuery}`)
       .then((res) => res.json())
       .then((data) => {
         if (data.success && data.data?.nextSaleNo) {
@@ -30,7 +30,7 @@ export function AddPharmacySaleForm({ onSave, notify, effectiveBranch = 'All', b
       })
       .catch((err) => console.warn('Could not fetch next saleNo:', err.message));
 
-    fetch('http://localhost:5000/api/v1/branches')
+    fetch('/api/v1/branches')
       .then((res) => res.json())
       .then((data) => {
         if (data.success && Array.isArray(data.data) && data.data.length > 0) {
@@ -72,7 +72,7 @@ export function AddPharmacySaleForm({ onSave, notify, effectiveBranch = 'All', b
     let savedObj = newSale;
 
     try {
-      const res = await fetch('http://localhost:5000/api/v1/pharmacy', {
+      const res = await fetch('/api/v1/pharmacy', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -100,7 +100,7 @@ export function AddPharmacySaleForm({ onSave, notify, effectiveBranch = 'All', b
     setTotalExpense('');
 
     // Fetch next sequential PHARM-0001 ID
-    fetch('http://localhost:5000/api/v1/pharmacy/next-saleno')
+    fetch('/api/v1/pharmacy/next-saleno')
       .then((res) => res.json())
       .then((data) => {
         if (data.success && data.data?.nextSaleNo) {

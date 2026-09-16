@@ -147,7 +147,7 @@ export default function AppShell({ path = '/dashboard', navigate }) {
   useEffect(() => {
     const token = localStorage.getItem('kh_auth_token');
 
-    fetch('http://localhost:5000/api/v1/branches')
+    fetch('/api/v1/branches')
       .then((res) => res.json())
       .then((data) => {
         if (data.success && Array.isArray(data.data)) {
@@ -156,7 +156,7 @@ export default function AppShell({ path = '/dashboard', navigate }) {
       })
       .catch((err) => console.warn('Could not fetch branches from backend API:', err.message));
 
-    fetch('http://localhost:5000/api/v1/staff', {
+    fetch('/api/v1/staff', {
       headers: {
         ...(token ? { 'Authorization': `Bearer ${token}` } : {}),
       },
@@ -169,7 +169,7 @@ export default function AppShell({ path = '/dashboard', navigate }) {
       })
       .catch((err) => console.warn('Could not fetch staff from backend API:', err.message));
 
-    fetch('http://localhost:5000/api/v1/doctors', {
+    fetch('/api/v1/doctors', {
       headers: {
         ...(token ? { 'Authorization': `Bearer ${token}` } : {}),
       },
@@ -182,7 +182,7 @@ export default function AppShell({ path = '/dashboard', navigate }) {
       })
       .catch((err) => console.warn('Could not fetch doctors from backend API:', err.message));
 
-    fetch('http://localhost:5000/api/v1/op-records', {
+    fetch('/api/v1/op-records', {
       headers: {
         ...(token ? { 'Authorization': `Bearer ${token}` } : {}),
       },
@@ -205,7 +205,7 @@ export default function AppShell({ path = '/dashboard', navigate }) {
       })
       .catch((err) => console.warn('Could not fetch OP Records from backend API:', err.message));
 
-    fetch('http://localhost:5000/api/v1/laboratory', {
+    fetch('/api/v1/laboratory', {
       headers: {
         ...(token ? { 'Authorization': `Bearer ${token}` } : {}),
       },
@@ -244,7 +244,7 @@ export default function AppShell({ path = '/dashboard', navigate }) {
       })
       .catch((err) => console.warn('Could not fetch Lab Orders from backend API:', err.message));
 
-    fetch('http://localhost:5000/api/v1/lab-services', {
+    fetch('/api/v1/lab-services', {
       headers: {
         ...(token ? { 'Authorization': `Bearer ${token}` } : {}),
       },
@@ -261,7 +261,7 @@ export default function AppShell({ path = '/dashboard', navigate }) {
       })
       .catch((err) => console.warn('Could not fetch Lab Services Catalogue from backend API:', err.message));
 
-    fetch('http://localhost:5000/api/v1/pharmacy', {
+    fetch('/api/v1/pharmacy', {
       headers: {
         ...(token ? { 'Authorization': `Bearer ${token}` } : {}),
       },
@@ -274,7 +274,7 @@ export default function AppShell({ path = '/dashboard', navigate }) {
       })
       .catch((err) => console.warn('Could not fetch Pharmacy sales from backend API:', err.message));
 
-    fetch('http://localhost:5000/api/v1/expenses', {
+    fetch('/api/v1/expenses', {
       headers: {
         ...(token ? { 'Authorization': `Bearer ${token}` } : {}),
       },
@@ -510,7 +510,7 @@ export default function AppShell({ path = '/dashboard', navigate }) {
   const addExpense = async (newExp) => {
     const token = localStorage.getItem('kh_auth_token');
     try {
-      const res = await fetch('http://localhost:5000/api/v1/expenses', {
+      const res = await fetch('/api/v1/expenses', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -537,7 +537,7 @@ export default function AppShell({ path = '/dashboard', navigate }) {
     notify('Expense record deleted successfully.');
 
     try {
-      await fetch(`http://localhost:5000/api/v1/expenses/${expId}`, {
+      await fetch(`/api/v1/expenses/${expId}`, {
         method: 'DELETE',
         headers: {
           ...(token ? { 'Authorization': `Bearer ${token}` } : {}),

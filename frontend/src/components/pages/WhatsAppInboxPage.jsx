@@ -61,7 +61,7 @@ export function WhatsAppInboxPage({ notify, effectiveBranch = 'All' }) {
 
   const fetchThreads = () => {
     setLoadingThreads(true);
-    return fetch(`http://localhost:5000/api/v1/marketing/conversations?branch=${encodeURIComponent(effectiveBranch)}`)
+    return fetch(`/api/v1/marketing/conversations?branch=${encodeURIComponent(effectiveBranch)}`)
       .then((res) => res.json())
       .then((data) => {
         if (data.success && Array.isArray(data.data)) {
@@ -78,7 +78,7 @@ export function WhatsAppInboxPage({ notify, effectiveBranch = 'All' }) {
 
   const fetchMessages = (phone) => {
     setLoadingMessages(true);
-    return fetch(`http://localhost:5000/api/v1/marketing/conversations/${encodeURIComponent(phone)}`)
+    return fetch(`/api/v1/marketing/conversations/${encodeURIComponent(phone)}`)
       .then((res) => res.json())
       .then((data) => {
         if (data.success && Array.isArray(data.data)) {
@@ -111,7 +111,7 @@ export function WhatsAppInboxPage({ notify, effectiveBranch = 'All' }) {
     setReplyText('');
 
     try {
-      const res = await fetch('http://localhost:5000/api/v1/marketing/reply-manual', {
+      const res = await fetch('/api/v1/marketing/reply-manual', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -140,7 +140,7 @@ export function WhatsAppInboxPage({ notify, effectiveBranch = 'All' }) {
   const handleToggleMode = async (phone, currentMode) => {
     const newMode = currentMode === 'human' ? 'ai' : 'human';
     try {
-      const res = await fetch('http://localhost:5000/api/v1/marketing/conversations/mode', {
+      const res = await fetch('/api/v1/marketing/conversations/mode', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ phone, mode: newMode }),

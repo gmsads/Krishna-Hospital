@@ -346,7 +346,7 @@ export function LaboratoryPage({ tests = initialLabTests, isDoctor = false, doct
           const orderId = paymentModalTest._id || paymentModalTest.labOrderNo || paymentModalTest.id;
 
           try {
-            const res = await fetch(`http://localhost:5000/api/v1/laboratory/${orderId}`, {
+            const res = await fetch(`/api/v1/laboratory/${orderId}`, {
               method: 'PUT',
               headers: {
                 'Content-Type': 'application/json',

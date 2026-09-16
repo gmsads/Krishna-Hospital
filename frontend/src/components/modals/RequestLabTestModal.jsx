@@ -47,7 +47,7 @@ export function RequestLabTestModal({
     const targetBranch = selectedBranch || (effectiveBranch === 'All' ? (branchesList[0]?.name || '') : effectiveBranch);
     const branchQuery = targetBranch ? `?branch=${encodeURIComponent(targetBranch)}` : '';
 
-    fetch(`http://localhost:5000/api/v1/laboratory/next-labno${branchQuery}`)
+    fetch(`/api/v1/laboratory/next-labno${branchQuery}`)
       .then((res) => res.json())
       .then((data) => {
         if (data.success && data.data?.nextLabNo) {
@@ -57,7 +57,7 @@ export function RequestLabTestModal({
       .catch((err) => console.warn('Could not fetch next labOrderNo from backend:', err.message));
 
     const token = localStorage.getItem('kh_auth_token');
-    fetch(`http://localhost:5000/api/v1/doctors${branchQuery}`, {
+    fetch(`/api/v1/doctors${branchQuery}`, {
       headers: {
         ...(token ? { 'Authorization': `Bearer ${token}` } : {}),
       },
@@ -74,7 +74,7 @@ export function RequestLabTestModal({
       .catch((err) => console.warn('Could not fetch doctors in RequestLabTestModal:', err.message));
 
     // Fetch staff members strictly for selected branch to populate Lab Assistant options
-    fetch(`http://localhost:5000/api/v1/staff${branchQuery}`, {
+    fetch(`/api/v1/staff${branchQuery}`, {
       headers: {
         ...(token ? { 'Authorization': `Bearer ${token}` } : {}),
       },
@@ -207,7 +207,7 @@ export function RequestLabTestModal({
     let savedObj = newOrder;
 
     try {
-      const res = await fetch('http://localhost:5000/api/v1/laboratory', {
+      const res = await fetch('/api/v1/laboratory', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

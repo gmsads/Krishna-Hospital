@@ -63,7 +63,7 @@ export function WhatsAppFlowBuilderPage({ notify, effectiveBranch = 'All' }) {
   }, [effectiveBranch]);
 
   const fetchFlows = () => {
-    fetch(`http://localhost:5000/api/v1/marketing/flows?branch=${encodeURIComponent(effectiveBranch)}`)
+    fetch(`/api/v1/marketing/flows?branch=${encodeURIComponent(effectiveBranch)}`)
       .then((res) => res.json())
       .then((data) => {
         if (data.success && Array.isArray(data.data) && data.data.length > 0) {
@@ -80,7 +80,7 @@ export function WhatsAppFlowBuilderPage({ notify, effectiveBranch = 'All' }) {
 
   const fetchMetaTemplates = () => {
     setLoadingTemplates(true);
-    fetch('http://localhost:5000/api/v1/marketing/templates/sync')
+    fetch('/api/v1/marketing/templates/sync')
       .then((res) => res.json())
       .then((data) => {
         if (data.success && Array.isArray(data.data)) {
@@ -165,7 +165,7 @@ export function WhatsAppFlowBuilderPage({ notify, effectiveBranch = 'All' }) {
     }
     setSavingFlow(true);
     try {
-      const res = await fetch('http://localhost:5000/api/v1/marketing/flows', {
+      const res = await fetch('/api/v1/marketing/flows', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -194,7 +194,7 @@ export function WhatsAppFlowBuilderPage({ notify, effectiveBranch = 'All' }) {
 
   const handleActivateFlow = async (id) => {
     try {
-      const res = await fetch(`http://localhost:5000/api/v1/marketing/flows/${id}/activate`, { method: 'POST' });
+      const res = await fetch(`/api/v1/marketing/flows/${id}/activate`, { method: 'POST' });
       const data = await res.json();
       if (res.ok && data.success) {
         notify && notify('Flow set as primary active WhatsApp responder!');
@@ -207,7 +207,7 @@ export function WhatsAppFlowBuilderPage({ notify, effectiveBranch = 'All' }) {
 
   const handleDeleteFlow = async (id) => {
     try {
-      const res = await fetch(`http://localhost:5000/api/v1/marketing/flows/${id}`, { method: 'DELETE' });
+      const res = await fetch(`/api/v1/marketing/flows/${id}`, { method: 'DELETE' });
       const data = await res.json();
       if (res.ok && data.success) {
         notify && notify('Flow deleted successfully');

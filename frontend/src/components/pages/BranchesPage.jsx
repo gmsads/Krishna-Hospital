@@ -82,7 +82,7 @@ export function BranchesPage({
 
     // Try posting to Express Backend
     try {
-      const res = await fetch('http://localhost:5000/api/v1/branches', {
+      const res = await fetch('/api/v1/branches', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

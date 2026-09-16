@@ -145,7 +145,7 @@ export function SettingsPage({ profile, currentBranding, onSaveBranding, onNotif
     const token = localStorage.getItem('kh_auth_token');
 
     try {
-      const res = await fetch('http://localhost:5000/api/v1/auth/update-profile', {
+      const res = await fetch('/api/v1/auth/update-profile', {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
@@ -219,7 +219,7 @@ export function SettingsPage({ profile, currentBranding, onSaveBranding, onNotif
     const token = localStorage.getItem('kh_auth_token');
 
     try {
-      const res = await fetch('http://localhost:5000/api/v1/auth/update-password', {
+      const res = await fetch('/api/v1/auth/update-password', {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
@@ -255,7 +255,7 @@ export function SettingsPage({ profile, currentBranding, onSaveBranding, onNotif
     }
 
     try {
-      const res = await fetch('http://localhost:5000/api/v1/auth/forgot-password', {
+      const res = await fetch('/api/v1/auth/forgot-password', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ emailOrPhone: forgotEmailOrPhone.trim() }),
@@ -297,7 +297,7 @@ export function SettingsPage({ profile, currentBranding, onSaveBranding, onNotif
     }
 
     try {
-      const res = await fetch('http://localhost:5000/api/v1/auth/reset-password', {
+      const res = await fetch('/api/v1/auth/reset-password', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({

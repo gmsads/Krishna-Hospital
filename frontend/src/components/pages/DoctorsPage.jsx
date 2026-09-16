@@ -71,7 +71,7 @@ export function DoctorsPage({ doctors = [], onNotify, effectiveBranch = 'All', b
   // Fetch next DOC-0001 ID on modal open
   React.useEffect(() => {
     if (isAddModalOpen) {
-      fetch('http://localhost:5000/api/v1/doctors/next-docid')
+      fetch('/api/v1/doctors/next-docid')
         .then((res) => res.json())
         .then((data) => {
           if (data.success && data.data?.nextDocId) {
@@ -141,7 +141,7 @@ export function DoctorsPage({ doctors = [], onNotify, effectiveBranch = 'All', b
     let savedObj = doctorObj;
 
     try {
-      const res = await fetch('http://localhost:5000/api/v1/doctors', {
+      const res = await fetch('/api/v1/doctors', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -186,7 +186,7 @@ export function DoctorsPage({ doctors = [], onNotify, effectiveBranch = 'All', b
 
     if (docId && String(docId).length > 10) {
       try {
-        await fetch(`http://localhost:5000/api/v1/doctors/${docId}`, {
+        await fetch(`/api/v1/doctors/${docId}`, {
           method: 'PUT',
           headers: {
             'Content-Type': 'application/json',
@@ -254,7 +254,7 @@ export function DoctorsPage({ doctors = [], onNotify, effectiveBranch = 'All', b
 
     if (targetId && String(targetId).length > 10) {
       try {
-        await fetch(`http://localhost:5000/api/v1/doctors/${targetId}`, {
+        await fetch(`/api/v1/doctors/${targetId}`, {
           method: 'DELETE',
           headers: {
             ...(token ? { 'Authorization': `Bearer ${token}` } : {}),

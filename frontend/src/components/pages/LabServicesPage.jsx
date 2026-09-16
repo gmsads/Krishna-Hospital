@@ -52,7 +52,7 @@ export function LabServicesPage({
     let savedObj = newService;
 
     try {
-      const res = await fetch('http://localhost:5000/api/v1/lab-services', {
+      const res = await fetch('/api/v1/lab-services', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -105,7 +105,7 @@ export function LabServicesPage({
 
     if (srvId && String(srvId).length > 10) {
       try {
-        await fetch(`http://localhost:5000/api/v1/lab-services/${srvId}`, {
+        await fetch(`/api/v1/lab-services/${srvId}`, {
           method: 'PUT',
           headers: {
             'Content-Type': 'application/json',
@@ -221,7 +221,7 @@ export function LabServicesPage({
                       const srvId = srv._id || srv.id;
                       if (srvId && String(srvId).length > 10) {
                         try {
-                          await fetch(`http://localhost:5000/api/v1/lab-services/${srvId}`, {
+                          await fetch(`/api/v1/lab-services/${srvId}`, {
                             method: 'DELETE',
                             headers: {
                               ...(token ? { 'Authorization': `Bearer ${token}` } : {}),

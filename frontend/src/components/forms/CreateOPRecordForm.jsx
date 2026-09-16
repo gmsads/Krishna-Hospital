@@ -51,7 +51,7 @@ export function CreateOPRecordForm({
     const targetBranch = effectiveBranch === 'All' ? selectedBranch : effectiveBranch;
     const regBranchQuery = targetBranch ? `?branch=${encodeURIComponent(targetBranch)}` : '';
 
-    fetch(`http://localhost:5000/api/v1/op-records/next-regno${regBranchQuery}`)
+    fetch(`/api/v1/op-records/next-regno${regBranchQuery}`)
       .then((res) => res.json())
       .then((data) => {
         if (data.success && data.data?.nextRegNo) {
@@ -64,7 +64,7 @@ export function CreateOPRecordForm({
     const token = localStorage.getItem('kh_auth_token');
     const docBranchQuery = targetBranch && targetBranch !== 'All' ? `?branch=${encodeURIComponent(targetBranch)}` : '';
 
-    fetch(`http://localhost:5000/api/v1/doctors${docBranchQuery}`, {
+    fetch(`/api/v1/doctors${docBranchQuery}`, {
       headers: {
         ...(token ? { 'Authorization': `Bearer ${token}` } : {}),
       },
@@ -271,7 +271,7 @@ export function CreateOPRecordForm({
     let savedObj = opRecord;
 
     try {
-      const res = await fetch('http://localhost:5000/api/v1/op-records', {
+      const res = await fetch('/api/v1/op-records', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

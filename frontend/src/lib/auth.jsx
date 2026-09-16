@@ -18,7 +18,7 @@ export function AuthProvider({ children }) {
       return;
     }
 
-    fetch('http://localhost:5000/api/v1/auth/me', {
+    fetch('/api/v1/auth/me', {
       headers: {
         'Authorization': `Bearer ${token}`,
       },
@@ -62,7 +62,7 @@ export function AuthProvider({ children }) {
 
   const signIn = async (email, password) => {
     try {
-      const res = await fetch('http://localhost:5000/api/v1/auth/login', {
+      const res = await fetch('/api/v1/auth/login', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ email, password }),
@@ -88,7 +88,7 @@ export function AuthProvider({ children }) {
 
   const signUp = async (data) => {
     try {
-      const res = await fetch('http://localhost:5000/api/v1/auth/register', {
+      const res = await fetch('/api/v1/auth/register', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(data),
@@ -116,7 +116,7 @@ export function AuthProvider({ children }) {
     const token = localStorage.getItem('kh_auth_token');
     if (token) {
       try {
-        await fetch('http://localhost:5000/api/v1/auth/logout', {
+        await fetch('/api/v1/auth/logout', {
           method: 'POST',
           headers: { 'Authorization': `Bearer ${token}` },
         });

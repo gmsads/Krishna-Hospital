@@ -153,7 +153,7 @@ export function PharmacyDashboard({
 
     try {
       if (saleId && String(saleId).length > 5) {
-        await fetch(`http://localhost:5000/api/v1/pharmacy/${saleId}`, {
+        await fetch(`/api/v1/pharmacy/${saleId}`, {
           method: 'DELETE',
           headers: {
             ...(token ? { 'Authorization': `Bearer ${token}` } : {}),

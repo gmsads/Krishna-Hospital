@@ -517,7 +517,7 @@ export function OPRecordsPage({
                           const recordMongoId = record._id || record.id;
                           if (recordMongoId && String(recordMongoId).length > 10) {
                             try {
-                              await fetch(`http://localhost:5000/api/v1/op-records/${recordMongoId}`, {
+                              await fetch(`/api/v1/op-records/${recordMongoId}`, {
                                 method: 'DELETE',
                                 headers: {
                                   ...(token ? { 'Authorization': `Bearer ${token}` } : {}),
