@@ -1,7 +1,10 @@
 import express from 'express';
 import cors from 'cors';
+import path from 'path';
+import fs from 'fs';
+import { fileURLToPath } from 'url';
 import { corsOptions } from './config/cors.js';
-import { notFound } from './middleware/notFound.middleware.js';
+import { notFound, getFrontendDistPath } from './middleware/notFound.middleware.js';
 import { errorHandler } from './middleware/error.middleware.js';
 
 // Feature Routes Imports
@@ -18,6 +21,9 @@ import marketingRoutes from './modules/marketing/whatsapp.routes.js';
 
 const app = express();
 
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+
 // Middlewares
 app.use(cors(corsOptions));
 app.use(
@@ -29,6 +35,39 @@ app.use(
   })
 );
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
+
+// Serve static assets dynamically if frontend dist folder exists
+app.use((req, res, next) => {
+  if (req.originalUrl.startsWith('/api')) {
+    return next();
+  }
+  const activeDist = getFrontendDistPath();
+  if (activeDist) {
+    return express.static(activeDist)(req, res, next);
+  }
+  next();
+});
+
+// Root Route: Serve index.html if frontend dist exists, otherwise return API Online Status JSON
+app.get('/', (req, res, next) => {
+  const activeDist = getFrontendDistPath();
+  if (activeDist) {
+    const indexPath = path.join(activeDist, 'index.html');
+    if (fs.existsSync(indexPath)) {
+      return res.sendFile(indexPath);
+    }
+  }
+  return res.status(200).json({
+    success: true,
+    message: 'Krishna Hospital Backend API is running',
+    data: {
+      service: 'Krishna Hospital & Diagnostics Management System API',
+      status: 'online',
+      healthCheck: '/api/v1/health',
+      timestamp: new Date().toISOString(),
+    },
+  });
+});
 
 // Health Check Route
 app.get('/api/v1/health', (req, res) => {
@@ -50,6 +89,21 @@ app.use('/api/v1/lab-services', labServiceRoutes);
 app.use('/api/v1/pharmacy', pharmacyRoutes);
 app.use('/api/v1/expenses', expenseRoutes);
 app.use('/api/v1', marketingRoutes);
+
+// SPA Client-side Route Fallback: For non-API browser routes like /dashboard or /login, serve index.html
+app.get('*', (req, res, next) => {
+  if (req.originalUrl.startsWith('/api')) {
+    return next();
+  }
+  const activeDist = getFrontendDistPath();
+  if (activeDist) {
+    const indexPath = path.join(activeDist, 'index.html');
+    if (fs.existsSync(indexPath)) {
+      return res.sendFile(indexPath);
+    }
+  }
+  next();
+});
 
 // Error Handling Middlewares
 app.use(notFound);
