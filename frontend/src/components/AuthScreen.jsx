@@ -136,7 +136,7 @@ export default function AuthScreen({ path = window.location.pathname, navigate }
           </div>
         </div>
         
-        <div className="auth-brand-foot">© 2024 Krishna Hospitals · Central Campus</div>
+        <div className="auth-brand-foot">© 2026 Krishna Hospitals · Central Campus</div>
       </div>
 
       {/* Right Panel - Form Section */}

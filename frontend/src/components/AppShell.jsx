@@ -64,6 +64,7 @@ import { LabServicesPage } from './pages/LabServicesPage';
 import { DoctorsPage } from './pages/DoctorsPage';
 import { BranchesPage } from './pages/BranchesPage';
 import { ExpensesPage } from './pages/ExpensesPage';
+import { SettingsPage } from './pages/SettingsPage';
 
 // Navigation configuration for different roles
 const roleNav = {
