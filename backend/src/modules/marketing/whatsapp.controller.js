@@ -246,9 +246,12 @@ export const broadcastCampaign = asyncHandler(async (req, res) => {
 
     let expectedParamCount = null;
     try {
-      const dbTpl = await WhatsAppMetaTemplate.findOne({ name: templateName.trim() });
+      const dbTpl = await WhatsAppMetaTemplate.findOne({
+        name: new RegExp('^' + templateName.trim() + '$', 'i'),
+      });
       if (dbTpl) {
-        const varMatches = [...(dbTpl.bodyText || '').matchAll(/\{\{(\d+)\}\}/g)];
+        const fullTplStr = `${dbTpl.bodyText || ''} ${dbTpl.headerContent || ''} ${JSON.stringify(dbTpl.buttons || [])}`;
+        const varMatches = [...fullTplStr.matchAll(/\{\{(\d+)\}\}/g)];
         if (varMatches.length > 0) {
           expectedParamCount = Math.max(...varMatches.map((m) => parseInt(m[1], 10) || 1));
         } else {
@@ -318,10 +321,18 @@ export const broadcastCampaign = asyncHandler(async (req, res) => {
         headerMediaUrl,
       });
 
-      // Fallback 1: Handle Meta Code 132000 (Parameter count mismatch)
+      // Fallback 1: Handle Meta Code 132000 (Parameter count mismatch) by trying all valid parameter counts
       if (!result.success && result.errorCode === 132000) {
-        const paramOptions = params.length > 0 ? [[], [patientName], [patientName, 'Krishna Hospitals']] : [[patientName]];
+        const paramOptions = [
+          [],
+          [patientName],
+          [patientName, 'Krishna Hospitals'],
+          [patientName, 'Dr. Vijaywada', '15th Sept 2026'],
+          [patientName, 'Dr. Vijaywada', '15th Sept 2026', '10:00 AM'],
+          [patientName, 'Dr. Vijaywada', '15th Sept 2026', '10:00 AM', 'Krishna Hospitals'],
+        ];
         for (const altParams of paramOptions) {
+          if (altParams.length === params.length) continue;
           result = await adapter.send({
             phoneNumber: formattedPhone,
             messageType: 'template',

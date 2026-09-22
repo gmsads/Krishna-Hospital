@@ -5,69 +5,55 @@ import { ApiResponse } from '../utils/apiResponse.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
+const scanForIndex = (dirPath, maxDepth = 4, currentDepth = 0) => {
+  if (!dirPath || currentDepth > maxDepth || !fs.existsSync(dirPath)) return null;
+  try {
+    const indexPath = path.join(dirPath, 'index.html');
+    if (fs.existsSync(indexPath)) return dirPath;
+
+    const items = fs.readdirSync(dirPath, { withFileTypes: true });
+    for (const item of items) {
+      if (item.isFile() && item.name.toLowerCase() === 'index.html') {
+        return dirPath;
+      }
+    }
+
+    for (const item of items) {
+      if (item.isDirectory() && !item.name.startsWith('.') && item.name !== 'node_modules') {
+        const found = scanForIndex(path.join(dirPath, item.name), maxDepth, currentDepth + 1);
+        if (found) return found;
+      }
+    }
+  } catch (_e) {
+    // Ignore file permission errors
+  }
+  return null;
+};
+
 export const getFrontendDistPath = () => {
   const rawEnvPath = process.env.FRONTEND_DIST_PATH;
   if (rawEnvPath) {
     const cleanEnvPath = rawEnvPath.trim().replace(/^["']|["']$/g, '');
-    if (fs.existsSync(cleanEnvPath) && fs.existsSync(path.join(cleanEnvPath, 'index.html'))) {
-      return cleanEnvPath;
-    }
+    const envFound = scanForIndex(cleanEnvPath, 2);
+    if (envFound) return envFound;
   }
 
-  const explicitCandidates = [
-    '/home/u594140720/domains/krishnahospitalsguntur.in/public_html',
-    '/home/u594140720/domains/krishnahospitalsguntur.in/public_html/dist',
-    '/home/u594140720/domains/krishnahospitalsguntur.in/hbuilds/current/nodejs/frontend/dist',
-    '/home/u594140720/domains/krishnahospitalsguntur.in/hbuilds/current/nodejs/dist',
-    '/home/u594140720/public_html',
-  ];
-
-  for (const cand of explicitCandidates) {
-    if (fs.existsSync(cand) && fs.existsSync(path.join(cand, 'index.html'))) {
-      return cand;
-    }
-  }
-
-  const bases = [
-    __dirname,
+  const rootCandidates = [
     process.cwd(),
-    process.env.PASSENGER_APP_ROOT,
-    process.env.PWD,
-    process.env.INIT_CWD,
-    '/home/u594140720/domains/krishnahospitalsguntur.in/hbuilds/current/nodejs',
+    path.resolve(process.cwd(), '..'),
+    path.resolve(process.cwd(), '../..'),
+    path.resolve(process.cwd(), '../../..'),
+    path.resolve(process.cwd(), '../../../..'),
     '/home/u594140720/domains/krishnahospitalsguntur.in/public_html',
+    '/home/u594140720/domains/krishnahospitalsguntur.in',
     '/home/u594140720/public_html',
+    process.env.PASSENGER_APP_ROOT,
+    __dirname,
   ].filter(Boolean);
 
-  const targets = [
-    'frontend/dist',
-    'frontend/build',
-    'dist',
-    'build',
-    'public_html',
-    'public',
-    'public_html/dist',
-    'public_html/frontend/dist',
-    'hbuilds/current/nodejs/frontend/dist',
-    'hbuilds/current/nodejs/dist',
-  ];
-
-  for (const base of bases) {
-    let curr = base;
-    for (let depth = 0; depth < 6; depth++) {
-      for (const target of targets) {
-        const candidate = path.join(curr, target);
-        if (fs.existsSync(candidate) && fs.existsSync(path.join(candidate, 'index.html'))) {
-          return candidate;
-        }
-      }
-      if (fs.existsSync(path.join(curr, 'index.html'))) {
-        return curr;
-      }
-      const parent = path.dirname(curr);
-      if (parent === curr) break;
-      curr = parent;
-    }
+  for (const root of rootCandidates) {
+    const found = scanForIndex(root, 4);
+    if (found) return found;
   }
 
   return null;
@@ -75,6 +61,11 @@ export const getFrontendDistPath = () => {
 
 export const notFound = (req, res) => {
   if (!req.originalUrl.startsWith('/api')) {
+    const isAsset = /\.(js|css|png|jpg|jpeg|gif|svg|ico|woff|woff2|ttf|eot|map|json)$/i.test(req.path);
+    if (isAsset) {
+      return ApiResponse.error(res, `Static asset file not found on server: ${req.originalUrl}`, 404);
+    }
+
     const distPath = getFrontendDistPath();
     if (distPath) {
       const indexPath = path.join(distPath, 'index.html');
@@ -105,7 +96,6 @@ export const notFound = (req, res) => {
       {
         envPathRaw: process.env.FRONTEND_DIST_PATH || null,
         envPathClean: envClean,
-        envPathExists: envClean ? fs.existsSync(envClean) : false,
         publicHtmlExists: fs.existsSync('/home/u594140720/domains/krishnahospitalsguntur.in/public_html'),
         publicHtmlIndexExists: fs.existsSync('/home/u594140720/domains/krishnahospitalsguntur.in/public_html/index.html'),
         cwd: process.cwd(),
