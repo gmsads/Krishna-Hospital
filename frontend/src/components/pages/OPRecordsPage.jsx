@@ -32,8 +32,22 @@ export function OPRecordsPage({
 
   // COLLECT PAYMENT SETTLEMENT MODAL STATE
   const [paymentModalRecord, setPaymentModalRecord] = useState(null);
-  const [amountPayingNow, setAmountPayingNow] = useState('300');
-  const [settlementMethod, setSettlementMethod] = useState('Cash');
+  const [selectedSettlementMethods, setSelectedSettlementMethods] = useState({
+    Cash: true,
+    UPI: false,
+    Card: false,
+    Cheque: false,
+    'Bank Transfer': false,
+    Others: false,
+  });
+  const [settlementSplitAmounts, setSettlementSplitAmounts] = useState({
+    Cash: '300',
+    UPI: '0',
+    Card: '0',
+    Cheque: '0',
+    'Bank Transfer': '0',
+    Others: '0',
+  });
   const [settlementUpiHandle, setSettlementUpiHandle] = useState(upiHandles[0] || 'krishnahospital@okicici');
   const [settlementTxnId, setSettlementTxnId] = useState('');
   const [settlementReceipt, setSettlementReceipt] = useState(null);
@@ -44,14 +58,61 @@ export function OPRecordsPage({
     const total = parseFloat((record.amount || '300').replace(/[^0-9.]/g, '')) || 300;
     const paid = parseFloat(record.paidAmount || (record.paymentStatus === 'Paid' ? total : 0)) || 0;
     const due = Math.max(0, total - paid);
-    
-    setAmountPayingNow(due > 0 ? due.toString() : total.toString());
-    setSettlementMethod('Cash');
+    const initialDueStr = due > 0 ? due.toString() : total.toString();
+
+    setSelectedSettlementMethods({
+      Cash: true,
+      UPI: false,
+      Card: false,
+      Cheque: false,
+      'Bank Transfer': false,
+      Others: false,
+    });
+    setSettlementSplitAmounts({
+      Cash: initialDueStr,
+      UPI: '0',
+      Card: '0',
+      Cheque: '0',
+      'Bank Transfer': '0',
+      Others: '0',
+    });
     setSettlementUpiHandle(upiHandles[0] || 'krishnahospital@okicici');
     setSettlementTxnId('');
     setSettlementReceipt(null);
     setSettlementReceiptName('');
   };
+
+  const toggleSettlementMethod = (modeKey) => {
+    setSelectedSettlementMethods((prev) => {
+      const nextState = { ...prev, [modeKey]: !prev[modeKey] };
+      const anyChecked = Object.keys(nextState).some((k) => nextState[k]);
+      if (!anyChecked) nextState.Cash = true;
+      return nextState;
+    });
+  };
+
+  const handleSettlementSplitAmountChange = (modeKey, val) => {
+    setSettlementSplitAmounts((prev) => ({
+      ...prev,
+      [modeKey]: val,
+    }));
+  };
+
+  const activeSettlementModes = Object.keys(selectedSettlementMethods).filter((k) => selectedSettlementMethods[k]);
+
+  const calculatedSettlementTotal = activeSettlementModes.reduce((sum, key) => {
+    const val = parseFloat(String(settlementSplitAmounts[key] || '0').replace(/[^0-9.]/g, '')) || 0;
+    return sum + val;
+  }, 0);
+
+  const settlementSummaryParts = activeSettlementModes
+    .map((key) => {
+      const amt = parseFloat(String(settlementSplitAmounts[key] || '0').replace(/[^0-9.]/g, '')) || 0;
+      return amt > 0 ? `${key} (₹${amt})` : null;
+    })
+    .filter(Boolean);
+
+  const settlementSummaryStr = settlementSummaryParts.join(' + ');
 
   const handleReceiptUpload = (e) => {
     const file = e.target.files?.[0];
@@ -70,7 +131,7 @@ export function OPRecordsPage({
     e.preventDefault();
     if (!paymentModalRecord) return;
 
-    const payingNum = parseFloat(amountPayingNow) || 0;
+    const payingNum = calculatedSettlementTotal;
     if (payingNum <= 0) {
       onNotify && onNotify('Please enter a valid amount being paid.');
       return;
@@ -88,7 +149,23 @@ export function OPRecordsPage({
       newStatus = 'Pay Later (Pending)';
     }
 
-    const finalMethod = settlementMethod === 'UPI / Online' ? `UPI (${settlementUpiHandle})` : settlementMethod;
+    const finalMethod = settlementSummaryStr || activeSettlementModes.join(', ') || 'Cash';
+
+    const splitBreakdown = {};
+    activeSettlementModes.forEach((k) => {
+      splitBreakdown[k] = parseFloat(String(settlementSplitAmounts[k] || '0').replace(/[^0-9.]/g, '')) || 0;
+    });
+
+    const now = new Date();
+    const historyEntry = {
+      date: now.toISOString(),
+      dateStr: now.toISOString().split('T')[0],
+      timeStr: now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+      amount: payingNum,
+      method: finalMethod,
+      breakdown: splitBreakdown,
+      type: 'Settlement Payment',
+    };
 
     const updatedRecord = {
       ...paymentModalRecord,
@@ -96,8 +173,10 @@ export function OPRecordsPage({
       dueBalance: newBalance,
       paymentStatus: newStatus,
       paymentMethod: finalMethod,
-      selectedUpiHandle: settlementMethod === 'UPI / Online' ? settlementUpiHandle : null,
-      upiTxnId: settlementMethod === 'UPI / Online' ? settlementTxnId : null,
+      paymentBreakdown: splitBreakdown,
+      paymentHistory: [...(paymentModalRecord.paymentHistory || []), historyEntry],
+      selectedUpiHandle: selectedSettlementMethods.UPI ? settlementUpiHandle : null,
+      upiTxnId: selectedSettlementMethods.UPI ? settlementTxnId : null,
       receiptImage: settlementReceipt || paymentModalRecord.receiptImage || null,
     };
 
@@ -630,23 +709,100 @@ export function OPRecordsPage({
                   </strong>
                 </div>
 
-                {/* Payment Method */}
+                {/* MULTI-SELECT SETTLEMENT PAYMENT METHODS (TICKS) & SPLIT AMOUNTS */}
                 <div className="field">
-                  <span style={{ fontSize: '11px', fontWeight: '700', color: '#4a5e7a' }}>Settlement Payment Method *</span>
-                  <select
-                    value={settlementMethod}
-                    onChange={(e) => setSettlementMethod(e.target.value)}
-                    required
-                    style={{ padding: '10px 12px', border: '1px solid #dde7f1', borderRadius: '7px', fontSize: '13px', background: '#fff', fontWeight: '700' }}
-                  >
-                    <option value="Cash">Cash</option>
-                    <option value="UPI / Online">UPI / Online</option>
-                    <option value="Credit / Debit Card">Credit / Debit Card</option>
-                  </select>
+                  <span style={{ fontSize: '11px', fontWeight: '800', color: '#0f2d55', display: 'block', marginBottom: '6px' }}>
+                    Settlement Payment Method (Select Multiple Modes with Ticks) *
+                  </span>
+
+                  {/* CHECKBOXES ROW */}
+                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: '12px', alignItems: 'center', background: '#f8fafc', padding: '10px 12px', borderRadius: '8px', border: '1px solid #dde7f1', marginBottom: '10px' }}>
+                    {[
+                      { key: 'Cash', label: 'Cash' },
+                      { key: 'UPI', label: 'UPI' },
+                      { key: 'Card', label: 'Card' },
+                      { key: 'Cheque', label: 'Cheque' },
+                      { key: 'Bank Transfer', label: 'Bank Transfer' },
+                      { key: 'Others', label: 'Others / PO' },
+                    ].map((m) => (
+                      <label key={m.key} style={{ display: 'flex', alignItems: 'center', gap: '6px', cursor: 'pointer', fontSize: '12px', fontWeight: '700', color: selectedSettlementMethods[m.key] ? '#1769d7' : '#475569' }}>
+                        <input
+                          type="checkbox"
+                          checked={!!selectedSettlementMethods[m.key]}
+                          onChange={() => toggleSettlementMethod(m.key)}
+                          style={{ width: '16px', height: '16px', accentColor: '#1769d7', cursor: 'pointer' }}
+                        />
+                        <span>{m.label}</span>
+                      </label>
+                    ))}
+                  </div>
+
+                  {/* SPLIT AMOUNT INPUTS FOR CHECKED MODES */}
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(150px, 1fr))', gap: '10px', background: '#f0fdf4', border: '1px solid #bbf7d0', padding: '10px', borderRadius: '8px', marginBottom: '10px' }}>
+                    {activeSettlementModes.map((modeKey) => (
+                      <div key={modeKey} className="field">
+                        <span style={{ color: '#15803d', fontSize: '10px', fontWeight: '800' }}>
+                          {modeKey} Amount (₹) *
+                        </span>
+                        <input
+                          type="number"
+                          step="any"
+                          value={settlementSplitAmounts[modeKey] || ''}
+                          onChange={(e) => handleSettlementSplitAmountChange(modeKey, e.target.value)}
+                          placeholder={`Enter ${modeKey} amount...`}
+                          required
+                          style={{ padding: '7px 10px', border: '1px solid #86efac', borderRadius: '6px', fontSize: '12px', fontWeight: '800', color: '#15803d', background: '#ffffff', width: '100%', boxSizing: 'border-box' }}
+                        />
+                      </div>
+                    ))}
+                  </div>
+
+                  {/* SETTLEMENT TOTAL SUMMARY BANNER */}
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '8px', background: '#e0f2fe', border: '1px solid #7dd3fc', padding: '8px 12px', borderRadius: '7px', fontSize: '11px', fontWeight: '800', color: '#0369a1' }}>
+                    <span>Total Amount Paying Now: <strong>₹ {calculatedSettlementTotal.toLocaleString('en-IN')}</strong> {settlementSummaryStr ? `(${settlementSummaryStr})` : ''}</span>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        if (activeSettlementModes.length === 1) {
+                          setSettlementSplitAmounts((prev) => ({ ...prev, [activeSettlementModes[0]]: currentDue.toString() }));
+                        }
+                      }}
+                      style={{ fontSize: '10px', background: '#0284c7', color: '#fff', border: 'none', padding: '3px 8px', borderRadius: '4px', cursor: 'pointer', fontWeight: '700' }}
+                    >
+                      ⚡ Auto-Set Full Remaining Due (₹ {currentDue})
+                    </button>
+                  </div>
                 </div>
 
-                {/* CONDITIONAL UPI HANDLES DROPDOWN (Configured in Settings) */}
-                {settlementMethod === 'UPI / Online' && (
+                {/* Live Remaining Balance Box */}
+                {(() => {
+                  const newBalancePreview = Math.max(0, currentDue - calculatedSettlementTotal);
+                  return (
+                    <div
+                      style={{
+                        background: newBalancePreview <= 0 ? '#f0fdf4' : '#fffbeb',
+                        border: `1px solid ${newBalancePreview <= 0 ? '#bbf7d0' : '#fde68a'}`,
+                        padding: '10px 12px',
+                        borderRadius: '8px',
+                        display: 'flex',
+                        justifyContent: 'space-between',
+                        alignItems: 'center',
+                        marginTop: '8px',
+                        marginBottom: '8px',
+                      }}
+                    >
+                      <span style={{ fontSize: '12px', fontWeight: '700', color: newBalancePreview <= 0 ? '#15803d' : '#b45309' }}>
+                        {newBalancePreview <= 0 ? '✓ Settlement Result: FULLY PAID (Zero Balance)' : '⚠️ Settlement Result: PARTIAL PAYMENT'}
+                      </span>
+                      <strong style={{ fontSize: '15px', color: newBalancePreview <= 0 ? '#15803d' : '#b45309' }}>
+                        Balance Due: ₹ {newBalancePreview}
+                      </strong>
+                    </div>
+                  );
+                })()}
+
+                {/* CONDITIONAL UPI HANDLES DROPDOWN */}
+                {selectedSettlementMethods.UPI && (
                   <>
                     <div className="field">
                       <span style={{ fontSize: '11px', fontWeight: '700', color: '#0284c7' }}>Hospital Available UPI Handle *</span>
@@ -654,7 +810,7 @@ export function OPRecordsPage({
                         value={settlementUpiHandle}
                         onChange={(e) => setSettlementUpiHandle(e.target.value)}
                         required
-                        style={{ padding: '10px 12px', border: '1px solid #93c5fd', borderRadius: '7px', fontSize: '13px', background: '#f0f9ff', fontWeight: '700', color: '#0284c7' }}
+                        style={{ padding: '10px 12px', border: '1px solid #93c5fd', borderRadius: '7px', fontSize: '13px', background: '#f0f9ff', fontWeight: '700', color: '#0284c7', width: '100%', boxSizing: 'border-box' }}
                       >
                         {upiHandles.map((h) => (
                           <option key={h} value={h}>💳 {h}</option>
@@ -668,7 +824,7 @@ export function OPRecordsPage({
                         value={settlementTxnId}
                         onChange={(e) => setSettlementTxnId(e.target.value)}
                         placeholder="e.g. 402918239102"
-                        style={{ padding: '10px 12px', border: '1px solid #dde7f1', borderRadius: '7px', fontSize: '13px' }}
+                        style={{ padding: '10px 12px', border: '1px solid #dde7f1', borderRadius: '7px', fontSize: '13px', width: '100%', boxSizing: 'border-box' }}
                       />
                     </div>
                   </>
@@ -696,7 +852,7 @@ export function OPRecordsPage({
                   <button type="button" className="secondary-button" onClick={() => setPaymentModalRecord(null)}>
                     Cancel
                   </button>
-                  <button type="submit" className="primary-button" style={{ background: '#ef4444', borderColor: '#dc2626', gap: '6px' }}>
+                  <button type="submit" className="primary-button" style={{ background: '#15803d', borderColor: '#15803d', gap: '6px' }}>
                     <CheckCircle2 size={16} /> Confirm Record Payment
                   </button>
                 </div>

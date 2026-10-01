@@ -2,8 +2,20 @@ import React, { useState } from 'react';
 import { Save, Plus, Trash2 } from 'lucide-react';
 import { initialLabTests, initialOPRecords, initialMasterLabServices } from '../data/initialData';
 
-// Preset generator helper for sub-parameter rows (Leaves results blank for real entry)
-const getInitialRowsForTest = (testName) => {
+// Preset generator helper for sub-parameter rows (Loads custom sub-categories defined in Master Services first)
+const getInitialRowsForTest = (testName, masterServices = []) => {
+  const foundSrv = masterServices.find(
+    (s) => s.name === testName || (s.name && s.name.toLowerCase() === (testName || '').toLowerCase())
+  );
+  if (foundSrv && Array.isArray(foundSrv.subCategories) && foundSrv.subCategories.length > 0) {
+    return foundSrv.subCategories.map((sub, idx) => ({
+      id: Date.now() + idx,
+      name: sub.name,
+      result: '',
+      normalRange: sub.normalRange || 'Standard Reference',
+    }));
+  }
+
   const lower = (testName || '').toLowerCase();
   if (lower.includes('thyroid')) {
     return [
@@ -34,7 +46,7 @@ const getInitialRowsForTest = (testName) => {
     ];
   }
   return [
-    { id: 1, name: testName || 'Diagnostic Finding', result: '', normalRange: 'Standard Reference' },
+    { id: 1, name: '', result: '', normalRange: 'Standard Reference' },
   ];
 };
 
@@ -108,10 +120,51 @@ export function EnterLabResultForm({
   const [testRows, setTestRows] = useState(
     initialSelectedTest?.testRows && initialSelectedTest.testRows.length > 0
       ? initialSelectedTest.testRows
-      : getInitialRowsForTest(initialMainTest)
+      : getInitialRowsForTest(initialMainTest, masterServices)
   );
 
   const [notes, setNotes] = useState(initialSelectedTest?.notes || '');
+
+  // Auto-sync sub-parameter rows when masterServices loads from API if no testRows set yet
+  React.useEffect(() => {
+    if (!initialSelectedTest && (!testRows || testRows.length === 0 || (testRows.length === 1 && !testRows[0].name)) && masterServices.length > 0) {
+      setTestRows(getInitialRowsForTest(testName, masterServices));
+    }
+  }, [masterServices, testName]);
+
+  // Sync state when editing an existing test
+  React.useEffect(() => {
+    if (initialSelectedTest) {
+      if (initialSelectedTest.opNumber || initialSelectedTest.labOrderNo) {
+        setOpNumber(initialSelectedTest.opNumber || initialSelectedTest.labOrderNo);
+      }
+      if (initialSelectedTest.patientName || initialSelectedTest.patient) {
+        setPatientName(initialSelectedTest.patientName || initialSelectedTest.patient);
+      }
+      if (initialSelectedTest.phone) setPhone(initialSelectedTest.phone);
+      if (initialSelectedTest.doctor || initialSelectedTest.orderingDoctor) {
+        setDoctor(initialSelectedTest.doctor || initialSelectedTest.orderingDoctor);
+      }
+      if (initialSelectedTest.status) {
+        setStatus(initialSelectedTest.status);
+      }
+      if (initialSelectedTest.test || initialSelectedTest.testName) {
+        const tName = initialSelectedTest.test || initialSelectedTest.testName;
+        setTestName(tName);
+      }
+      if (initialSelectedTest.testRows && initialSelectedTest.testRows.length > 0) {
+        setTestRows(initialSelectedTest.testRows);
+      }
+      if (initialSelectedTest.notes) setNotes(initialSelectedTest.notes);
+      if (initialSelectedTest.amount || initialSelectedTest.testFee) {
+        const fee = initialSelectedTest.amount || parseFloat(initialSelectedTest.testFee) || 1200;
+        setTestFee(fee.toString());
+        const paid = typeof initialSelectedTest.paidAmount === 'number' ? initialSelectedTest.paidAmount : (parseFloat(initialSelectedTest.amountPaid) || fee);
+        setAmountPaidNow(paid.toString());
+      }
+      if (initialSelectedTest.paymentMethod) setPaymentMethod(initialSelectedTest.paymentMethod);
+    }
+  }, [initialSelectedTest]);
 
   // Lab Fee & Upfront Payment State
   const initialFee = initialSelectedTest?.amount || (parseFloat(masterServices.find(s => s.name === initialMainTest)?.rate) || 1200);
@@ -122,7 +175,7 @@ export function EnterLabResultForm({
   // Handle Main Test Selection -> Auto-populate presets & rates
   const handleMainTestChange = (selectedName) => {
     setTestName(selectedName);
-    setTestRows(getInitialRowsForTest(selectedName));
+    setTestRows(getInitialRowsForTest(selectedName, masterServices));
     const foundSrv = masterServices.find(s => s.name === selectedName);
     if (foundSrv && foundSrv.rate) {
       const rateStr = parseFloat(foundSrv.rate).toString();
@@ -195,6 +248,7 @@ export function EnterLabResultForm({
 
     const targetBranch = effectiveBranch === 'All' ? (branchesList[0]?.name || 'Central Campus') : effectiveBranch;
     const isSelfCreated = !initialSelectedTest?.opNumber || opNumber.startsWith('LAB-');
+    const assignedDoctor = initialSelectedTest?.doctor || initialSelectedTest?.orderingDoctor || doctor || 'Self Created / Walk-In';
 
     const payload = {
       id: initialSelectedTest?.id || initialSelectedTest?._id || opNumber.trim(),
@@ -203,8 +257,8 @@ export function EnterLabResultForm({
       patient: patientName.trim(),
       patientName: patientName.trim(),
       phone: phone.trim(),
-      doctor: 'Self Created / Walk-In',
-      orderingDoctor: 'Self Created / Walk-In',
+      doctor: assignedDoctor,
+      orderingDoctor: assignedDoctor,
       test: testName.trim(),
       testName: testName.trim(),
       amount: feeNum,
@@ -214,7 +268,7 @@ export function EnterLabResultForm({
       dueBalance: dueNum,
       paymentStatus: payStatus,
       paymentMethod,
-      result: summaryResult || 'Pathology Report Available',
+      result: summaryResult || (status === 'Result ready' ? 'Pathology Report Available' : status),
       testRows,
       status: status || 'Result ready',
       notes: notes.trim(),
@@ -399,98 +453,104 @@ export function EnterLabResultForm({
             </div>
           </div>
 
-          {/* DYNAMIC MULTI-ROW SUB-PARAMETER BUILDER (T1, T2, T3, T4, TSH, Hb, etc.) */}
-          <div style={{ background: '#f4f8fe', padding: '18px', borderRadius: '10px', border: '1px solid #d4e4f7', display: 'grid', gap: '14px', width: '100%', boxSizing: 'border-box' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '10px', borderBottom: '1px solid #d3e2f5', paddingBottom: '10px' }}>
-              <div>
-                <strong style={{ fontSize: '13px', color: '#1769d7' }}>
-                  Sub-Test Parameters & Readings ({testRows.length})
-                </strong>
-                <span style={{ fontSize: '11px', color: '#576c85', display: 'block' }}>
-                  Add sub-fields (e.g. T1, T2, T3, T4, TSH) with measured results and normal reference ranges.
-                </span>
-              </div>
-              <button
-                type="button"
-                className="secondary-button"
-                style={{ background: '#fff', border: '1px solid #1769d7', color: '#1769d7', fontWeight: '700', padding: '6px 14px', fontSize: '12px' }}
-                onClick={handleAddRow}
-              >
-                <Plus size={15} />Add
-              </button>
-            </div>
-
-            {/* Sub-Parameter Rows List */}
-            <div style={{ display: 'grid', gap: '12px', width: '100%', boxSizing: 'border-box' }}>
-              {testRows.map((row, index) => (
-                <div
-                  key={row.id || index}
-                  className="form-row"
-                  style={{
-                    display: 'grid',
-                    gridTemplateColumns: '1.2fr 1fr 1fr auto',
-                    gap: '10px',
-                    alignItems: 'center',
-                    background: '#fff',
-                    padding: '12px',
-                    borderRadius: '8px',
-                    border: '1px solid #e1eaf4',
-                    width: '100%',
-                    boxSizing: 'border-box',
-                  }}
-                >
-                  {/* 1. Sub-Test / Parameter Name */}
-                  <div className="field">
-                    <span style={{ fontSize: '10px', fontWeight: '700', color: '#576c85' }}>Sub-Parameter Name *</span>
-                    <input
-                      value={row.name}
-                      onChange={(e) => handleRowChange(index, 'name', e.target.value)}
-                      placeholder="e.g. T3, T4, TSH, Hb"
-                      required
-                      style={{ padding: '8px 10px', fontSize: '12px', borderRadius: '6px', border: '1px solid #dde7f1' }}
-                    />
-                  </div>
-
-                  {/* 2. Measured Result */}
-                  <div className="field">
-                    <span style={{ fontSize: '10px', fontWeight: '700', color: '#1769d7' }}>Result *</span>
-                    <input
-                      value={row.result}
-                      onChange={(e) => handleRowChange(index, 'result', e.target.value)}
-                      placeholder="e.g. 1.2 ng/mL"
-                      required
-                      style={{ padding: '8px 10px', fontSize: '12px', borderRadius: '6px', border: '1px solid #b8d5f7', fontWeight: '700', color: '#1769d7' }}
-                    />
-                  </div>
-
-                  {/* 3. Normal Range */}
-                  <div className="field">
-                    <span style={{ fontSize: '10px', fontWeight: '700', color: '#576c85' }}>Normal Range *</span>
-                    <input
-                      value={row.normalRange}
-                      onChange={(e) => handleRowChange(index, 'normalRange', e.target.value)}
-                      placeholder="e.g. 0.8 - 2.0 ng/mL"
-                      required
-                      style={{ padding: '8px 10px', fontSize: '12px', borderRadius: '6px', border: '1px solid #dde7f1' }}
-                    />
-                  </div>
-
-                  {/* Remove Row Button */}
-                  <div style={{ display: 'flex', alignItems: 'flex-end', paddingTop: '16px' }}>
-                    <button
-                      type="button"
-                      className="icon-button"
-                      style={{ width: '32px', height: '32px', padding: 0 }}
-                      onClick={() => handleRemoveRow(index)}
-                      title="Remove Sub-Parameter Row"
-                    >
-                      <Trash2 size={15} color="#dc2626" />
-                    </button>
-                  </div>
+          {/* DYNAMIC MULTI-ROW SUB-PARAMETER BUILDER (T1, T2, T3, T4, TSH, Hb, etc.) - ONLY VISIBLE WHEN STATUS IS 'Result ready' */}
+          {status === 'Result ready' ? (
+            <div style={{ background: '#f4f8fe', padding: '18px', borderRadius: '10px', border: '1px solid #d4e4f7', display: 'grid', gap: '14px', width: '100%', boxSizing: 'border-box' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '10px', borderBottom: '1px solid #d3e2f5', paddingBottom: '10px' }}>
+                <div>
+                  <strong style={{ fontSize: '13px', color: '#1769d7' }}>
+                    Sub-Test Parameters & Readings ({testRows.length})
+                  </strong>
+                  <span style={{ fontSize: '11px', color: '#576c85', display: 'block' }}>
+                    Add sub-fields (e.g. T1, T2, T3, T4, TSH) with measured results and normal reference ranges.
+                  </span>
                 </div>
-              ))}
+                <button
+                  type="button"
+                  className="secondary-button"
+                  style={{ background: '#fff', border: '1px solid #1769d7', color: '#1769d7', fontWeight: '700', padding: '6px 14px', fontSize: '12px' }}
+                  onClick={handleAddRow}
+                >
+                  <Plus size={15} />Add
+                </button>
+              </div>
+
+              {/* Sub-Parameter Rows List */}
+              <div style={{ display: 'grid', gap: '12px', width: '100%', boxSizing: 'border-box' }}>
+                {testRows.map((row, index) => (
+                  <div
+                    key={row.id || index}
+                    className="form-row"
+                    style={{
+                      display: 'grid',
+                      gridTemplateColumns: '1.2fr 1fr 1fr auto',
+                      gap: '10px',
+                      alignItems: 'center',
+                      background: '#fff',
+                      padding: '12px',
+                      borderRadius: '8px',
+                      border: '1px solid #e1eaf4',
+                      width: '100%',
+                      boxSizing: 'border-box',
+                    }}
+                  >
+                    {/* 1. Sub-Test / Parameter Name */}
+                    <div className="field">
+                      <span style={{ fontSize: '10px', fontWeight: '700', color: '#576c85' }}>Sub-Parameter Name *</span>
+                      <input
+                        value={row.name}
+                        onChange={(e) => handleRowChange(index, 'name', e.target.value)}
+                        placeholder="e.g. T3, T4, TSH, Hb"
+                        required
+                        style={{ padding: '8px 10px', fontSize: '12px', borderRadius: '6px', border: '1px solid #dde7f1' }}
+                      />
+                    </div>
+
+                    {/* 2. Measured Result */}
+                    <div className="field">
+                      <span style={{ fontSize: '10px', fontWeight: '700', color: '#1769d7' }}>Result *</span>
+                      <input
+                        value={row.result}
+                        onChange={(e) => handleRowChange(index, 'result', e.target.value)}
+                        placeholder="e.g. 1.2 ng/mL"
+                        required
+                        style={{ padding: '8px 10px', fontSize: '12px', borderRadius: '6px', border: '1px solid #b8d5f7', fontWeight: '700', color: '#1769d7' }}
+                      />
+                    </div>
+
+                    {/* 3. Normal Range */}
+                    <div className="field">
+                      <span style={{ fontSize: '10px', fontWeight: '700', color: '#576c85' }}>Normal Range *</span>
+                      <input
+                        value={row.normalRange}
+                        onChange={(e) => handleRowChange(index, 'normalRange', e.target.value)}
+                        placeholder="e.g. 0.8 - 2.0 ng/mL"
+                        required
+                        style={{ padding: '8px 10px', fontSize: '12px', borderRadius: '6px', border: '1px solid #dde7f1' }}
+                      />
+                    </div>
+
+                    {/* Remove Row Button */}
+                    <div style={{ display: 'flex', alignItems: 'flex-end', paddingTop: '16px' }}>
+                      <button
+                        type="button"
+                        className="icon-button"
+                        style={{ width: '32px', height: '32px', padding: 0 }}
+                        onClick={() => handleRemoveRow(index)}
+                        title="Remove Sub-Parameter Row"
+                      >
+                        <Trash2 size={15} color="#dc2626" />
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
             </div>
-          </div>
+          ) : (
+            <div style={{ background: '#fff8e6', padding: '14px', borderRadius: '10px', border: '1px solid #ffe0b2', color: '#b45309', fontSize: '12px', fontWeight: '600', display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <span>ℹ️ Status is currently <strong>"{status}"</strong>. Parameter result readings can be entered once status is updated to <strong>"Result ready"</strong>.</span>
+            </div>
+          )}
 
           {/* Pathology Remarks & Notes */}
           <div className="field">

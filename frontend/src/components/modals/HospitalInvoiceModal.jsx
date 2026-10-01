@@ -134,10 +134,10 @@ export function HospitalInvoiceModal({ isOpen, onClose, record, type = 'record',
           </table>
 
           {/* Payment Breakdown & Summary */}
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', borderTop: '2px solid #e2e8f0', paddingTop: '12px', marginBottom: '20px' }}>
-            <div>
-              <span style={{ fontSize: '11px', fontWeight: '800', color: '#475569', display: 'block' }}>Payment Method:</span>
-              <span style={{ fontSize: '12px', fontWeight: '700', color: '#0369a1' }}>💳 {paymentMethod}</span>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', borderTop: '2px solid #e2e8f0', paddingTop: '12px', marginBottom: '14px' }}>
+            <div style={{ maxWidth: '320px' }}>
+              <span style={{ fontSize: '11px', fontWeight: '800', color: '#475569', display: 'block' }}>Payment Method / Modes:</span>
+              <span style={{ fontSize: '12px', fontWeight: '700', color: '#0369a1', display: 'block' }}>💳 {paymentMethod}</span>
               {record.upiTxnId && (
                 <span style={{ fontSize: '10px', color: '#64748b', display: 'block' }}>Txn Ref: {record.upiTxnId}</span>
               )}
@@ -149,7 +149,7 @@ export function HospitalInvoiceModal({ isOpen, onClose, record, type = 'record',
                 <span>₹ {totalFee.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</span>
               </div>
               <div style={{ display: 'flex', justifyContent: 'space-between', color: '#15803d', fontWeight: '700' }}>
-                <span>Paid Amount:</span>
+                <span>Total Paid Amount:</span>
                 <span>₹ {paidAmount.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</span>
               </div>
               <div style={{ display: 'flex', justifyContent: 'space-between', color: dueBalance > 0 ? '#dc2626' : '#15803d', fontWeight: '800', borderTop: '1px solid #cbd5e1', paddingTop: '4px', marginTop: '2px', fontSize: '13px' }}>
@@ -158,6 +158,39 @@ export function HospitalInvoiceModal({ isOpen, onClose, record, type = 'record',
               </div>
             </div>
           </div>
+
+          {/* OFFICIAL PAYMENT TRANSACTION HISTORY LOG */}
+          {Array.isArray(record.paymentHistory) && record.paymentHistory.length > 0 && (
+            <div style={{ marginBottom: '18px', borderTop: '1px dashed #cbd5e1', paddingTop: '10px' }}>
+              <span style={{ fontSize: '10px', fontWeight: '800', color: '#0369a1', display: 'block', marginBottom: '6px', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+                📜 Official Payment History &amp; Transaction Log
+              </span>
+              <table style={{ width: '100%', fontSize: '11px', borderCollapse: 'collapse', background: '#f8fafc', borderRadius: '6px', overflow: 'hidden', border: '1px solid #e2e8f0' }}>
+                <thead>
+                  <tr style={{ background: '#f1f5f9', color: '#475569', fontSize: '10px', textTransform: 'uppercase' }}>
+                    <th style={{ padding: '6px 8px', textAlign: 'left' }}>Date &amp; Time</th>
+                    <th style={{ padding: '6px 8px', textAlign: 'left' }}>Payment Method / Modes</th>
+                    <th style={{ padding: '6px 8px', textAlign: 'right' }}>Amount Paid</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {record.paymentHistory.map((h, idx) => (
+                    <tr key={idx} style={{ borderBottom: '1px solid #edf2f7' }}>
+                      <td style={{ padding: '5px 8px', color: '#475569' }}>
+                        {h.dateStr || (h.date ? new Date(h.date).toLocaleDateString('en-IN') : 'Date')} {h.timeStr || ''}
+                      </td>
+                      <td style={{ padding: '5px 8px', color: '#0f2d55', fontWeight: '700' }}>
+                        {h.method || 'Cash'}
+                      </td>
+                      <td style={{ padding: '5px 8px', textAlign: 'right', color: '#15803d', fontWeight: '800' }}>
+                        ₹ {parseFloat(String(h.amount || 0)).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
 
           {/* Authorised Signature & Footer */}
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', borderTop: '1px dashed #cbd5e1', paddingTop: '16px' }}>

@@ -47,6 +47,13 @@ const labServiceSchema = new mongoose.Schema(
       type: String,
       default: '',
     },
+    subCategories: [
+      {
+        name: { type: String, trim: true },
+        normalRange: { type: String, trim: true },
+        linkedKitName: { type: String, trim: true },
+      },
+    ],
   },
   {
     timestamps: true,

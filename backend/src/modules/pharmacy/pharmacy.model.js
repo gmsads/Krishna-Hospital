@@ -49,6 +49,47 @@ const pharmacySchema = new mongoose.Schema(
       type: String,
       default: 'Pharmacist',
     },
+    createdByEmail: {
+      type: String,
+      default: '',
+    },
+    creatorRole: {
+      type: String,
+      default: 'Pharmacist',
+    },
+    // Pharmacy Credit Fields (Taken from Supplier vs Given to Customer)
+    creditType: {
+      type: String,
+      enum: ['None', 'Taken', 'Given'],
+      default: 'None',
+    },
+    partyName: {
+      type: String,
+      default: '',
+      trim: true,
+    },
+    partyPhone: {
+      type: String,
+      default: '',
+      trim: true,
+    },
+    creditAmount: {
+      type: Number,
+      default: 0,
+    },
+    paidAmount: {
+      type: Number,
+      default: 0,
+    },
+    dueDate: {
+      type: String,
+      default: '',
+    },
+    creditStatus: {
+      type: String,
+      enum: ['Pending', 'Partial', 'Settled'],
+      default: 'Pending',
+    },
     // Multi-tenant Branch Scoping
     branch: {
       type: String,

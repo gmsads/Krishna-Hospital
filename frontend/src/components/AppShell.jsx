@@ -2,6 +2,7 @@ import React, { useMemo, useState, useRef, useEffect } from 'react';
 import {
   Activity,
   Bell,
+  Boxes,
   ChevronDown,
   ChevronRight,
   ClipboardList,
@@ -14,6 +15,7 @@ import {
   UsersRound,
   UserRound,
   WalletCards,
+  CreditCard,
   X,
   LogOut,
   Plus,
@@ -54,11 +56,11 @@ import { PatientsPage } from './pages/PatientsPage';
 import { PatientHistoryPage } from './pages/PatientHistoryPage';
 import { OPRecordsPage } from './pages/OPRecordsPage';
 import { LaboratoryPage } from './pages/LaboratoryPage';
+import { LabInventoryPage } from './pages/LabInventoryPage';
 import { FinancePage } from './pages/FinancePage';
 import { StaffPage } from './pages/StaffPage';
 import { MarketingPage } from './pages/MarketingPage';
 import { WhatsAppInboxPage } from './pages/WhatsAppInboxPage';
-import { WhatsAppFlowBuilderPage } from './pages/WhatsAppFlowBuilderPage';
 import { WhatsAppTemplatesPage } from './pages/WhatsAppTemplatesPage';
 import { LabServicesPage } from './pages/LabServicesPage';
 import { DoctorsPage } from './pages/DoctorsPage';
@@ -73,11 +75,12 @@ const roleNav = {
     { label: 'Branches', path: '/branches', icon: Building2 },
     { label: 'All Records', path: '/op-records', icon: ClipboardList },
     { label: 'Laboratory', path: '/laboratory', icon: FlaskConical },
-    { label: 'Pharmacy', path: '/pharmacy', icon: Pill },
+    { label: 'Lab Inventory', path: '/laboratory/inventory', icon: Boxes },
+    { label: 'Pharmacy Workspace', path: '/pharmacy', icon: Pill },
+    { label: 'Pharmacy Credits', path: '/pharmacy/credits', icon: CreditCard },
     { label: 'Lab Services', path: '/admin/services', icon: Layers },
     { label: 'Expenses', path: '/expenses', icon: Receipt },
     { label: 'Marketing', path: '/marketing', icon: MessageSquareShare },
-    { label: 'Flow Builder', path: '/flow-builder', icon: Workflow },
     { label: 'Meta Templates', path: '/templates', icon: FileText },
     { label: 'WhatsApp Inbox', path: '/inbox', icon: MessageCircle },
     { label: 'Finance', path: '/finance', icon: WalletCards },
@@ -88,11 +91,12 @@ const roleNav = {
     { label: 'Dashboard', path: '/dashboard', icon: LayoutDashboard },
     { label: 'All Records', path: '/op-records', icon: ClipboardList },
     { label: 'Laboratory', path: '/laboratory', icon: FlaskConical },
-    { label: 'Pharmacy', path: '/pharmacy', icon: Pill },
+    { label: 'Lab Inventory', path: '/laboratory/inventory', icon: Boxes },
+    { label: 'Pharmacy Workspace', path: '/pharmacy', icon: Pill },
+    { label: 'Pharmacy Credits', path: '/pharmacy/credits', icon: CreditCard },
     { label: 'Lab Services', path: '/admin/services', icon: Layers },
     { label: 'Expenses', path: '/expenses', icon: Receipt },
     { label: 'Marketing', path: '/marketing', icon: MessageSquareShare },
-    { label: 'Flow Builder', path: '/flow-builder', icon: Workflow },
     { label: 'Meta Templates', path: '/templates', icon: FileText },
     { label: 'WhatsApp Inbox', path: '/inbox', icon: MessageCircle },
     { label: 'Finance', path: '/finance', icon: WalletCards },
@@ -107,7 +111,8 @@ const roleNav = {
   'Front Desk': [
     { label: 'Dashboard', path: '/dashboard', icon: LayoutDashboard },
     { label: 'All Records', path: '/op-records', icon: ClipboardList },
-    { label: 'Flow Builder', path: '/flow-builder', icon: Workflow },
+    { label: 'Lab Inventory', path: '/laboratory/inventory', icon: Boxes },
+    { label: 'Marketing', path: '/marketing', icon: MessageSquareShare },
     { label: 'Meta Templates', path: '/templates', icon: FileText },
     { label: 'WhatsApp Inbox', path: '/inbox', icon: MessageCircle },
     { label: 'Expenses', path: '/expenses', icon: Receipt },
@@ -115,10 +120,12 @@ const roleNav = {
   'Lab Assistant': [
     { label: 'Dashboard', path: '/dashboard', icon: LayoutDashboard },
     { label: 'Laboratory', path: '/laboratory', icon: FlaskConical },
+    { label: 'Lab Inventory', path: '/laboratory/inventory', icon: Boxes },
     { label: 'Expenses', path: '/expenses', icon: Receipt },
   ],
   Pharmacist: [
     { label: 'Dashboard', path: '/dashboard', icon: LayoutDashboard },
+    { label: 'Pharmacy Credits', path: '/pharmacy/credits', icon: CreditCard },
   ],
 };
 
@@ -129,6 +136,17 @@ const roleLabel = {
   'Front Desk': 'Front Desk',
   'Lab Assistant': 'Lab Assistant',
   Pharmacist: 'Pharmacist',
+};
+
+export const getRoleKey = (role = '') => {
+  const r = (role || '').toLowerCase().trim();
+  if (r.includes('super')) return 'Super Admin';
+  if (r.includes('admin')) return 'Admin';
+  if (r.includes('doctor') || r.includes('physician')) return 'Doctor';
+  if (r.includes('front') || r.includes('reception')) return 'Front Desk';
+  if (r.includes('lab') || r.includes('patholog')) return 'Lab Assistant';
+  if (r.includes('pharm')) return 'Pharmacist';
+  return 'Admin';
 };
 
 export default function AppShell({ path = '/dashboard', navigate }) {
@@ -275,22 +293,6 @@ export default function AppShell({ path = '/dashboard', navigate }) {
       })
       .catch((err) => console.warn('Could not fetch Pharmacy sales from backend API:', err.message));
 
-    fetch('/api/v1/expenses', {
-      headers: {
-        ...(token ? { 'Authorization': `Bearer ${token}` } : {}),
-      },
-    })
-      .then((res) => res.json())
-      .then((data) => {
-        if (data.success && Array.isArray(data.data)) {
-          const mapped = data.data.map(e => ({
-            ...e,
-            id: e._id || e.expenseNo || e.id,
-          }));
-          setExpensesList(mapped);
-        }
-      })
-      .catch((err) => console.warn('Could not fetch Expenses from backend API:', err.message));
   }, []);
 
   // Active branch selection context (Default: 'All' for Super Admin, or user's assigned branch)
@@ -310,6 +312,30 @@ export default function AppShell({ path = '/dashboard', navigate }) {
       }
     }
   }, [profile]);
+
+  // Fetch branch-scoped expenses from backend API on mount or activeBranch change
+  useEffect(() => {
+    const token = localStorage.getItem('kh_auth_token');
+    const targetBranch = isSuperAdmin ? activeBranch : (profile?.branch || activeBranch || 'All');
+    const branchQuery = targetBranch && targetBranch !== 'All' ? `?branch=${encodeURIComponent(targetBranch)}` : '';
+
+    fetch(`/api/v1/expenses${branchQuery}`, {
+      headers: {
+        ...(token ? { 'Authorization': `Bearer ${token}` } : {}),
+      },
+    })
+      .then((res) => res.json())
+      .then((data) => {
+        if (data.success && Array.isArray(data.data)) {
+          const mapped = data.data.map(e => ({
+            ...e,
+            id: e._id || e.expenseNo || e.id,
+          }));
+          setExpensesList(mapped);
+        }
+      })
+      .catch((err) => console.warn('Could not fetch Expenses from backend API:', err.message));
+  }, [activeBranch, profile?.branch, isSuperAdmin]);
 
   // Dynamic Hospital Branding & Assets State (Per Branch / Global Scope)
   const defaultBranding = useMemo(() => ({
@@ -484,8 +510,9 @@ export default function AppShell({ path = '/dashboard', navigate }) {
     let list = expensesList;
 
     // 1. Branch Scoping (Super Admin global vs Branch scope)
-    if (effectiveBranch !== 'All') {
-      list = list.filter((e) => (e.branch || 'Central Campus') === effectiveBranch);
+    if (!isSuperAdmin || activeBranch !== 'All') {
+      const targetBranch = isSuperAdmin ? activeBranch : (profile?.branch || 'Central Campus');
+      list = list.filter((e) => isBranchMatch(e.branch, e.branchCode, targetBranch));
     }
 
     // 2. Creator Scoping for Front Desk & Lab Assistant (Only see what they created)
@@ -506,7 +533,7 @@ export default function AppShell({ path = '/dashboard', navigate }) {
     }
 
     return list;
-  }, [expensesList, effectiveBranch, userRole, userName]);
+  }, [expensesList, isSuperAdmin, activeBranch, profile?.branch, userRole, userName, branchesList]);
 
   const addExpense = async (newExp) => {
     const token = localStorage.getItem('kh_auth_token');
@@ -696,7 +723,8 @@ export default function AppShell({ path = '/dashboard', navigate }) {
 
   if (!profile) return null;
 
-  const navItems = roleNav[profile.role] || [];
+  const currentRoleKey = getRoleKey(profile.role);
+  const navItems = roleNav[currentRoleKey] || [];
   const initials = profile.full_name
     .split(' ')
     .map((w) => w[0])
@@ -807,9 +835,48 @@ export default function AppShell({ path = '/dashboard', navigate }) {
       }
       return [{ ...resultData, branch: resultData.branch || targetBranch }, ...current];
     });
+
+    // Auto-Deduct inventory kit stock for used test kits (e.g. Thyroid T1, T2, etc.)
+    try {
+      const token = localStorage.getItem('kh_auth_token');
+      const testNameLower = (resultData.test || resultData.testName || '').toLowerCase();
+      const testRows = Array.isArray(resultData.testRows) ? resultData.testRows : [];
+
+      fetch(`/api/v1/lab-inventory?branch=${encodeURIComponent(targetBranch)}`, {
+        headers: { ...(token ? { Authorization: `Bearer ${token}` } : {}) },
+      })
+        .then((res) => res.json())
+        .then((data) => {
+          if (data.success && Array.isArray(data.data)) {
+            data.data.forEach((invItem) => {
+              if (invItem.itemType === 'Consumable') {
+                const itemLower = invItem.itemName.toLowerCase();
+                const isMatch = testNameLower.includes('thyroid')
+                  ? (itemLower.includes('thyroid') || itemLower.includes('t1') || itemLower.includes('t2') || testRows.some((r) => itemLower.includes(r.name.toLowerCase())))
+                  : testRows.some((r) => itemLower.includes(r.name.toLowerCase()));
+
+                if (isMatch && invItem.stockQuantity > 0) {
+                  fetch(`/api/v1/lab-inventory/${invItem._id || invItem.id}/consume`, {
+                    method: 'PATCH',
+                    headers: {
+                      'Content-Type': 'application/json',
+                      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+                    },
+                    body: JSON.stringify({ quantity: 1 }),
+                  }).catch(() => {});
+                }
+              }
+            });
+          }
+        })
+        .catch(() => {});
+    } catch (err) {
+      console.warn('Auto stock deduction triggered:', err.message);
+    }
+
     setSelectedTestForResult(null);
     handleNavigate('/laboratory');
-    notify('Lab result saved successfully');
+    notify('Lab result saved & inventory kit stock updated!');
   };
 
   const updateLabOrder = (updatedOrder) => {
@@ -867,7 +934,9 @@ export default function AppShell({ path = '/dashboard', navigate }) {
       case '/op-records/new': return 'OP Records > Create OP Record';
       case '/laboratory': return 'Laboratory';
       case '/laboratory/enter-result': return 'Laboratory > Enter Lab Result';
+      case '/laboratory/inventory': return 'Laboratory > Lab Inventory & Machinery';
       case '/pharmacy': return 'Pharmacy Workspace';
+      case '/pharmacy/credits': return 'Pharmacy > Pharmacy Credits Manager';
       case '/pharmacy/new': return 'Pharmacy > Record Collection';
       case '/admin/services': return 'Admin > Lab Service Categories';
       case '/marketing': return 'Admin > Marketing Bulk WhatsApp';
@@ -1447,6 +1516,8 @@ export default function AppShell({ path = '/dashboard', navigate }) {
           {path === '/patients/history' && (
             <PatientHistoryPage 
               patient={selectedPatientForHistory} 
+              opRecords={scopedOpRecords}
+              labTests={scopedLabTests}
               patientHistoryMap={patientHistoryMap} 
               onRequestLabTest={handleOpenRequestLab}
               onBack={() => handleNavigate('/op-records')} 
@@ -1510,9 +1581,19 @@ export default function AppShell({ path = '/dashboard', navigate }) {
             />
           )}
 
-          {path === '/pharmacy' && (
+          {(path === '/laboratory/inventory' || path === '/lab-inventory') && (
+            <LabInventoryPage
+              profile={profile}
+              effectiveBranch={effectiveBranch}
+              branchesList={branchesList}
+              onNotify={notify}
+            />
+          )}
+
+          {(path === '/pharmacy' || path === '/pharmacy/credits') && (
             <PharmacyDashboard
               profile={profile}
+              path={path}
               onNavigate={handleNavigate}
               onAddPharmacySale={() => handleNavigate('/pharmacy/new')}
               pharmacySales={scopedPharmacySales}
@@ -1554,19 +1635,36 @@ export default function AppShell({ path = '/dashboard', navigate }) {
           )}
 
           {path === '/marketing' && (
-            <MarketingPage notify={notify} effectiveBranch={effectiveBranch} />
-          )}
-
-          {path === '/flow-builder' && (
-            <WhatsAppFlowBuilderPage notify={notify} effectiveBranch={effectiveBranch} />
+            ['Super Admin', 'Admin', 'Front Desk'].includes(getRoleKey(profile?.role)) ? (
+              <MarketingPage notify={notify} effectiveBranch={effectiveBranch} />
+            ) : (
+              <div className="p-8 text-center bg-white rounded-xl shadow-sm border border-red-100 my-6">
+                <h3 className="text-lg font-bold text-red-600 mb-2">Access Restricted</h3>
+                <p className="text-gray-600">The WhatsApp Marketing module is strictly restricted to Super Admin, Admin, and Front Desk roles.</p>
+              </div>
+            )
           )}
 
           {path === '/templates' && (
-            <WhatsAppTemplatesPage notify={notify} effectiveBranch={effectiveBranch} />
+            ['Super Admin', 'Admin', 'Front Desk'].includes(getRoleKey(profile?.role)) ? (
+              <WhatsAppTemplatesPage notify={notify} effectiveBranch={effectiveBranch} />
+            ) : (
+              <div className="p-8 text-center bg-white rounded-xl shadow-sm border border-red-100 my-6">
+                <h3 className="text-lg font-bold text-red-600 mb-2">Access Restricted</h3>
+                <p className="text-gray-600">Meta Templates module is strictly restricted to Super Admin, Admin, and Front Desk roles.</p>
+              </div>
+            )
           )}
 
           {path === '/inbox' && (
-            <WhatsAppInboxPage notify={notify} effectiveBranch={effectiveBranch} />
+            ['Super Admin', 'Admin', 'Front Desk'].includes(getRoleKey(profile?.role)) ? (
+              <WhatsAppInboxPage notify={notify} effectiveBranch={effectiveBranch} />
+            ) : (
+              <div className="p-8 text-center bg-white rounded-xl shadow-sm border border-red-100 my-6">
+                <h3 className="text-lg font-bold text-red-600 mb-2">Access Restricted</h3>
+                <p className="text-gray-600">WhatsApp Inbox module is strictly restricted to Super Admin, Admin, and Front Desk roles.</p>
+              </div>
+            )
           )}
 
           {path === '/finance' && (

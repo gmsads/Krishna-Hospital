@@ -15,6 +15,10 @@ import {
   User,
   RefreshCw,
   Receipt,
+  FlaskConical,
+  Boxes,
+  ClipboardList,
+  Pill,
 } from 'lucide-react';
 import { PanelHeader } from '../common/PanelHeader';
 import { StatCard } from '../common/StatCard';
@@ -57,28 +61,63 @@ export function ExpensesPage({
     });
   }, [expenses, searchTerm, selectedCategory]);
 
-  // Financial Computations
+  // Financial Computations by Department
   const totalExpenseAmount = useMemo(() => {
     return filteredExpenses.reduce((sum, item) => sum + (Number(item.amount) || 0), 0);
   }, [filteredExpenses]);
 
-  const labSuppliesTotal = useMemo(() => {
+  const labExpensesTotal = useMemo(() => {
     return filteredExpenses
-      .filter((e) => e.category === 'Medical & Lab Supplies')
+      .filter((e) => e.category === 'Medical & Lab Supplies' || (e.category && e.category.toLowerCase().includes('lab supply')))
       .reduce((sum, item) => sum + (Number(item.amount) || 0), 0);
   }, [filteredExpenses]);
 
-  const officeTotal = useMemo(() => {
+  const labInventoryTotal = useMemo(() => {
     return filteredExpenses
-      .filter((e) => e.category === 'Office & Front Desk')
+      .filter((e) => e.category === 'Lab Inventory & Machinery' || (e.category && (e.category.toLowerCase().includes('inventory') || e.category.toLowerCase().includes('machinery'))))
       .reduce((sum, item) => sum + (Number(item.amount) || 0), 0);
   }, [filteredExpenses]);
 
-  const utilitiesTotal = useMemo(() => {
+  const opExpensesTotal = useMemo(() => {
     return filteredExpenses
-      .filter((e) => e.category === 'Utilities & Maintenance' || e.category === 'Staff & Operations')
+      .filter((e) => e.category === 'OP & Consultation' || (e.category && e.category.toLowerCase().includes('op ')))
       .reduce((sum, item) => sum + (Number(item.amount) || 0), 0);
   }, [filteredExpenses]);
+
+  const pharmacyExpensesTotal = useMemo(() => {
+    return filteredExpenses
+      .filter((e) => e.category === 'Pharmacy Expenses' || (e.category && e.category.toLowerCase().includes('pharma')))
+      .reduce((sum, item) => sum + (Number(item.amount) || 0), 0);
+  }, [filteredExpenses]);
+
+  const officeUtilitiesTotal = useMemo(() => {
+    return filteredExpenses
+      .filter((e) => ['Office & Front Desk', 'Utilities & Maintenance', 'Staff & Operations', 'Marketing', 'Miscellaneous', 'General Expenses'].includes(e.category))
+      .reduce((sum, item) => sum + (Number(item.amount) || 0), 0);
+  }, [filteredExpenses]);
+
+  const getDepartmentBadge = (cat = '') => {
+    const categoryLower = (cat || '').toLowerCase();
+    if (categoryLower.includes('lab supply') || cat === 'Medical & Lab Supplies') {
+      return { label: '🧪 Laboratory', bg: '#eff6ff', color: '#1d4ed8', border: '#bfdbfe' };
+    }
+    if (categoryLower.includes('inventory') || categoryLower.includes('machinery') || cat === 'Lab Inventory & Machinery') {
+      return { label: '📦 Lab Inventory', bg: '#f0fdf4', color: '#15803d', border: '#bbf7d0' };
+    }
+    if (categoryLower.includes('op ') || cat === 'OP & Consultation') {
+      return { label: '📋 OP Department', bg: '#fff7ed', color: '#c2410c', border: '#ffedd5' };
+    }
+    if (categoryLower.includes('pharma') || cat === 'Pharmacy Expenses') {
+      return { label: '💊 Pharmacy', bg: '#faf5ff', color: '#7e22ce', border: '#e9d5ff' };
+    }
+    if (cat === 'Office & Front Desk') {
+      return { label: '🏢 Front Desk & Office', bg: '#f0f9ff', color: '#0369a1', border: '#bae6fd' };
+    }
+    if (cat === 'Utilities & Maintenance' || cat === 'Staff & Operations') {
+      return { label: '⚡ Utilities & Ops', bg: '#f1f5f9', color: '#334155', border: '#cbd5e1' };
+    }
+    return { label: `🏷️ ${cat || 'General'}`, bg: '#f8fafc', color: '#475569', border: '#e2e8f0' };
+  };
 
   const [expenseNo, setExpenseNo] = useState('');
 
@@ -148,13 +187,13 @@ export function ExpensesPage({
     <>
       <div className="page-heading">
         <div>
-          <div className="eyebrow">Hospital Operational Expenses</div>
+          <div className="eyebrow">Hospital Departmental Expenses</div>
           <h1>Hospital Expenses Tracker</h1>
           <p>
             {profile?.role === 'Super Admin'
-              ? 'Super Admin Audit: View all operational expenses across hospital campuses, who created each expense (name & role), and exact amounts.'
+              ? 'Super Admin Audit: View all department operational expenses across hospital campuses, creator audit logs, and totals.'
               : profile?.role === 'Admin'
-              ? `Branch Admin Audit: View all operational expenses recorded for ${profile?.branch || 'your branch'}, who created each expense (name & role), and exact amounts.`
+              ? `Branch Admin Audit: View department expenses recorded for ${profile?.branch || 'your branch'}, creator audit logs, and totals.`
               : `Viewing your self-recorded operational expenses for ${profile?.branch || 'assigned branch'}.`}
           </p>
         </div>
@@ -167,10 +206,10 @@ export function ExpensesPage({
         </button>
       </div>
 
-      {/* STAT CARDS FOR EXPENSES */}
-      <div className="stat-grid" style={{ marginBottom: '20px' }}>
+      {/* STAT CARDS FOR DEPARTMENT EXPENSES */}
+      <div className="stat-grid" style={{ marginBottom: '20px', display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '14px' }}>
         <StatCard
-          label="Total Expenses Recorded"
+          label="Total Overall Expenses"
           value={`₹ ${totalExpenseAmount.toLocaleString('en-IN')}`}
           change={`${filteredExpenses.length} Records`}
           trend="down"
@@ -179,31 +218,49 @@ export function ExpensesPage({
           tone="amber"
         />
         <StatCard
-          label="Medical & Lab Supplies"
-          value={`₹ ${labSuppliesTotal.toLocaleString('en-IN')}`}
-          change="Lab Reagents & Kits"
+          label="🧪 Lab Expenses"
+          value={`₹ ${labExpensesTotal.toLocaleString('en-IN')}`}
+          change="Lab Reagents & Testing"
           trend="up"
-          detail="Pathology & clinical consumables"
-          icon={<WalletCards />}
+          detail="Pathology & clinical supplies"
+          icon={<FlaskConical />}
           tone="sky"
         />
         <StatCard
-          label="Office & Front Desk"
-          value={`₹ ${officeTotal.toLocaleString('en-IN')}`}
-          change="Stationery & Prints"
+          label="📦 Lab Inventory & Machines"
+          value={`₹ ${labInventoryTotal.toLocaleString('en-IN')}`}
+          change="Equipment & Kit Spend"
           trend="up"
-          detail="OP counters & receipts"
-          icon={<FileText />}
-          tone="blue"
+          detail="Machinery & consumable kits"
+          icon={<Boxes />}
+          tone="teal"
         />
         <StatCard
-          label="Utilities & Operations"
-          value={`₹ ${utilitiesTotal.toLocaleString('en-IN')}`}
+          label="📋 OP & Consultation"
+          value={`₹ ${opExpensesTotal.toLocaleString('en-IN')}`}
+          change="OP Counter Stationery"
+          trend="up"
+          detail="OPD receipts & forms"
+          icon={<ClipboardList />}
+          tone="amber"
+        />
+        <StatCard
+          label="💊 Pharmacy Expenses"
+          value={`₹ ${pharmacyExpensesTotal.toLocaleString('en-IN')}`}
+          change="Medicine & Suppliers"
+          trend="down"
+          detail="Inventory & supplier payables"
+          icon={<Pill />}
+          tone="purple"
+        />
+        <StatCard
+          label="🏢 Office & Utilities"
+          value={`₹ ${officeUtilitiesTotal.toLocaleString('en-IN')}`}
           change="Maintenance & Staff"
           trend="down"
-          detail="AC servicing & waste disposal"
+          detail="Front desk, AC & operations"
           icon={<Building2 />}
-          tone="teal"
+          tone="blue"
         />
       </div>
 
@@ -211,8 +268,8 @@ export function ExpensesPage({
       <section className="panel full-panel">
         <div className="list-toolbar" style={{ flexWrap: 'wrap', gap: '12px', justifyContent: 'space-between', alignItems: 'center' }}>
           <div>
-            <h2>Recorded Hospital Expenses ({filteredExpenses.length})</h2>
-            <p>Audited operational expenditures and vendor receipts.</p>
+            <h2>Recorded Department Expenses ({filteredExpenses.length})</h2>
+            <p>Audited operational expenditures categorized clearly by hospital department.</p>
           </div>
 
           <div style={{ display: 'flex', gap: '10px', alignItems: 'center', flexWrap: 'wrap' }}>
@@ -228,7 +285,7 @@ export function ExpensesPage({
               <Search size={15} color="#64748b" style={{ position: 'absolute', left: '10px', top: '9px' }} />
             </div>
 
-            {/* Category Filter */}
+            {/* Department / Category Filter */}
             <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
               <Filter size={15} color="#1769d7" />
               <select
@@ -236,13 +293,16 @@ export function ExpensesPage({
                 onChange={(e) => setSelectedCategory(e.target.value)}
                 style={{ padding: '8px 12px', border: '1px solid #b8d5f7', borderRadius: '7px', fontSize: '12px', background: '#fff', fontWeight: '700', color: '#1769d7' }}
               >
-                <option value="All">All Categories</option>
-                <option value="Medical & Lab Supplies">Medical & Lab Supplies</option>
-                <option value="Office & Front Desk">Office & Front Desk</option>
-                <option value="Utilities & Maintenance">Utilities & Maintenance</option>
-                <option value="Staff & Operations">Staff & Operations</option>
-                <option value="Marketing">Marketing</option>
-                <option value="Miscellaneous">Miscellaneous</option>
+                <option value="All">All Departments</option>
+                <option value="Medical & Lab Supplies">🧪 Lab Expenses</option>
+                <option value="Lab Inventory & Machinery">📦 Lab Inventory & Machinery</option>
+                <option value="OP & Consultation">📋 OP & Consultation Expenses</option>
+                <option value="Pharmacy Expenses">💊 Pharmacy Expenses</option>
+                <option value="Office & Front Desk">🏢 Office & Front Desk</option>
+                <option value="Utilities & Maintenance">⚡ Utilities & Maintenance</option>
+                <option value="Staff & Operations">👥 Staff & Operations</option>
+                <option value="Marketing">📢 Marketing</option>
+                <option value="Miscellaneous">📦 Miscellaneous</option>
               </select>
             </div>
           </div>
@@ -254,7 +314,8 @@ export function ExpensesPage({
             <thead>
               <tr>
                 <th>Expense ID</th>
-                <th>Title & Category</th>
+                <th>Title & Description</th>
+                <th>Department Origin</th>
                 <th>Hospital Branch</th>
                 <th>Amount (₹)</th>
                 <th>Payment Method</th>
@@ -266,30 +327,37 @@ export function ExpensesPage({
             <tbody>
               {filteredExpenses.length === 0 ? (
                 <tr>
-                  <td colSpan={8} style={{ textAlign: 'center', padding: '30px', color: '#64748b' }}>
+                  <td colSpan={9} style={{ textAlign: 'center', padding: '30px', color: '#64748b' }}>
                     No hospital expense records found matching your filters.
                   </td>
                 </tr>
               ) : (
-                filteredExpenses.map((exp) => (
-                  <tr key={exp.id}>
-                    <td>
-                      <span className="muted-code">{exp.expenseNo || exp.id}</span>
-                      <div style={{ fontSize: '11px', fontWeight: '800', color: '#0369a1', marginTop: '2px' }}>
-                        📄 {exp.billNo || exp.referenceNo || 'BILL-10029'}
-                      </div>
-                    </td>
-                    <td>
-                      <div><strong>{exp.title}</strong></div>
-                      <span style={{ fontSize: '11px', color: '#1769d7', background: '#f4f8fe', padding: '2px 8px', borderRadius: '4px', display: 'inline-block', marginTop: '2px' }}>
-                        {exp.category}
-                      </span>
-                    </td>
-                    <td>
-                      <span style={{ fontSize: '11px', fontWeight: '700', color: '#0284c7', background: '#f0f9ff', border: '1px solid #bae6fd', padding: '2px 8px', borderRadius: '12px' }}>
-                        🏥 {exp.branch || 'Central Campus'} ({exp.branchCode || (exp.branch === 'City Extension' ? 'EXT-CITY' : exp.branch === 'North Hospital' ? 'NORTH-MED' : 'HQ-CENTRAL')})
-                      </span>
-                    </td>
+                filteredExpenses.map((exp) => {
+                  const deptBadge = getDepartmentBadge(exp.category);
+                  return (
+                    <tr key={exp.id}>
+                      <td>
+                        <span className="muted-code">{exp.expenseNo || exp.id}</span>
+                        <div style={{ fontSize: '11px', fontWeight: '800', color: '#0369a1', marginTop: '2px' }}>
+                          📄 {exp.billNo || exp.referenceNo || 'BILL-10029'}
+                        </div>
+                      </td>
+                      <td>
+                        <div><strong>{exp.title}</strong></div>
+                        <span style={{ fontSize: '11px', color: '#64748b', display: 'inline-block', marginTop: '2px' }}>
+                          {exp.notes || exp.category}
+                        </span>
+                      </td>
+                      <td>
+                        <span style={{ fontSize: '11px', fontWeight: '800', color: deptBadge.color, background: deptBadge.bg, border: `1px solid ${deptBadge.border}`, padding: '4px 10px', borderRadius: '12px', display: 'inline-block' }}>
+                          {deptBadge.label}
+                        </span>
+                      </td>
+                      <td>
+                        <span style={{ fontSize: '11px', fontWeight: '700', color: '#0284c7', background: '#f0f9ff', border: '1px solid #bae6fd', padding: '2px 8px', borderRadius: '12px' }}>
+                          🏥 {exp.branch || 'Central Campus'}
+                        </span>
+                      </td>
                     <td>
                       <strong style={{ fontSize: '14px', color: '#dc2626' }}>
                         ₹ {Number(exp.amount).toLocaleString('en-IN')}
@@ -314,8 +382,9 @@ export function ExpensesPage({
                       </button>
                     </td>
                   </tr>
-                ))
-              )}
+                );
+              })
+            )}
             </tbody>
           </table>
         </div>
@@ -381,12 +450,15 @@ export function ExpensesPage({
                     required
                     style={{ padding: '10px 12px', border: '1px solid #dde7f1', borderRadius: '7px', fontSize: '13px', background: '#fff' }}
                   >
-                    <option value="Medical & Lab Supplies">Medical & Lab Supplies</option>
-                    <option value="Office & Front Desk">Office & Front Desk</option>
-                    <option value="Utilities & Maintenance">Utilities & Maintenance</option>
-                    <option value="Staff & Operations">Staff & Operations</option>
-                    <option value="Marketing">Marketing</option>
-                    <option value="Miscellaneous">Miscellaneous</option>
+                    <option value="Medical & Lab Supplies">🧪 Medical & Lab Supplies (Laboratory)</option>
+                    <option value="Lab Inventory & Machinery">📦 Lab Inventory & Machinery</option>
+                    <option value="OP & Consultation">📋 OP & Consultation (OP Department)</option>
+                    <option value="Pharmacy Expenses">💊 Pharmacy Expenses (Pharmacy)</option>
+                    <option value="Office & Front Desk">🏢 Office & Front Desk</option>
+                    <option value="Utilities & Maintenance">⚡ Utilities & Maintenance</option>
+                    <option value="Staff & Operations">👥 Staff & Operations</option>
+                    <option value="Marketing">📢 Marketing</option>
+                    <option value="Miscellaneous">📦 Miscellaneous</option>
                   </select>
                 </div>
 
@@ -430,26 +502,15 @@ export function ExpensesPage({
                 </div>
               </div>
 
-              <div className="form-row">
-                <div className="field">
-                  <span style={{ fontSize: '11px', fontWeight: '700', color: '#4a5e7a' }}>Expense Date *</span>
-                  <input
-                    type="date"
-                    value={date}
-                    onChange={(e) => setDate(e.target.value)}
-                    required
-                    style={{ padding: '10px 12px', border: '1px solid #dde7f1', borderRadius: '7px', fontSize: '13px' }}
-                  />
-                </div>
-
-                <div className="field">
-                  <span style={{ fontSize: '11px', fontWeight: '700', color: '#0284c7' }}>Target Hospital Branch</span>
-                  <input
-                    value={effectiveBranch === 'All' ? profile?.branch || 'Central Campus' : effectiveBranch}
-                    disabled
-                    style={{ padding: '10px 12px', border: '1px solid #bae6fd', borderRadius: '7px', fontSize: '13px', background: '#f0f9ff', fontWeight: '700', color: '#0284c7' }}
-                  />
-                </div>
+              <div className="field">
+                <span style={{ fontSize: '11px', fontWeight: '700', color: '#4a5e7a' }}>Expense Date *</span>
+                <input
+                  type="date"
+                  value={date}
+                  onChange={(e) => setDate(e.target.value)}
+                  required
+                  style={{ padding: '10px 12px', border: '1px solid #dde7f1', borderRadius: '7px', fontSize: '13px' }}
+                />
               </div>
 
               <div className="field">

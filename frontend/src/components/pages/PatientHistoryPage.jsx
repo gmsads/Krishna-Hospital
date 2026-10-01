@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import {
   Activity,
   ArrowLeft,
@@ -11,29 +11,121 @@ import {
 import { initialPatients, initialPatientHistory } from '../data/initialData';
 import { PathologyLabReportPDFModal } from '../modals/PathologyLabReportPDFModal';
 
-export function PatientHistoryPage({ patient = initialPatients[0], patientHistoryMap = initialPatientHistory, onRequestLabTest, onBack }) {
+export function PatientHistoryPage({
+  patient = initialPatients[0],
+  opRecords = [],
+  labTests = [],
+  patientHistoryMap = initialPatientHistory,
+  onRequestLabTest,
+  onBack,
+}) {
   const [activePdfModalTest, setActivePdfModalTest] = useState(null);
 
-  const patientName = patient?.name || 'Ananya Sharma';
-  const historyList = patientHistoryMap[patientName] || [
-    {
-      visitNo: 1,
-      date: patient?.lastVisit || 'Today, 09:42 AM',
-      time: '09:42 AM',
-      opNumber: 'OPD-240813-086',
-      department: 'General medicine',
-      doctor: patient?.doctor || 'Dr. Meera Nair',
-      referralDoctor: 'Self',
-      charges: '₹ 850',
-      paymentMethod: 'Cash',
-      status: 'In consultation',
-      vitals: { temp: '98.6 °F', weight: '68 kg', height: '165 cm', bmi: '25.0', bloodGroup: patient?.bloodGroup || 'O+', bp: '120/80 mmHg' },
-      complaints: 'Patient registered for OPD consultation.',
-      labTests: [
-        { test: 'Complete blood count', status: 'Processing', result: 'Pending', notes: 'Sample submitted for analysis.' }
-      ]
+  const patientName = patient?.name || patient?.patient || patient?.patientName || 'Patient';
+  const patientPhone = (patient?.phone || '').replace(/\D/g, '');
+  const patientRegNo = (patient?.id || patient?.regNo || patient?.opNumber || '').toLowerCase().trim();
+
+  // DYNAMIC PATIENT MEDICAL HISTORY DERIVED REAL-TIME FROM MONGODB / BACKEND RECORDS
+  const historyList = useMemo(() => {
+    const normalize = (str) => (str || '').toLowerCase().trim();
+    const targetName = normalize(patientName);
+
+    // Filter all OP records matching this patient
+    const matchedOPs = (opRecords || []).filter((r) => {
+      const rName = normalize(r.patient || r.patientName);
+      const rPhone = (r.phone || '').replace(/\D/g, '');
+      const rReg = normalize(r.regNo || r.id);
+
+      if (targetName && rName && (rName === targetName || rName.includes(targetName) || targetName.includes(rName))) {
+        return true;
+      }
+      if (patientPhone && patientPhone.length >= 7 && rPhone && (rPhone === patientPhone || rPhone.endsWith(patientPhone))) {
+        return true;
+      }
+      if (patientRegNo && rReg && (rReg === patientRegNo || rReg.includes(patientRegNo))) {
+        return true;
+      }
+      return false;
+    });
+
+    if (matchedOPs.length > 0) {
+      return matchedOPs.map((r, idx) => {
+        const rLabOrders = (labTests || []).filter((l) => {
+          const lName = normalize(l.patient || l.patientName);
+          const lOp = normalize(l.opNumber || l.regNo || l.patientId);
+          return (
+            (lName && targetName && (lName === targetName || lName.includes(targetName))) ||
+            (lOp && (lOp === normalize(r.regNo || r.id)))
+          );
+        });
+
+        const chargesStr = r.charges
+          ? (String(r.charges).startsWith('₹') ? r.charges : `₹ ${r.charges}`)
+          : r.amount
+          ? (String(r.amount).startsWith('₹') ? r.amount : `₹ ${r.amount}`)
+          : '₹ 300';
+
+        return {
+          visitNo: idx + 1,
+          date: r.date || (r.createdAt ? new Date(r.createdAt).toISOString().split('T')[0] : 'Today'),
+          time: r.time || '09:30 AM',
+          opNumber: r.regNo || r.id || `OPD-${1000 + idx}`,
+          department: r.department || 'General medicine',
+          doctor: r.doctor || 'Dr. Meera Nair',
+          referralDoctor: r.referralDoctor || 'Self',
+          charges: chargesStr,
+          paymentMethod: r.paymentMethod || 'Cash',
+          paymentBreakdown: r.paymentBreakdown || null,
+          paymentHistory: r.paymentHistory || [],
+          status: r.status || r.paymentStatus || 'Completed',
+          vitals: r.vitals || {
+            temp: '98.6 °F',
+            weight: '68 kg',
+            height: '165 cm',
+            bmi: '25.0',
+            bloodGroup: patient?.bloodGroup || 'O+',
+            bp: '120/80 mmHg',
+          },
+          complaints: r.complaints || r.notes || r.recordType || 'Patient registered for OPD consultation.',
+          labTests: rLabOrders.map((l) => ({
+            test: l.test || l.testName || 'Diagnostic Test',
+            status: l.status || 'Sample collected',
+            result: l.result || 'Pending',
+            notes: l.notes || '',
+          })),
+        };
+      });
     }
-  ];
+
+    if (patientHistoryMap[patientName]) {
+      return patientHistoryMap[patientName];
+    }
+
+    const chargesStr = patient?.charges
+      ? (String(patient.charges).startsWith('₹') ? patient.charges : `₹ ${patient.charges}`)
+      : patient?.amount
+      ? (String(patient.amount).startsWith('₹') ? patient.amount : `₹ ${patient.amount}`)
+      : '₹ 300';
+
+    return [
+      {
+        visitNo: 1,
+        date: patient?.date || patient?.lastVisit || 'Today',
+        time: patient?.time || '09:30 AM',
+        opNumber: patient?.opNumber || patient?.regNo || patient?.id || 'OPD-1001',
+        department: patient?.department || 'General medicine',
+        doctor: patient?.doctor || 'Dr. Meera Nair',
+        referralDoctor: 'Self',
+        charges: chargesStr,
+        paymentMethod: patient?.paymentMethod || 'Cash',
+        paymentHistory: patient?.paymentHistory || [],
+        status: patient?.status || 'Active',
+        vitals: patient?.vitals || { temp: '98.6 °F', weight: '68 kg', height: '165 cm', bmi: '25.0', bloodGroup: patient?.bloodGroup || 'O+', bp: '120/80 mmHg' },
+        complaints: patient?.complaints || 'Patient registered for OPD consultation.',
+        labTests: [],
+      }
+    ];
+  }, [patient, patientName, patientPhone, patientRegNo, opRecords, labTests, patientHistoryMap]);
 
   return (
     <>
@@ -209,9 +301,22 @@ export function PatientHistoryPage({ patient = initialPatients[0], patientHistor
                   </td>
 
                   {/* Fee & Payment */}
-                  <td style={{ padding: '12px', fontSize: '12px', whiteSpace: 'nowrap' }}>
-                    <strong style={{ color: '#0f172a', display: 'block' }}>{visit.charges}</strong>
-                    <span style={{ display: 'block', fontSize: '10px', color: '#64748b', marginTop: '2px' }}>{visit.paymentMethod}</span>
+                  <td style={{ padding: '12px', fontSize: '12px', minWidth: '160px' }}>
+                    <strong style={{ color: '#0f172a', display: 'block' }}>{visit.charges || visit.amount}</strong>
+                    <span style={{ display: 'block', fontSize: '11px', color: '#0369a1', fontWeight: '700', marginTop: '2px' }}>
+                      💳 {visit.paymentMethod || 'Cash'}
+                    </span>
+                    {Array.isArray(visit.paymentHistory) && visit.paymentHistory.length > 0 && (
+                      <div style={{ marginTop: '6px', background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: '6px', padding: '6px 8px', fontSize: '10px' }}>
+                        <strong style={{ color: '#0369a1', display: 'block', marginBottom: '4px' }}>📜 Payment History ({visit.paymentHistory.length}):</strong>
+                        {visit.paymentHistory.map((h, hIdx) => (
+                          <div key={hIdx} style={{ color: '#475569', borderBottom: hIdx < visit.paymentHistory.length - 1 ? '1px dashed #cbd5e1' : 'none', paddingBottom: '3px', marginBottom: '3px' }}>
+                            <span style={{ fontWeight: '700', color: '#15803d' }}>+₹{h.amount}</span> ({h.method})
+                            <span style={{ display: 'block', color: '#94a3b8', fontSize: '9px' }}>{h.dateStr || ''} {h.timeStr || ''}</span>
+                          </div>
+                        ))}
+                      </div>
+                    )}
                   </td>
 
                   {/* Status */}

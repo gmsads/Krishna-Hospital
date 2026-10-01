@@ -31,7 +31,7 @@ export const getNextExpenseNo = asyncHandler(async (req, res) => {
 });
 
 export const getExpenses = asyncHandler(async (req, res) => {
-  const branchFilter = req.query.branch;
+  const branchFilter = req.query.branch || (req.user && req.user.role !== 'Super Admin' ? req.user.branch : null);
   const userEmail = req.user ? req.user.email : null;
   const userRole = req.user ? req.user.role : null;
 

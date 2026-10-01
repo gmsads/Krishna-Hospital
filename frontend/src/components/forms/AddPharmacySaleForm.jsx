@@ -14,6 +14,9 @@ export function AddPharmacySaleForm({ onSave, notify, effectiveBranch = 'All', b
   const [collectingAmount, setCollectingAmount] = useState('');
   const [totalPurchase, setTotalPurchase] = useState('');
   const [totalExpense, setTotalExpense] = useState('');
+  const [creditType, setCreditType] = useState('None');
+  const [partyName, setPartyName] = useState('');
+  const [partyPhone, setPartyPhone] = useState('');
   const [submitting, setSubmitting] = useState(false);
 
   // Fetch next branch-scoped PHARM-0001 format Sale No on mount / branch change
@@ -56,13 +59,18 @@ export function AddPharmacySaleForm({ onSave, notify, effectiveBranch = 'All', b
 
     const newSale = {
       saleNo,
-      patientName: 'Walk-In Customer',
+      patientName: partyName.trim() || 'Walk-In Customer',
+      partyName: partyName.trim() || 'Walk-In Customer',
+      partyPhone: partyPhone.trim() || '',
+      phone: partyPhone.trim() || '',
       collectingAmount: collectingNum,
       totalCollection: collectingNum,
       totalExpense: totalExpense ? parseFloat(totalExpense) : 0,
       totalPurchase: totalPurchase ? parseFloat(totalPurchase) : 0,
       paymentMethod: 'Cash',
-      notes: 'Pharmacy Record',
+      creditType,
+      creditAmount: creditType !== 'None' ? collectingNum : 0,
+      notes: creditType !== 'None' ? `Credit ${creditType} record` : 'Pharmacy Record',
       branch: assignedBranch,
       branchCode: assignedCode,
       status: 'Completed',
@@ -98,6 +106,8 @@ export function AddPharmacySaleForm({ onSave, notify, effectiveBranch = 'All', b
     setCollectingAmount('');
     setTotalPurchase('');
     setTotalExpense('');
+    setPartyName('');
+    setPartyPhone('');
 
     // Fetch next sequential PHARM-0001 ID
     fetch('/api/v1/pharmacy/next-saleno')
@@ -181,6 +191,50 @@ export function AddPharmacySaleForm({ onSave, notify, effectiveBranch = 'All', b
             />
           </div>
 
+          {/* 5. Credit Mode Selection (Optional) */}
+          <div className="field" style={{ width: '100%' }}>
+            <span style={{ fontSize: '11px', fontWeight: '800', color: '#1d4ed8' }}>Credit Status (Optional)</span>
+            <select
+              value={creditType}
+              onChange={(e) => setCreditType(e.target.value)}
+              style={{ padding: '10px 12px', border: '1px solid #cbd5e1', borderRadius: '7px', fontSize: '13px', background: '#ffffff', width: '100%', minHeight: '42px', boxSizing: 'border-box' }}
+            >
+              <option value="None">Direct Settlement (No Credit)</option>
+              <option value="Given">Credit Given (Customer Receivable)</option>
+              <option value="Taken">Credit Taken (Supplier Payable)</option>
+            </select>
+          </div>
+
+          {creditType !== 'None' && (
+            <>
+              <div className="field" style={{ width: '100%' }}>
+                <span style={{ fontSize: '11px', fontWeight: '800', color: '#0f2d55' }}>
+                  {creditType === 'Given' ? 'Customer / Patient Name' : 'Supplier / Vendor Name'}
+                </span>
+                <input
+                  type="text"
+                  value={partyName}
+                  onChange={(e) => setPartyName(e.target.value)}
+                  placeholder={creditType === 'Given' ? 'Customer name' : 'Supplier name'}
+                  style={{ padding: '10px 12px', border: '1px solid #cbd5e1', borderRadius: '7px', fontSize: '13px', width: '100%', minHeight: '42px', boxSizing: 'border-box' }}
+                />
+              </div>
+
+              <div className="field" style={{ width: '100%' }}>
+                <span style={{ fontSize: '11px', fontWeight: '800', color: '#0f2d55' }}>
+                  Contact Phone Number
+                </span>
+                <input
+                  type="tel"
+                  value={partyPhone}
+                  onChange={(e) => setPartyPhone(e.target.value)}
+                  placeholder="e.g. +91 9876543210"
+                  style={{ padding: '10px 12px', border: '1px solid #cbd5e1', borderRadius: '7px', fontSize: '13px', width: '100%', minHeight: '42px', boxSizing: 'border-box' }}
+                />
+              </div>
+            </>
+          )}
+
         </div>
 
         {/* Form Actions */}
@@ -188,7 +242,7 @@ export function AddPharmacySaleForm({ onSave, notify, effectiveBranch = 'All', b
           <button
             type="button"
             className="secondary-button"
-            onClick={() => { setCollectingAmount(''); setTotalPurchase(''); setTotalExpense(''); }}
+            onClick={() => { setCollectingAmount(''); setTotalPurchase(''); setTotalExpense(''); setPartyName(''); setPartyPhone(''); }}
             disabled={submitting}
             style={{ minHeight: '40px', padding: '8px 16px', fontSize: '13px' }}
           >

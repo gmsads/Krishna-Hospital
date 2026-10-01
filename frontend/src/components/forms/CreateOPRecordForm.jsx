@@ -101,26 +101,121 @@ export function CreateOPRecordForm({
   const [refCommPercent, setRefCommPercent] = useState('0');
   const [charges, setCharges] = useState('300.00');
 
-  // PAYMENT & RECEIPT ENHANCEMENTS
-  const [paymentMethod, setPaymentMethod] = useState('Cash'); // Options: Cash, UPI / Online, Credit / Debit Card, Pay Later (Post-Pay)
-  const [amountCollectingNow, setAmountCollectingNow] = useState('300.00');
+  // MULTI-SELECT PAYMENT METHODS & SPLIT AMOUNT COLLECTION
+  const [selectedMethods, setSelectedMethods] = useState({
+    Cash: true,
+    UPI: false,
+    Card: false,
+    Cheque: false,
+    'Bank Transfer': false,
+    Others: false,
+    'Pay Later': false,
+  });
+
+  const [splitAmounts, setSplitAmounts] = useState({
+    Cash: '300.00',
+    UPI: '0',
+    Card: '0',
+    Cheque: '0',
+    'Bank Transfer': '0',
+    Others: '0',
+  });
+
   const [selectedUpiHandle, setSelectedUpiHandle] = useState(upiHandles[0] || 'krishnahospital@okicici');
   const [upiTxnId, setUpiTxnId] = useState('');
   const [receiptImage, setReceiptImage] = useState(null);
   const [receiptImageName, setReceiptImageName] = useState('');
   const [autoFetchMsg, setAutoFetchMsg] = useState('');
 
-  // Handle Payment Method Switch (Hide collect amount when Pay Later is selected)
-  const handlePaymentMethodChange = (methodVal) => {
-    setPaymentMethod(methodVal);
-    if (methodVal === 'Pay Later (Post-Pay)' || methodVal === 'Pay Later (Pending)') {
-      setAmountCollectingNow('0');
-    } else {
-      if (amountCollectingNow === '0' || !amountCollectingNow) {
-        setAmountCollectingNow(charges);
-      }
+  // EDITABLE FEE HANDLER
+  const handleFeeChargesChange = (val) => {
+    setCharges(val);
+    const activeKeys = Object.keys(selectedMethods).filter((k) => selectedMethods[k] && k !== 'Pay Later');
+    if (activeKeys.length === 1) {
+      setSplitAmounts((prev) => ({
+        ...prev,
+        [activeKeys[0]]: val,
+      }));
     }
   };
+
+  // MULTI-SELECT PAYMENT TOGGLE
+  const togglePaymentMethod = (modeKey) => {
+    setSelectedMethods((prev) => {
+      if (modeKey === 'Pay Later') {
+        const isCurrentlySelected = prev['Pay Later'];
+        if (!isCurrentlySelected) {
+          return {
+            Cash: false,
+            UPI: false,
+            Card: false,
+            Cheque: false,
+            'Bank Transfer': false,
+            Others: false,
+            'Pay Later': true,
+          };
+        } else {
+          return {
+            ...prev,
+            Cash: true,
+            'Pay Later': false,
+          };
+        }
+      } else {
+        const nextState = { ...prev, [modeKey]: !prev[modeKey], 'Pay Later': false };
+        const anyChecked = Object.keys(nextState).some((k) => nextState[k]);
+        if (!anyChecked) {
+          nextState.Cash = true;
+        }
+        if (nextState[modeKey] && (!splitAmounts[modeKey] || splitAmounts[modeKey] === '0')) {
+          setSplitAmounts((prevSplits) => ({
+            ...prevSplits,
+            [modeKey]: modeKey === 'Cash' && !prev[modeKey] ? charges : '0',
+          }));
+        }
+        return nextState;
+      }
+    });
+  };
+
+  const handleSplitAmountChange = (modeKey, val) => {
+    setSplitAmounts((prev) => ({
+      ...prev,
+      [modeKey]: val,
+    }));
+  };
+
+  const handleCollectFullFee = () => {
+    const activeKeys = Object.keys(selectedMethods).filter((k) => selectedMethods[k] && k !== 'Pay Later');
+    if (activeKeys.length === 1) {
+      setSplitAmounts((prev) => ({ ...prev, [activeKeys[0]]: charges }));
+    } else if (activeKeys.length > 1) {
+      const newSplits = { ...splitAmounts };
+      newSplits[activeKeys[0]] = charges;
+      activeKeys.slice(1).forEach((k) => {
+        newSplits[k] = '0';
+      });
+      setSplitAmounts(newSplits);
+    }
+  };
+
+  const activeModes = Object.keys(selectedMethods).filter((k) => selectedMethods[k] && k !== 'Pay Later');
+
+  const calculatedTotalCollected = selectedMethods['Pay Later']
+    ? 0
+    : activeModes.reduce((sum, key) => {
+        const val = parseFloat(String(splitAmounts[key] || '0').replace(/[^0-9.]/g, '')) || 0;
+        return sum + val;
+      }, 0);
+
+  const paymentSummaryParts = activeModes
+    .map((key) => {
+      const amt = parseFloat(String(splitAmounts[key] || '0').replace(/[^0-9.]/g, '')) || 0;
+      return amt > 0 ? `${key} (₹${amt})` : null;
+    })
+    .filter(Boolean);
+
+  const paymentSummaryStr = paymentSummaryParts.join(' + ');
 
   const handleReceiptImageUpload = (e) => {
     const file = e.target.files?.[0];
@@ -224,10 +319,26 @@ export function CreateOPRecordForm({
 
     const finalRecordType = recordType === 'IP' && ipCareDetails.trim() ? `IP (${ipCareDetails.trim()})` : recordType;
     const totalNum = parseFloat(String(charges).replace(/[^0-9.]/g, '')) || 0;
-    const isPayLater = paymentMethod === 'Pay Later (Post-Pay)' || paymentMethod === 'Pay Later (Pending)';
-    const paidNum = isPayLater ? 0 : (parseFloat(String(amountCollectingNow).replace(/[^0-9.]/g, '')) || 0);
+    const isPayLater = selectedMethods['Pay Later'];
+    const paidNum = isPayLater ? 0 : calculatedTotalCollected;
     const dueNum = Math.max(0, totalNum - paidNum);
     const payStatus = isPayLater ? 'Pay Later (Pending)' : dueNum <= 0 ? 'Paid' : paidNum > 0 ? 'Partial' : 'Pay Later (Pending)';
+    const savedPaymentMethod = isPayLater ? 'Pay Later (Post-Pay)' : (paymentSummaryStr || activeModes.join(', ') || 'Cash');
+
+    const splitBreakdown = {};
+    activeModes.forEach((k) => {
+      splitBreakdown[k] = parseFloat(String(splitAmounts[k] || '0').replace(/[^0-9.]/g, '')) || 0;
+    });
+
+    const initialHistoryEntry = paidNum > 0 ? [{
+      date: new Date().toISOString(),
+      dateStr: regDate,
+      timeStr: regTime,
+      amount: paidNum,
+      method: savedPaymentMethod,
+      breakdown: splitBreakdown,
+      type: 'Initial Registration Payment',
+    }] : [];
 
     const assignedBranch = effectiveBranch === 'All' ? selectedBranch : effectiveBranch;
     const matchingBranchObj = branchesList.find((b) => b.name === assignedBranch);
@@ -258,10 +369,12 @@ export function CreateOPRecordForm({
       amountPaid: paidNum.toString(),
       paidAmount: paidNum,
       dueBalance: dueNum,
-      paymentMethod,
+      paymentMethod: savedPaymentMethod,
+      paymentBreakdown: splitBreakdown,
+      paymentHistory: initialHistoryEntry,
       paymentStatus: payStatus,
-      selectedUpiHandle: paymentMethod === 'UPI / Online' ? selectedUpiHandle : null,
-      upiTxnId: paymentMethod === 'UPI / Online' ? upiTxnId : null,
+      selectedUpiHandle: selectedMethods.UPI ? selectedUpiHandle : null,
+      upiTxnId: selectedMethods.UPI ? upiTxnId : null,
       receiptImage: isPayLater ? null : (receiptImage || null),
       branch: assignedBranch,
       branchCode: assignedCode,
@@ -617,9 +730,17 @@ export function CreateOPRecordForm({
               </select>
             </div>
 
+            {/* Fee (₹) Editable Input */}
             <div className="field">
               <span style={{ color: '#4a5e7a', fontSize: '10px', fontWeight: '700' }}>Fee (₹) *</span>
-              <input value={charges} onChange={(e) => handleFeeChargesChange(e.target.value)} required style={{ padding: '8px 10px', border: '1px solid #dde7f1', borderRadius: '6px', fontWeight: '700', fontSize: '12px', width: '100%', boxSizing: 'border-box' }} />
+              <input
+                type="number"
+                step="any"
+                value={charges}
+                onChange={(e) => handleFeeChargesChange(e.target.value)}
+                required
+                style={{ padding: '8px 10px', border: '1px solid #dde7f1', borderRadius: '6px', fontWeight: '800', fontSize: '12px', color: '#1769d7', background: '#f4f8fe', width: '100%', boxSizing: 'border-box' }}
+              />
             </div>
 
             <div className="field">
@@ -634,53 +755,81 @@ export function CreateOPRecordForm({
               />
             </div>
 
-            <div className="field" style={{ gridColumn: '1 / -1' }}>
-              <span style={{ color: '#4a5e7a', fontSize: '10px', fontWeight: '700' }}>Payment Mode *</span>
-              <select
-                value={paymentMethod}
-                onChange={(e) => handlePaymentMethodChange(e.target.value)}
-                style={{ padding: '8px 6px', border: '1px solid #dde7f1', borderRadius: '6px', background: '#fff', fontSize: '11px', fontWeight: '700', color: paymentMethod === 'Pay Later (Post-Pay)' ? '#b45309' : '#0f172a', width: '100%', boxSizing: 'border-box' }}
-              >
-                <option value="Cash">Cash</option>
-                <option value="UPI / Online">UPI / Online</option>
-                <option value="Credit / Debit Card">Credit / Debit Card</option>
-                <option value="Pay Later (Post-Pay)">Pay Later (Post-Pay)</option>
-              </select>
-            </div>
+            {/* MULTI-SELECT PAYMENT METHOD CHECKBOXES & SPLIT AMOUNTS */}
+            <div className="field" style={{ gridColumn: '1 / -1', borderTop: '1px solid #edf2f7', paddingTop: '10px' }}>
+              <span style={{ color: '#0f2d55', fontSize: '11px', fontWeight: '800', display: 'block', marginBottom: '8px' }}>
+                Payment Method (Select Multiple Modes with Ticks) *
+              </span>
 
-            {/* CONDITIONAL AMOUNT COLLECTING NOW FIELD (Hidden when Pay Later selected) */}
-            {paymentMethod !== 'Pay Later (Post-Pay)' && paymentMethod !== 'Pay Later (Pending)' && (
-              <div className="field" style={{ gridColumn: '1 / -1', background: '#f0fdf4', border: '1px solid #bbf7d0', padding: '10px 12px', borderRadius: '8px' }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '4px' }}>
-                  <span style={{ color: '#15803d', fontSize: '11px', fontWeight: '800' }}>Amount Collecting Now (₹) *</span>
+              {/* CHECKBOXES ROW */}
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: '14px', alignItems: 'center', background: '#f8fafc', padding: '10px 14px', borderRadius: '8px', border: '1px solid #dde7f1', marginBottom: '12px' }}>
+                {[
+                  { key: 'Cash', label: 'Cash' },
+                  { key: 'UPI', label: 'UPI' },
+                  { key: 'Card', label: 'Card' },
+                  { key: 'Cheque', label: 'Cheque' },
+                  { key: 'Bank Transfer', label: 'Bank Transfer' },
+                  { key: 'Others', label: 'Others / PO' },
+                  { key: 'Pay Later', label: 'Pay Later (Post-Pay)' },
+                ].map((m) => (
+                  <label key={m.key} style={{ display: 'flex', alignItems: 'center', gap: '6px', cursor: 'pointer', fontSize: '12px', fontWeight: '700', color: selectedMethods[m.key] ? '#1769d7' : '#475569' }}>
+                    <input
+                      type="checkbox"
+                      checked={!!selectedMethods[m.key]}
+                      onChange={() => togglePaymentMethod(m.key)}
+                      style={{ width: '16px', height: '16px', accentColor: '#1769d7', cursor: 'pointer' }}
+                    />
+                    <span>{m.label}</span>
+                  </label>
+                ))}
+              </div>
+
+              {/* SPLIT AMOUNT INPUTS FOR CHECKED METHODS */}
+              {!selectedMethods['Pay Later'] && (
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(160px, 1fr))', gap: '10px', background: '#f0fdf4', border: '1px solid #bbf7d0', padding: '12px', borderRadius: '8px', marginBottom: '10px' }}>
+                  {activeModes.map((modeKey) => (
+                    <div key={modeKey} className="field">
+                      <span style={{ color: '#15803d', fontSize: '10px', fontWeight: '800' }}>
+                        {modeKey} Amount (₹) *
+                      </span>
+                      <input
+                        type="number"
+                        step="any"
+                        value={splitAmounts[modeKey] || ''}
+                        onChange={(e) => handleSplitAmountChange(modeKey, e.target.value)}
+                        placeholder={`Enter ${modeKey} amount...`}
+                        required
+                        style={{ padding: '7px 10px', border: '1px solid #86efac', borderRadius: '6px', fontSize: '12px', fontWeight: '800', color: '#15803d', background: '#ffffff', width: '100%', boxSizing: 'border-box' }}
+                      />
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              {/* COLLECTED TOTAL SUMMARY BANNER */}
+              {!selectedMethods['Pay Later'] && (
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '8px', background: '#e0f2fe', border: '1px solid #7dd3fc', padding: '8px 12px', borderRadius: '7px', fontSize: '11px', fontWeight: '800', color: '#0369a1' }}>
+                  <span>Total Collecting Now: <strong>₹ {calculatedTotalCollected.toLocaleString('en-IN')}</strong> {paymentSummaryStr ? `(${paymentSummaryStr})` : ''}</span>
                   <button
                     type="button"
-                    onClick={() => setAmountCollectingNow(charges)}
-                    style={{ fontSize: '9px', background: '#dcfce7', color: '#15803d', border: '1px solid #86efac', padding: '2px 7px', borderRadius: '4px', cursor: 'pointer', fontWeight: '800' }}
+                    onClick={handleCollectFullFee}
+                    style={{ fontSize: '10px', background: '#0284c7', color: '#fff', border: 'none', padding: '4px 10px', borderRadius: '4px', cursor: 'pointer', fontWeight: '800' }}
                   >
-                    ⚡ Collect Full Amount (₹ {charges})
+                    ⚡ Auto-Set Full Fee (₹ {charges})
                   </button>
                 </div>
-                <input
-                  type="number"
-                  value={amountCollectingNow}
-                  onChange={(e) => setAmountCollectingNow(e.target.value)}
-                  required
-                  placeholder="Enter amount collecting now..."
-                  style={{ padding: '8px 10px', border: '1px solid #86efac', borderRadius: '6px', fontSize: '12px', fontWeight: '800', color: '#15803d', background: '#ffffff' }}
-                />
-              </div>
-            )}
+              )}
+            </div>
 
-            {/* CONDITIONAL UPI HANDLES DROPDOWN (Configured by Admin in Settings) */}
-            {paymentMethod === 'UPI / Online' && (
+            {/* CONDITIONAL UPI HANDLES DROPDOWN */}
+            {selectedMethods.UPI && (
               <>
                 <div className="field" style={{ gridColumn: '1 / -1' }}>
                   <span style={{ color: '#0284c7', fontSize: '10px', fontWeight: '700' }}>Hospital Available UPI Handle *</span>
                   <select
                     value={selectedUpiHandle}
                     onChange={(e) => setSelectedUpiHandle(e.target.value)}
-                    style={{ padding: '8px 6px', border: '1px solid #93c5fd', borderRadius: '6px', background: '#f0f9ff', fontWeight: '700', color: '#0284c7', fontSize: '11px' }}
+                    style={{ padding: '8px 6px', border: '1px solid #93c5fd', borderRadius: '6px', background: '#f0f9ff', fontWeight: '700', color: '#0284c7', fontSize: '11px', width: '100%', boxSizing: 'border-box' }}
                   >
                     {upiHandles.map((h) => (
                       <option key={h} value={h}>💳 {h}</option>
@@ -694,21 +843,21 @@ export function CreateOPRecordForm({
                     value={upiTxnId}
                     onChange={(e) => setUpiTxnId(e.target.value)}
                     placeholder="e.g. 402918239102"
-                    style={{ padding: '8px 10px', border: '1px solid #dde7f1', borderRadius: '6px', fontSize: '11px' }}
+                    style={{ padding: '8px 10px', border: '1px solid #dde7f1', borderRadius: '6px', fontSize: '11px', width: '100%', boxSizing: 'border-box' }}
                   />
                 </div>
               </>
             )}
 
             {/* CONDITIONAL PAY LATER WARNING BANNER */}
-            {(paymentMethod === 'Pay Later (Post-Pay)' || paymentMethod === 'Pay Later (Pending)') && (
+            {selectedMethods['Pay Later'] && (
               <div style={{ gridColumn: '1 / -1', background: '#fffbeb', border: '1px solid #fde68a', padding: '10px 12px', borderRadius: '8px', fontSize: '11px', color: '#b45309', fontWeight: '700' }}>
                 ⚠️ Pay Later Selected: Patient registered without upfront payment collection. Complete fee (₹{charges}) will be billed for post-consultation settlement.
               </div>
             )}
 
             {/* OPTIONAL RECEIPT / PROOF PHOTO UPLOAD FOR IMMEDIATE PAYMENT MODES */}
-            {paymentMethod !== 'Pay Later (Post-Pay)' && paymentMethod !== 'Pay Later (Pending)' && (
+            {!selectedMethods['Pay Later'] && (
               <div className="field" style={{ gridColumn: '1 / -1', borderTop: '1px solid #edf2f7', paddingTop: '10px', marginTop: '4px' }}>
                 <span style={{ color: '#4a5e7a', fontSize: '10px', fontWeight: '700' }}>Payment Receipt / Voucher Image (Optional)</span>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginTop: '4px', flexWrap: 'wrap' }}>

@@ -20,6 +20,7 @@ export * from './pages/PatientsPage';
 export * from './pages/PatientHistoryPage';
 export * from './pages/OPRecordsPage';
 export * from './pages/LaboratoryPage';
+export * from './pages/LabInventoryPage';
 export * from './pages/FinancePage';
 export * from './pages/StaffPage';
 export * from './pages/SettingsPage';

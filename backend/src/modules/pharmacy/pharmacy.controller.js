@@ -30,6 +30,13 @@ export const getSale = asyncHandler(async (req, res) => {
   return ApiResponse.success(res, sale, 'Pharmacy sale details fetched successfully', 200);
 });
 
+export const settleCredit = asyncHandler(async (req, res) => {
+  const { id } = req.params;
+  const { paidAmount } = req.body;
+  const updatedSale = await pharmacyService.settlePharmacyCredit(id, paidAmount);
+  return ApiResponse.success(res, updatedSale, 'Pharmacy credit settled successfully', 200);
+});
+
 export const remove = asyncHandler(async (req, res) => {
   await pharmacyService.deletePharmacySale(req.params.id);
   return ApiResponse.success(res, null, 'Pharmacy sale record deleted successfully', 200);

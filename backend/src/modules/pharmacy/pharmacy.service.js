@@ -34,11 +34,39 @@ export const createPharmacySale = async (saleData) => {
     notes: saleData.notes || '',
     status: saleData.status || 'Completed',
     createdBy: saleData.createdBy || 'Pharmacist',
+    createdByEmail: saleData.createdByEmail || '',
+    creatorRole: saleData.creatorRole || 'Pharmacist',
+    creditType: saleData.creditType || 'None',
+    partyName: saleData.partyName || saleData.patientName || '',
+    partyPhone: saleData.partyPhone || saleData.phone || '',
+    creditAmount: saleData.creditAmount || (saleData.creditType !== 'None' ? collectingVal : 0),
+    paidAmount: saleData.paidAmount || 0,
+    dueDate: saleData.dueDate || '',
+    creditStatus: saleData.creditStatus || 'Pending',
     branch: branchToUse,
     branchCode: branchCodeToUse,
   });
 
   return newSale;
+};
+
+export const settlePharmacyCredit = async (id, paidAmt = null) => {
+  let sale = null;
+  if (mongoose.Types.ObjectId.isValid(id)) {
+    sale = await Pharmacy.findById(id);
+  }
+  if (!sale) {
+    sale = await Pharmacy.findOne({ saleNo: id });
+  }
+  if (!sale) throw new Error('Pharmacy record not found');
+
+  const fullCredit = sale.creditAmount || sale.collectingAmount || 0;
+  const newPaid = paidAmt !== null ? Number(paidAmt) : fullCredit;
+  const isSettled = newPaid >= fullCredit;
+
+  sale.paidAmount = newPaid;
+  sale.creditStatus = isSettled ? 'Settled' : 'Partial';
+  return await sale.save();
 };
 
 export const getAllPharmacySales = async (branchFilter = null) => {

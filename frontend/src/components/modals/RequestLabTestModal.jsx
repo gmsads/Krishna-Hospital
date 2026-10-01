@@ -171,6 +171,11 @@ export function RequestLabTestModal({
     const matchingBranchObj = branchesList.find((b) => b.name === assignedBranch);
     const assignedCode = matchingBranchObj?.code || 'HQ-CENTRAL';
 
+    const foundSrv = masterServices.find((s) => s.name === testName.trim());
+    const defaultTestRows = (foundSrv && Array.isArray(foundSrv.subCategories) && foundSrv.subCategories.length > 0)
+      ? foundSrv.subCategories.map((sub, idx) => ({ id: idx + 1, name: sub.name, result: '', normalRange: sub.normalRange || 'Standard Reference' }))
+      : [];
+
     const newOrder = {
       id: labOrderNo,
       labOrderNo,
@@ -198,6 +203,7 @@ export function RequestLabTestModal({
       notes: clinicalNotes.trim() ? clinicalNotes.trim() : 'Laboratory Order',
       branch: assignedBranch,
       branchCode: assignedCode,
+      testRows: defaultTestRows,
       assignedLabAssistant: assignedLabAssistant.trim() || 'General Lab Staff',
       assignedStaff: assignedLabAssistant.trim() || 'General Lab Staff',
       createdBy: isLabAssistant ? 'Lab Assistant' : 'Doctor',

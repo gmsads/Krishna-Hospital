@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { FlaskConical, Plus, Trash2, Edit3, CheckCircle2, X } from 'lucide-react';
+import { FlaskConical, Plus, Trash2, Edit3, CheckCircle2, X, Layers } from 'lucide-react';
 import { initialMasterLabServices } from '../data/initialData';
 
 export function LabServicesPage({
@@ -15,6 +15,7 @@ export function LabServicesPage({
   const [testName, setTestName] = useState('');
   const [description, setDescription] = useState('');
   const [rate, setRate] = useState('');
+  const [subCategories, setSubCategories] = useState([]); // Array of { name: '', normalRange: '' }
 
   // Sync serviceList with masterServices prop
   React.useEffect(() => {
@@ -26,6 +27,21 @@ export function LabServicesPage({
   const [editName, setEditName] = useState('');
   const [editDescription, setEditDescription] = useState('');
   const [editRate, setEditRate] = useState('');
+  const [editSubCategories, setEditSubCategories] = useState([]);
+
+  const handleAddSubCategoryRow = () => {
+    setSubCategories((prev) => [...prev, { name: '', normalRange: '' }]);
+  };
+
+  const handleRemoveSubCategoryRow = (index) => {
+    setSubCategories((prev) => prev.filter((_, i) => i !== index));
+  };
+
+  const handleSubCategoryChange = (index, field, value) => {
+    setSubCategories((prev) =>
+      prev.map((item, i) => (i === index ? { ...item, [field]: value } : item))
+    );
+  };
 
   const handleAddCategory = async (e) => {
     e.preventDefault();
@@ -40,12 +56,15 @@ export function LabServicesPage({
     const matchingBranchObj = branchesList.find((b) => b.name === defaultBranchName);
     const assignedCode = matchingBranchObj?.code || 'HQ-CENTRAL';
 
+    const validSubCats = subCategories.filter((sc) => sc.name && sc.name.trim());
+
     const newService = {
       name: testName.trim(),
       description: description.trim() || 'Pathology laboratory diagnostic test',
       rate: parseFloat(rate).toFixed(2),
       branch: defaultBranchName,
       branchCode: assignedCode,
+      subCategories: validSubCats,
     };
 
     const token = localStorage.getItem('kh_auth_token');
@@ -77,6 +96,7 @@ export function LabServicesPage({
     setTestName('');
     setDescription('');
     setRate('');
+    setSubCategories([]);
   };
 
   const handleStartEdit = (srv) => {
@@ -84,6 +104,25 @@ export function LabServicesPage({
     setEditName(srv.name || '');
     setEditDescription(srv.description || '');
     setEditRate(srv.rate ? srv.rate.toString() : '');
+    setEditSubCategories(
+      Array.isArray(srv.subCategories) && srv.subCategories.length > 0
+        ? srv.subCategories
+        : []
+    );
+  };
+
+  const handleAddEditSubCategoryRow = () => {
+    setEditSubCategories((prev) => [...prev, { name: '', normalRange: '' }]);
+  };
+
+  const handleRemoveEditSubCategoryRow = (index) => {
+    setEditSubCategories((prev) => prev.filter((_, i) => i !== index));
+  };
+
+  const handleEditSubCategoryChange = (index, field, value) => {
+    setEditSubCategories((prev) =>
+      prev.map((item, i) => (i === index ? { ...item, [field]: value } : item))
+    );
   };
 
   const handleSaveEdit = async (e) => {
@@ -93,11 +132,14 @@ export function LabServicesPage({
       return;
     }
 
+    const validSubCats = editSubCategories.filter((sc) => sc.name && sc.name.trim());
+
     const updated = {
       ...editingService,
       name: editName.trim(),
       description: editDescription.trim() || 'Pathology laboratory diagnostic test',
       rate: parseFloat(editRate).toFixed(2),
+      subCategories: validSubCats,
     };
 
     const token = localStorage.getItem('kh_auth_token');
@@ -132,7 +174,7 @@ export function LabServicesPage({
         <div>
           <div className="eyebrow">Admin Master Catalogue</div>
           <h1>Lab Service Categories</h1>
-          <p>Define hospital lab test categories, descriptions, and charges. Added tests automatically pre-fill for the Lab Assistant.</p>
+          <p>Define hospital lab test categories, descriptions, charges, and optional sub-categories (e.g. Thyroid T1, T2, T3, T4, TSH).</p>
         </div>
       </div>
 
@@ -151,7 +193,7 @@ export function LabServicesPage({
               <input
                 value={testName}
                 onChange={(e) => setTestName(e.target.value)}
-                placeholder="e.g. HbA1c Diabetes Profile"
+                placeholder="e.g. Thyroid Function Profile / HbA1c"
                 required
                 style={{ padding: '12px 14px', border: '1px solid #b8d5f7', borderRadius: '9px', fontSize: '13px', background: '#fff' }}
               />
@@ -164,7 +206,7 @@ export function LabServicesPage({
                 value={description}
                 onChange={(e) => setDescription(e.target.value)}
                 placeholder="Enter pathology test scope, parameters measured, or preparation notes..."
-                rows={3}
+                rows={2}
                 style={{ padding: '12px 14px', border: '1px solid #dde7f1', borderRadius: '9px', fontSize: '13px', fontFamily: 'inherit', background: '#fff' }}
               />
             </div>
@@ -177,10 +219,53 @@ export function LabServicesPage({
                 step="0.01"
                 value={rate}
                 onChange={(e) => setRate(e.target.value)}
-                placeholder="e.g. 450.00"
+                placeholder="e.g. 1200.00"
                 required
                 style={{ padding: '12px 14px', border: '1px solid #b8d5f7', borderRadius: '9px', fontSize: '14px', background: '#f4f8fe', fontWeight: '700', color: '#1769d7' }}
               />
+            </div>
+
+            {/* OPTIONAL SUB-CATEGORIES SECTION (e.g. T1, T2, T3, T4, TSH) */}
+            <div style={{ background: '#f4f8fe', padding: '14px', borderRadius: '9px', border: '1px solid #d4e4f7', display: 'grid', gap: '10px' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <div>
+                  <span style={{ fontSize: '12px', fontWeight: '800', color: '#1769d7', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                    <Layers size={14} /> Optional Sub-Categories / Sub-Tests (e.g. T1, T2, T3, T4, TSH)
+                  </span>
+                  <span style={{ fontSize: '10px', color: '#64748b' }}>Define individual test sub-components and reference ranges.</span>
+                </div>
+                <button
+                  type="button"
+                  onClick={handleAddSubCategoryRow}
+                  style={{ background: '#fff', border: '1px solid #1769d7', color: '#1769d7', fontSize: '11px', fontWeight: '700', padding: '4px 10px', borderRadius: '6px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '4px' }}
+                >
+                  <Plus size={13} /> Add Sub-Test
+                </button>
+              </div>
+
+              {subCategories.map((sub, idx) => (
+                <div key={idx} style={{ display: 'grid', gridTemplateColumns: '1fr 1fr auto', gap: '8px', alignItems: 'center' }}>
+                  <input
+                    value={sub.name}
+                    onChange={(e) => handleSubCategoryChange(idx, 'name', e.target.value)}
+                    placeholder="Sub-test name (e.g. Thyroid T1)"
+                    style={{ padding: '7px 10px', fontSize: '11px', border: '1px solid #cbd5e1', borderRadius: '6px' }}
+                  />
+                  <input
+                    value={sub.normalRange}
+                    onChange={(e) => handleSubCategoryChange(idx, 'normalRange', e.target.value)}
+                    placeholder="Normal range (e.g. 0.8 - 2.0 ng/mL)"
+                    style={{ padding: '7px 10px', fontSize: '11px', border: '1px solid #cbd5e1', borderRadius: '6px' }}
+                  />
+                  <button
+                    type="button"
+                    onClick={() => handleRemoveSubCategoryRow(idx)}
+                    style={{ background: 'transparent', border: 'none', color: '#dc2626', cursor: 'pointer', padding: '4px' }}
+                  >
+                    <Trash2 size={14} />
+                  </button>
+                </div>
+              ))}
             </div>
 
             <button type="submit" className="primary-button" style={{ padding: '12px', justifyContent: 'center' }}>
@@ -202,6 +287,16 @@ export function LabServicesPage({
                 <div>
                   <strong style={{ fontSize: '14px', color: '#162d4a', display: 'block' }}>{srv.name}</strong>
                   <p style={{ margin: '3px 0 0', fontSize: '11px', color: '#64748b' }}>{srv.description}</p>
+                  
+                  {Array.isArray(srv.subCategories) && srv.subCategories.length > 0 && (
+                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: '4px', marginTop: '6px' }}>
+                      {srv.subCategories.map((sub, sIdx) => (
+                        <span key={sIdx} style={{ background: '#e0f2fe', color: '#0369a1', fontSize: '10px', fontWeight: '700', padding: '2px 8px', borderRadius: '4px' }}>
+                          Sub: {sub.name}
+                        </span>
+                      ))}
+                    </div>
+                  )}
                 </div>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
                   <strong style={{ fontSize: '16px', color: '#1769d7', fontFamily: 'Plus Jakarta Sans, sans-serif' }}>₹ {srv.rate}</strong>
@@ -248,7 +343,7 @@ export function LabServicesPage({
       {/* EDIT LAB SERVICE MODAL */}
       {editingService && (
         <div className="modal-overlay" style={{ position: 'fixed', inset: 0, zIndex: 120, background: 'rgba(15, 45, 85, 0.45)', display: 'grid', placeItems: 'center', padding: '16px' }}>
-          <div className="modal" style={{ background: '#fff', borderRadius: '12px', padding: '24px', maxWidth: '460px', width: '100%', boxShadow: '0 20px 40px rgba(16, 45, 85, 0.2)', border: '1px solid #dbe6f5' }}>
+          <div className="modal" style={{ background: '#fff', borderRadius: '12px', padding: '24px', maxWidth: '520px', width: '100%', boxShadow: '0 20px 40px rgba(16, 45, 85, 0.2)', border: '1px solid #dbe6f5' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid #edf2f8', paddingBottom: '12px', marginBottom: '16px' }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                 <Edit3 size={18} color="#1769d7" />
@@ -275,7 +370,7 @@ export function LabServicesPage({
                 <textarea
                   value={editDescription}
                   onChange={(e) => setEditDescription(e.target.value)}
-                  rows={3}
+                  rows={2}
                   style={{ padding: '10px 12px', border: '1px solid #dde7f1', borderRadius: '7px', fontSize: '13px', fontFamily: 'inherit' }}
                 />
               </div>
@@ -290,6 +385,44 @@ export function LabServicesPage({
                   required
                   style={{ padding: '10px 12px', border: '1px solid #b8d5f7', borderRadius: '7px', fontSize: '14px', background: '#f4f8fe', fontWeight: '700', color: '#1769d7' }}
                 />
+              </div>
+
+              {/* EDIT SUB-CATEGORIES SECTION */}
+              <div style={{ background: '#f4f8fe', padding: '12px', borderRadius: '8px', border: '1px solid #d4e4f7', display: 'grid', gap: '8px' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <span style={{ fontSize: '11px', fontWeight: '800', color: '#1769d7' }}>Sub-Categories / Sub-Tests</span>
+                  <button
+                    type="button"
+                    onClick={handleAddEditSubCategoryRow}
+                    style={{ background: '#fff', border: '1px solid #1769d7', color: '#1769d7', fontSize: '10px', fontWeight: '700', padding: '3px 8px', borderRadius: '4px', cursor: 'pointer' }}
+                  >
+                    + Add Sub-Test
+                  </button>
+                </div>
+
+                {editSubCategories.map((sub, idx) => (
+                  <div key={idx} style={{ display: 'grid', gridTemplateColumns: '1fr 1fr auto', gap: '6px', alignItems: 'center' }}>
+                    <input
+                      value={sub.name}
+                      onChange={(e) => handleEditSubCategoryChange(idx, 'name', e.target.value)}
+                      placeholder="Sub-test name (e.g. T1)"
+                      style={{ padding: '6px 8px', fontSize: '11px', border: '1px solid #cbd5e1', borderRadius: '5px' }}
+                    />
+                    <input
+                      value={sub.normalRange}
+                      onChange={(e) => handleEditSubCategoryChange(idx, 'normalRange', e.target.value)}
+                      placeholder="Normal range"
+                      style={{ padding: '6px 8px', fontSize: '11px', border: '1px solid #cbd5e1', borderRadius: '5px' }}
+                    />
+                    <button
+                      type="button"
+                      onClick={() => handleRemoveEditSubCategoryRow(idx)}
+                      style={{ background: 'transparent', border: 'none', color: '#dc2626', cursor: 'pointer' }}
+                    >
+                      <Trash2 size={13} />
+                    </button>
+                  </div>
+                ))}
               </div>
 
               <div style={{ display: 'flex', gap: '10px', justifyContent: 'flex-end', marginTop: '10px' }}>
