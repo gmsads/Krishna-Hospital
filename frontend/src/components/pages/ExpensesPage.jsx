@@ -489,6 +489,7 @@ export function ExpensesPage({
                     <option value="Card">Card</option>
                     <option value="Bank Transfer">Bank Transfer</option>
                     <option value="Cheque">Cheque</option>
+                    <option value="Free">Free / Complimentary</option>
                   </select>
                 </div>
 

@@ -22,6 +22,7 @@ const whatsAppCampaignSchema = new mongoose.Schema(
     templateLanguage: { type: String, default: 'en_US' },
     messageBody: { type: String, default: '' },
     totalRecipients: { type: Number, default: 0 },
+    recipientNumbers: { type: String, default: '' },
     sentCount: { type: Number, default: 0 },
     failedCount: { type: Number, default: 0 },
     status: { type: String, enum: ['Sending', 'Completed', 'Failed'], default: 'Completed' },

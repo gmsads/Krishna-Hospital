@@ -122,7 +122,7 @@ export class WhatsAppAdapter {
         if (!name) throw new Error('templateName is required');
         message.template = {
           name,
-          language: { code: request.templateLanguage || 'en_US' },
+          language: { code: request.templateLanguage || 'en' },
         };
         const components = [];
         if (request.headerMediaUrl) {

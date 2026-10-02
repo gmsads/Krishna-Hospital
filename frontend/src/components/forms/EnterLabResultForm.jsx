@@ -236,9 +236,10 @@ export function EnterLabResultForm({
     }
 
     const feeNum = parseFloat(testFee) || 1200;
-    const paidNum = parseFloat(amountPaidNow) || 0;
-    const dueNum = Math.max(0, feeNum - paidNum);
-    const payStatus = dueNum <= 0 ? 'Paid' : paidNum > 0 ? 'Partial' : 'Pay Later (Pending)';
+    const isFree = paymentMethod === 'Free' || paymentMethod === 'Free / Complimentary';
+    const paidNum = isFree ? feeNum : (parseFloat(amountPaidNow) || 0);
+    const dueNum = isFree ? 0 : Math.max(0, feeNum - paidNum);
+    const payStatus = isFree ? 'Paid' : (dueNum <= 0 ? 'Paid' : paidNum > 0 ? 'Partial' : 'Pay Later (Pending)');
 
     // Format main result summary string for cards
     const summaryResult = testRows
@@ -448,6 +449,7 @@ export function EnterLabResultForm({
                 <option value="Cash">Cash</option>
                 <option value="UPI / Online">UPI / QR Payment</option>
                 <option value="Credit / Debit Card">Credit / Debit Card</option>
+                <option value="Free">Free / Complimentary</option>
                 <option value="Pay Later (Pending)">Pay Later (Post-Pay)</option>
               </select>
             </div>

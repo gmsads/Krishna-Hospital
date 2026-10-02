@@ -108,6 +108,7 @@ export function CreateOPRecordForm({
     Card: false,
     Cheque: false,
     'Bank Transfer': false,
+    Free: false,
     Others: false,
     'Pay Later': false,
   });
@@ -118,6 +119,7 @@ export function CreateOPRecordForm({
     Card: '0',
     Cheque: '0',
     'Bank Transfer': '0',
+    Free: '0',
     Others: '0',
   });
 
@@ -142,7 +144,31 @@ export function CreateOPRecordForm({
   // MULTI-SELECT PAYMENT TOGGLE
   const togglePaymentMethod = (modeKey) => {
     setSelectedMethods((prev) => {
-      if (modeKey === 'Pay Later') {
+      if (modeKey === 'Free') {
+        const isCurrentlySelected = prev['Free'];
+        if (!isCurrentlySelected) {
+          setSplitAmounts((prevSplits) => ({
+            ...prevSplits,
+            Free: charges,
+          }));
+          return {
+            Cash: false,
+            UPI: false,
+            Card: false,
+            Cheque: false,
+            'Bank Transfer': false,
+            Free: true,
+            Others: false,
+            'Pay Later': false,
+          };
+        } else {
+          return {
+            ...prev,
+            Cash: true,
+            Free: false,
+          };
+        }
+      } else if (modeKey === 'Pay Later') {
         const isCurrentlySelected = prev['Pay Later'];
         if (!isCurrentlySelected) {
           return {
@@ -151,6 +177,7 @@ export function CreateOPRecordForm({
             Card: false,
             Cheque: false,
             'Bank Transfer': false,
+            Free: false,
             Others: false,
             'Pay Later': true,
           };
@@ -162,7 +189,7 @@ export function CreateOPRecordForm({
           };
         }
       } else {
-        const nextState = { ...prev, [modeKey]: !prev[modeKey], 'Pay Later': false };
+        const nextState = { ...prev, [modeKey]: !prev[modeKey], 'Pay Later': false, Free: false };
         const anyChecked = Object.keys(nextState).some((k) => nextState[k]);
         if (!anyChecked) {
           nextState.Cash = true;
@@ -319,11 +346,12 @@ export function CreateOPRecordForm({
 
     const finalRecordType = recordType === 'IP' && ipCareDetails.trim() ? `IP (${ipCareDetails.trim()})` : recordType;
     const totalNum = parseFloat(String(charges).replace(/[^0-9.]/g, '')) || 0;
-    const isPayLater = selectedMethods['Pay Later'];
-    const paidNum = isPayLater ? 0 : calculatedTotalCollected;
-    const dueNum = Math.max(0, totalNum - paidNum);
-    const payStatus = isPayLater ? 'Pay Later (Pending)' : dueNum <= 0 ? 'Paid' : paidNum > 0 ? 'Partial' : 'Pay Later (Pending)';
-    const savedPaymentMethod = isPayLater ? 'Pay Later (Post-Pay)' : (paymentSummaryStr || activeModes.join(', ') || 'Cash');
+    const isFree = !!selectedMethods['Free'];
+    const isPayLater = !isFree && selectedMethods['Pay Later'];
+    const paidNum = isFree ? totalNum : (isPayLater ? 0 : calculatedTotalCollected);
+    const dueNum = isFree ? 0 : Math.max(0, totalNum - paidNum);
+    const payStatus = isFree ? 'Paid' : (isPayLater ? 'Pay Later (Pending)' : dueNum <= 0 ? 'Paid' : paidNum > 0 ? 'Partial' : 'Pay Later (Pending)');
+    const savedPaymentMethod = isFree ? 'Free / Complimentary' : (isPayLater ? 'Pay Later (Post-Pay)' : (paymentSummaryStr || activeModes.join(', ') || 'Cash'));
 
     const splitBreakdown = {};
     activeModes.forEach((k) => {
@@ -758,7 +786,7 @@ export function CreateOPRecordForm({
             {/* MULTI-SELECT PAYMENT METHOD CHECKBOXES & SPLIT AMOUNTS */}
             <div className="field" style={{ gridColumn: '1 / -1', borderTop: '1px solid #edf2f7', paddingTop: '10px' }}>
               <span style={{ color: '#0f2d55', fontSize: '11px', fontWeight: '800', display: 'block', marginBottom: '8px' }}>
-                Payment Method (Select Multiple Modes with Ticks) *
+                Payment Method *
               </span>
 
               {/* CHECKBOXES ROW */}
@@ -769,6 +797,7 @@ export function CreateOPRecordForm({
                   { key: 'Card', label: 'Card' },
                   { key: 'Cheque', label: 'Cheque' },
                   { key: 'Bank Transfer', label: 'Bank Transfer' },
+                  { key: 'Free', label: 'Free / Complimentary' },
                   { key: 'Others', label: 'Others / PO' },
                   { key: 'Pay Later', label: 'Pay Later (Post-Pay)' },
                 ].map((m) => (

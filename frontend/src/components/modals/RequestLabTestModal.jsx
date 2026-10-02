@@ -163,9 +163,10 @@ export function RequestLabTestModal({
     }
 
     const feeNum = parseFloat(testFee) || 0;
-    const paidNum = parseFloat(amountPaidNow) || 0;
-    const dueNum = Math.max(0, feeNum - paidNum);
-    const payStatus = dueNum <= 0 ? 'Paid' : paidNum > 0 ? 'Partial' : 'Pending';
+    const isFree = paymentMethod === 'Free' || paymentMethod === 'Free / Complimentary';
+    const paidNum = isFree ? feeNum : (parseFloat(amountPaidNow) || 0);
+    const dueNum = isFree ? 0 : Math.max(0, feeNum - paidNum);
+    const payStatus = isFree ? 'Paid' : (dueNum <= 0 ? 'Paid' : paidNum > 0 ? 'Partial' : 'Pending');
 
     const assignedBranch = effectiveBranch === 'All' ? selectedBranch : effectiveBranch;
     const matchingBranchObj = branchesList.find((b) => b.name === assignedBranch);
@@ -415,6 +416,7 @@ export function RequestLabTestModal({
                   <option value="Cash">Cash</option>
                   <option value="UPI / Online">UPI / QR Payment</option>
                   <option value="Credit / Debit Card">Credit / Debit Card</option>
+                  <option value="Free">Free / Complimentary</option>
                   <option value="Pay Later (Pending)">Pay Later (Post-Pay)</option>
                 </select>
               </div>

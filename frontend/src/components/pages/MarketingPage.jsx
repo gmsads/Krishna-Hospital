@@ -3,11 +3,11 @@ import { MessageSquare, Send, CheckCircle2, Phone, Key, Settings, ShieldCheck, S
 
 export function MarketingPage({ notify, effectiveBranch = 'All' }) {
   const [audience, setAudience] = useState('All OP Patients');
-  const [campaignTitle, setCampaignTitle] = useState('Comprehensive Health Checkup Offer');
-  const [templateName, setTemplateName] = useState('opd_health_checkup_offer');
-  const [templateLanguage, setTemplateLanguage] = useState('en_US');
+  const [campaignTitle, setCampaignTitle] = useState('Krishna Hospitals Grand Inauguration');
+  const [templateName, setTemplateName] = useState('krishna_hospitals_inauguration');
+  const [templateLanguage, setTemplateLanguage] = useState('en');
   const [message, setMessage] = useState(
-    'Dear {patient_name}, Krishna Hospitals is offering a 20% discount on OPD Health Checkups & Pathology Tests this month. Book your appointment today or reply to this WhatsApp message for details. Stay Healthy!'
+    '🌸 A New Beginning at Krishna Hospitals, Guntur 🌸\n\nWith the blessings and support of our well-wishers, Krishna Hospitals, Guntur is pleased to announce its grand inauguration. 🏥✨\n\n📅 Date: {date}\n⏰ Time: 10:00 AM\n📍 Venue: Krishna Hospitals, Guntur'
   );
 
   const [showConfigModal, setShowConfigModal] = useState(false);
@@ -143,12 +143,54 @@ export function MarketingPage({ notify, effectiveBranch = 'All' }) {
       .catch((err) => console.warn('Could not fetch marketing config:', err.message));
   };
 
+  const selectTemplate = (selectedName, tplList = metaTemplates) => {
+    setTemplateName(selectedName);
+    const found = (tplList || []).find((t) => t.name === selectedName);
+    if (found) {
+      setTemplateLanguage(found.language || 'en');
+      const bodyComp = (found.components || []).find(
+        (c) => (c.type || '').toUpperCase() === 'BODY'
+      );
+      if (bodyComp && bodyComp.text) {
+        let formattedText = bodyComp.text;
+        if (selectedName === 'krishna_hospitals_inauguration') {
+          formattedText = formattedText.replace(/\{\{1\}\}/g, '15th October 2026').replace(/\{\{2\}\}/g, '10:00 AM');
+        } else if (selectedName === 'inauguration_template') {
+          formattedText = formattedText.replace(/\{\{1\}\}/g, '15 అక్టోబర్ 2026').replace(/\{\{2\}\}/g, 'ఉదయం 10:00 గంటలకు');
+        } else {
+          formattedText = formattedText
+            .replace(/\{\{1\}\}/g, '{patient_name}')
+            .replace(/\{\{2\}\}/g, '{hospital_name}')
+            .replace(/\{\{3\}\}/g, '{doctor_name}')
+            .replace(/\{\{4\}\}/g, '{date}');
+        }
+        setMessage(formattedText);
+      } else {
+        setMessage('');
+      }
+    } else {
+      if (selectedName === 'krishna_hospitals_inauguration') {
+        setTemplateLanguage('en');
+        setMessage('🌸 A New Beginning at Krishna Hospitals, Guntur 🌸\n\nWith the blessings and support of our well-wishers, Krishna Hospitals, Guntur is pleased to announce its grand inauguration. 🏥✨\n\n📅 Date: 15th October 2026\n⏰ Time: 10:00 AM\n📍 Venue: Krishna Hospitals, Guntur');
+      } else if (selectedName === 'inauguration_template') {
+        setTemplateLanguage('te');
+        setMessage('మీ అందరి ఆశీస్సులతో కృష్ణ హాస్పిటల్స్ నూతనంగా ప్రారంభమవుతోంది. 🏥✨\n\n📅 తేదీ: 15 అక్టోబర్ 2026\n⏰ సమయం: ఉదయం 10:00 గంటలకు\n📍 వేదిక: కృష్ణ హాస్పిటల్స్, గుంటూరు');
+      } else if (selectedName === 'hello_world') {
+        setTemplateLanguage('en');
+        setMessage('Welcome to Krishna Hospitals ({hospital_name}), {patient_name}! We are happy to assist you.');
+      }
+    }
+  };
+
   const fetchTemplates = () => {
     fetch('/api/v1/marketing/templates')
       .then((res) => res.json())
       .then((data) => {
         if (data.success && Array.isArray(data.data) && data.data.length > 0) {
           setMetaTemplates(data.data);
+          const existing = data.data.find((t) => t.name === templateName);
+          const nameToUse = existing ? templateName : data.data[0].name;
+          selectTemplate(nameToUse, data.data);
         }
       })
       .catch((err) => console.warn('Could not fetch Meta templates:', err.message));
@@ -196,6 +238,7 @@ export function MarketingPage({ notify, effectiveBranch = 'All' }) {
         setIsConfigured(true);
         setShowConfigModal(false);
         fetchConfig();
+        fetchTemplates();
         notify && notify('Meta WhatsApp Cloud API credentials saved successfully!');
       } else {
         notify && notify(data.message || 'Failed to save Meta credentials');
@@ -223,6 +266,11 @@ export function MarketingPage({ notify, effectiveBranch = 'All' }) {
       return;
     }
 
+    let tplParams = ['{patient_name}', '{hospital_name}', '{doctor_name}', '{date}'];
+    if (templateName.trim() === 'hello_world') tplParams = [];
+    else if (templateName.trim() === 'krishna_hospitals_inauguration') tplParams = ['15th October 2026', '10:00 AM'];
+    else if (templateName.trim() === 'inauguration_template') tplParams = ['15 అక్టోబర్ 2026', 'ఉదయం 10:00 గంటలకు'];
+
     setSending(true);
     try {
       const res = await fetch('/api/v1/marketing/broadcast', {
@@ -234,7 +282,7 @@ export function MarketingPage({ notify, effectiveBranch = 'All' }) {
           templateName: templateName.trim(),
           templateLanguage,
           messageBody: message,
-          templateParameters: templateName.trim() === 'hello_world' ? [] : ['{patient_name}', '{hospital_name}'],
+          templateParameters: tplParams,
           targetBranch: effectiveBranch,
         }),
       });
@@ -242,12 +290,14 @@ export function MarketingPage({ notify, effectiveBranch = 'All' }) {
       const data = await res.json();
       if (res.ok && data.success) {
         const count = data.data?.totalRecipients || getRecipientCount();
+        const numbers = data.data?.recipientNumbers || '';
         setSentLog({
           timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
           count,
+          numbers,
           title: campaignTitle,
         });
-        notify && notify(`Official Meta Cloud API broadcast queued for ${count} patients!`);
+        notify && notify(`Official Meta Cloud API broadcast queued for ${count} patients (${numbers})!`);
         fetchCampaignLogs();
         fetchAudienceStats();
       } else {
@@ -385,30 +435,19 @@ export function MarketingPage({ notify, effectiveBranch = 'All' }) {
 
             {/* Approved Meta Template Picker */}
             <div className="field">
-              <span style={{ color: '#4a5e7a', fontSize: '12px', fontWeight: '700' }}>Official Meta Approved Template *</span>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '4px' }}>
+                <span style={{ color: '#4a5e7a', fontSize: '12px', fontWeight: '700' }}>Official Meta Approved Template *</span>
+                <button
+                  type="button"
+                  onClick={fetchTemplates}
+                  style={{ background: 'none', border: 'none', color: '#1769d7', cursor: 'pointer', fontSize: '11px', display: 'flex', alignItems: 'center', gap: '4px', padding: 0 }}
+                >
+                  <RefreshCw size={12} /> Sync from Meta
+                </button>
+              </div>
               <select
                 value={templateName}
-                onChange={(e) => {
-                  const selectedName = e.target.value;
-                  setTemplateName(selectedName);
-
-                  const found = metaTemplates.find((t) => t.name === selectedName);
-                  if (found) {
-                    setTemplateLanguage(found.language || 'en');
-                    const bodyComp = (found.components || []).find((c) => c.type === 'BODY');
-                    if (bodyComp && bodyComp.text) {
-                      setMessage(bodyComp.text.replace(/\{\{1\}\}/g, '{patient_name}').replace(/\{\{2\}\}/g, '{hospital_name}'));
-                    }
-                  } else {
-                    if (selectedName === 'opd_health_checkup_offer') {
-                      setTemplateLanguage('en');
-                      setMessage('Dear {patient_name}, Krishna Hospitals ({hospital_name}) is offering a 20% discount on OPD Health Checkups & Pathology Tests this month. Book your appointment today!');
-                    } else if (selectedName === 'hello_world') {
-                      setTemplateLanguage('en_US');
-                      setMessage('Welcome to Krishna Hospitals ({hospital_name}), {patient_name}! We are happy to assist you.');
-                    }
-                  }
-                }}
+                onChange={(e) => selectTemplate(e.target.value)}
                 style={{ padding: '12px 14px', border: '1px solid #dde7f1', borderRadius: '9px', fontSize: '13px', background: '#fff', fontWeight: '700', color: '#0f172a', width: '100%', boxSizing: 'border-box' }}
               >
                 {metaTemplates.length > 0 ? (
@@ -442,7 +481,11 @@ export function MarketingPage({ notify, effectiveBranch = 'All' }) {
             <div className="field">
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '4px', flexWrap: 'wrap' }}>
                 <span style={{ color: '#4a5e7a', fontSize: '12px', fontWeight: '700' }}>WhatsApp Template Content Body *</span>
-                <span style={{ fontSize: '11px', color: '#1769d7' }}>Injected Variables: <code>{"{patient_name}"}</code>, <code>{"{hospital_name}"}</code></span>
+                <span style={{ fontSize: '11px', color: '#1769d7' }}>
+                  {templateName === 'krishna_hospitals_inauguration' || templateName === 'inauguration_template'
+                    ? 'Injected Variables: Date (15th October 2026), Time (10:00 AM)'
+                    : 'Injected Variables: {patient_name}, {hospital_name}'}
+                </span>
               </div>
               <textarea
                 value={message}
@@ -472,7 +515,7 @@ export function MarketingPage({ notify, effectiveBranch = 'All' }) {
                   <CheckCircle2 size={18} /> Broadcast Successfully Initiated via Meta Cloud API!
                 </div>
                 <div style={{ fontSize: '12px', color: '#166534', marginTop: '4px' }}>
-                  Campaign "<strong>{sentLog.title}</strong>" queued for <strong>{sentLog.count} patients</strong> via Meta Graph API at {sentLog.timestamp}.
+                  Campaign "<strong>{sentLog.title}</strong>" queued for <strong>{sentLog.count} patients</strong> {sentLog.numbers && <span>(<strong>{sentLog.numbers}</strong>)</span>} via Meta Graph API at {sentLog.timestamp}.
                 </div>
               </div>
             )}
@@ -724,6 +767,7 @@ export function MarketingPage({ notify, effectiveBranch = 'All' }) {
                 <th>Campaign Title</th>
                 <th>Target Audience</th>
                 <th>Meta Template</th>
+                <th>Target Patient Numbers</th>
                 <th>Total Patients</th>
                 <th>Delivered</th>
                 <th>Status</th>
@@ -733,7 +777,7 @@ export function MarketingPage({ notify, effectiveBranch = 'All' }) {
             <tbody>
               {campaignLogs.length === 0 ? (
                 <tr>
-                  <td colSpan={7} style={{ textAlign: 'center', padding: '24px', color: '#64748b' }}>
+                  <td colSpan={8} style={{ textAlign: 'center', padding: '24px', color: '#64748b' }}>
                     No Meta broadcast campaign history recorded yet.
                   </td>
                 </tr>
@@ -750,6 +794,11 @@ export function MarketingPage({ notify, effectiveBranch = 'All' }) {
                     </td>
                     <td>
                       <code style={{ fontSize: '11px', color: '#0f172a' }}>{c.templateName}</code>
+                    </td>
+                    <td>
+                      <span style={{ fontSize: '11px', color: '#0369a1', fontFamily: 'monospace', background: '#e0f2fe', padding: '2px 6px', borderRadius: '4px', display: 'inline-block', maxWidth: '200px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={c.recipientNumbers}>
+                        {c.recipientNumbers || 'DB OP Records'}
+                      </span>
                     </td>
                     <td>
                       <strong style={{ fontSize: '13px' }}>{c.totalRecipients}</strong>

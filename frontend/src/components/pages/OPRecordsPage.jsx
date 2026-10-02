@@ -66,6 +66,7 @@ export function OPRecordsPage({
       Card: false,
       Cheque: false,
       'Bank Transfer': false,
+      Free: false,
       Others: false,
     });
     setSettlementSplitAmounts({
@@ -74,6 +75,7 @@ export function OPRecordsPage({
       Card: '0',
       Cheque: '0',
       'Bank Transfer': '0',
+      Free: '0',
       Others: '0',
     });
     setSettlementUpiHandle(upiHandles[0] || 'krishnahospital@okicici');
@@ -712,7 +714,7 @@ export function OPRecordsPage({
                 {/* MULTI-SELECT SETTLEMENT PAYMENT METHODS (TICKS) & SPLIT AMOUNTS */}
                 <div className="field">
                   <span style={{ fontSize: '11px', fontWeight: '800', color: '#0f2d55', display: 'block', marginBottom: '6px' }}>
-                    Settlement Payment Method (Select Multiple Modes with Ticks) *
+                    Settlement Payment Method *
                   </span>
 
                   {/* CHECKBOXES ROW */}
@@ -723,6 +725,7 @@ export function OPRecordsPage({
                       { key: 'Card', label: 'Card' },
                       { key: 'Cheque', label: 'Cheque' },
                       { key: 'Bank Transfer', label: 'Bank Transfer' },
+                      { key: 'Free', label: 'Free / Complimentary' },
                       { key: 'Others', label: 'Others / PO' },
                     ].map((m) => (
                       <label key={m.key} style={{ display: 'flex', alignItems: 'center', gap: '6px', cursor: 'pointer', fontSize: '12px', fontWeight: '700', color: selectedSettlementMethods[m.key] ? '#1769d7' : '#475569' }}>

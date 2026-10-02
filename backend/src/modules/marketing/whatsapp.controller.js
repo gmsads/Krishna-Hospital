@@ -25,6 +25,23 @@ const constantTimeEquals = (left, right) => {
 const escapeHtml = (value) =>
   String(value || '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
 
+const getDynamicWabaId = async (accessToken, phoneNumberId) => {
+  if (!accessToken || !phoneNumberId) return null;
+  try {
+    const cleanPhoneId = String(phoneNumberId).trim();
+    if (!cleanPhoneId || cleanPhoneId.includes('...')) return null;
+    const url = `https://graph.facebook.com/v22.0/${cleanPhoneId}?fields=account_id`;
+    const resp = await fetch(url, { headers: { Authorization: `Bearer ${accessToken}` } });
+    if (resp.ok) {
+      const data = await resp.json();
+      if (data.account_id) return data.account_id;
+    }
+  } catch (err) {
+    console.warn('[WhatsApp] Could not auto-detect WABA ID:', err.message);
+  }
+  return null;
+};
+
 const verifyHmacSha256Signature = (rawPayload, signatureHeader, secret) => {
   if (!secret || !signatureHeader) return false;
   const sig = Array.isArray(signatureHeader) ? signatureHeader[0] : signatureHeader;
@@ -126,9 +143,14 @@ export const saveConfig = asyncHandler(async (req, res) => {
   if (defaultTemplate) dbConfig.defaultTemplate = defaultTemplate.trim();
   dbConfig.isConfigured = Boolean(dbConfig.phoneNumberId && dbConfig.accessToken);
 
+  if (dbConfig.accessToken && dbConfig.phoneNumberId) {
+    const fetchedWabaId = await getDynamicWabaId(dbConfig.accessToken, dbConfig.phoneNumberId);
+    if (fetchedWabaId) dbConfig.wabaId = fetchedWabaId;
+  }
+
   await dbConfig.save();
 
-  return ApiResponse.success(res, { isConfigured: dbConfig.isConfigured }, 'WhatsApp Meta Cloud API credentials saved successfully', 200);
+  return ApiResponse.success(res, { isConfigured: dbConfig.isConfigured, wabaId: dbConfig.wabaId }, 'WhatsApp Meta Cloud API credentials saved successfully', 200);
 });
 
 // 5. Get Real Database Audience Statistics
@@ -179,17 +201,25 @@ export const broadcastCampaign = asyncHandler(async (req, res) => {
   const query = {};
   if (targetBranch && targetBranch !== 'All') {
     const branchKeyword = targetBranch.replace(/^Krishna\s+Hospital\s+/i, '').trim();
-    const branchRegex = new RegExp(branchKeyword, 'i');
-    query.$or = [
-      { branch: branchRegex },
-      { branchCode: branchRegex },
-    ];
+    if (branchKeyword) {
+      const branchRegex = new RegExp(branchKeyword, 'i');
+      query.$or = [
+        { branch: branchRegex },
+        { branchCode: branchRegex },
+      ];
+    }
   }
 
-  const records = await OPRecord.find(query).select('patientName patient phone age createdAt').sort({ createdAt: -1 });
+  let records = await OPRecord.find(query).select('patientName patient phone age createdAt').sort({ createdAt: -1 });
+  if (records.length === 0 && targetBranch && targetBranch !== 'All') {
+    records = await OPRecord.find({}).select('patientName patient phone age createdAt').sort({ createdAt: -1 });
+  }
 
   // Filter numbers based on selected audience
   let recipients = records.filter((r) => r.phone && adapter.validatePhoneNumber(r.phone));
+  if (recipients.length === 0 && records.length > 0) {
+    recipients = records.filter((r) => r.phone && String(r.phone).replace(/\D/g, '').length >= 10);
+  }
 
   const parseAge = (ageStr) => {
     if (!ageStr) return 0;
@@ -225,14 +255,18 @@ export const broadcastCampaign = asyncHandler(async (req, res) => {
     return ApiResponse.error(res, 'No valid patient phone numbers found for the selected audience scope', 400);
   }
 
+  const recipientPhoneList = uniqueRecipients.map((r) => adapter.formatPhoneNumber(r.phone));
+  const recipientSummaryStr = recipientPhoneList.join(', ');
+
   // Create Campaign Record in MongoDB
   const campaignRecord = await WhatsAppCampaign.create({
     campaignTitle,
     audience,
     templateName,
-    templateLanguage: templateLanguage || 'en_US',
+    templateLanguage: templateLanguage || 'en',
     messageBody: messageBody || '',
     totalRecipients: totalCount,
+    recipientNumbers: recipientSummaryStr,
     sentCount: 0,
     failedCount: 0,
     status: 'Sending',
@@ -245,47 +279,76 @@ export const broadcastCampaign = asyncHandler(async (req, res) => {
     let failCount = 0;
 
     let expectedParamCount = null;
+    let detectedMetaLanguage = templateLanguage || 'en_US';
+
     try {
-      const dbTpl = await WhatsAppMetaTemplate.findOne({
-        name: new RegExp('^' + templateName.trim() + '$', 'i'),
-      });
-      if (dbTpl) {
-        const fullTplStr = `${dbTpl.bodyText || ''} ${dbTpl.headerContent || ''} ${JSON.stringify(dbTpl.buttons || [])}`;
-        const varMatches = [...fullTplStr.matchAll(/\{\{(\d+)\}\}/g)];
-        if (varMatches.length > 0) {
-          expectedParamCount = Math.max(...varMatches.map((m) => parseInt(m[1], 10) || 1));
-        } else {
-          expectedParamCount = 0;
+      const { accessToken, phoneNumberId } = await adapter.getDynamicCredentials();
+      const dbConfig = await WhatsAppConfig.findOne({ isConfigured: true }).sort({ updatedAt: -1 });
+      let wabaId = dbConfig?.wabaId;
+      if (!wabaId && phoneNumberId) {
+        wabaId = await getDynamicWabaId(accessToken, phoneNumberId);
+        if (wabaId && dbConfig) {
+          dbConfig.wabaId = wabaId;
+          await dbConfig.save().catch(() => {});
         }
-      } else if (templateName.trim() === 'hello_world') {
-        expectedParamCount = 0;
+      }
+      wabaId = wabaId || process.env.WHATSAPP_WABA_ID || '1956272015332745';
+
+      if (accessToken && wabaId) {
+        const url = `https://graph.facebook.com/v22.0/${wabaId}/message_templates?limit=100`;
+        const resp = await fetch(url, { headers: { Authorization: `Bearer ${accessToken}` } });
+        if (resp.ok) {
+          const tplData = await resp.json();
+          const metaTpl = (tplData.data || []).find((t) => t.name.trim().toLowerCase() === templateName.trim().toLowerCase());
+          if (metaTpl) {
+            if (metaTpl.language) detectedMetaLanguage = metaTpl.language;
+            const bodyComp = (metaTpl.components || []).find((c) => (c.type || '').toUpperCase() === 'BODY');
+            const headerComp = (metaTpl.components || []).find((c) => (c.type || '').toUpperCase() === 'HEADER');
+            const fullTplStr = `${bodyComp?.text || ''} ${headerComp?.text || ''}`;
+            const varMatches = [...fullTplStr.matchAll(/\{\{(\d+)\}\}/g)];
+            if (varMatches.length > 0) {
+              expectedParamCount = Math.max(...varMatches.map((m) => parseInt(m[1], 10) || 1));
+            } else {
+              expectedParamCount = 0;
+            }
+          }
+        }
+      }
+
+      if (expectedParamCount === null) {
+        const dbTpl = await WhatsAppMetaTemplate.findOne({
+          name: new RegExp('^' + templateName.trim() + '$', 'i'),
+        });
+        if (dbTpl) {
+          if (dbTpl.language) detectedMetaLanguage = dbTpl.language;
+          const fullTplStr = `${dbTpl.bodyText || ''} ${dbTpl.headerContent || ''} ${JSON.stringify(dbTpl.buttons || [])}`;
+          const varMatches = [...fullTplStr.matchAll(/\{\{(\d+)\}\}/g)];
+          if (varMatches.length > 0) {
+            expectedParamCount = Math.max(...varMatches.map((m) => parseInt(m[1], 10) || 1));
+          } else {
+            expectedParamCount = 0;
+          }
+        } else if (templateName.trim() === 'hello_world') {
+          expectedParamCount = 0;
+          detectedMetaLanguage = 'en_US';
+        }
       }
     } catch (err) {
-      console.warn('[WhatsApp Campaign] Template DB lookup warning:', err.message);
+      console.warn('[WhatsApp Campaign] Template DB/Meta lookup warning:', err.message);
     }
 
     for (const patient of uniqueRecipients) {
       const patientName = patient.patientName || patient.patient || 'Patient';
       const formattedPhone = adapter.formatPhoneNumber(patient.phone);
 
-      let langToUse = templateLanguage || 'en_US';
+      let langToUse = detectedMetaLanguage || templateLanguage || 'en_US';
       let params = [];
       let headerMediaUrl = undefined;
 
       if (templateName.trim() === 'hello_world') {
-        langToUse = 'en_US';
+        langToUse = detectedMetaLanguage || 'en_US';
         params = [];
-      } else if (templateName.trim() === 'krishna_hospitals_inauguration') {
-        langToUse = 'te';
-        headerMediaUrl = 'https://scontent.whatsapp.net/v/t61.29466-34/794645776_1589941262774766_5351474244715672565_n.jpg?ccb=1-7&_nc_sid=8b1bef&_nc_ohc=3D0VwxSip0wQ7kNvwEs-tDR&_nc_oc=AdpKPTo8wlTaLpZ3YgKyb7dideUn1ROzPm5EX0-hzBTe9B3Z8SUtnf55FZqaMoGjUumHM96YkBYf3VSNZ-Zw_ltN&_nc_zt=3&_nc_ht=scontent.whatsapp.net&edm=AH51TzQEAAAA&_nc_gid=S6uP17hj6hnNQJmSRcQ6wg&_nc_tpa=Q5bMBQLJHaJNYboOChcVQ_bU_A3x2XB_pSgAynZm6khtaYsuw6pb6elIBd8ou6AeSvPaImpHzyH46Mlf0w&oh=01_Q5Aa5gG0JZfG8BtlH_zgruBLKl9zpjOLL_F2Gumgp-JSwDmk8w&oe=6AC8B7B5';
-        params = [
-          '15 సెప్టెంబర్ 2026',
-          'ఉదయం 10:00 గంటలకు',
-          'కృష్ణ హాస్పిటల్స్, Guntur',
-          '8074499548',
-        ];
       } else {
-        langToUse = templateLanguage || 'en_US';
         let rawParams = [];
         if (templateParameters && Array.isArray(templateParameters) && templateParameters.length > 0) {
           rawParams = templateParameters.map((p) =>
@@ -293,17 +356,17 @@ export const broadcastCampaign = asyncHandler(async (req, res) => {
               .replace('{patient_name}', patientName)
               .replace('{hospital_name}', 'Krishna Hospitals')
               .replace('{doctor_name}', 'Dr. Vijaywada')
-              .replace('{date}', '15th Sept 2026')
+              .replace('{date}', '15th October 2026')
           );
         } else {
-          rawParams = [patientName, 'Dr. Vijaywada', '15th Sept 2026', '10:00 AM', 'Krishna Hospitals'];
+          rawParams = ['15th October 2026', '10:00 AM', patientName, 'Krishna Hospitals'];
         }
 
         if (expectedParamCount === 0) {
           params = [];
         } else if (expectedParamCount !== null && expectedParamCount > 0) {
           params = rawParams.slice(0, expectedParamCount);
-          const presets = [patientName, 'Dr. Vijaywada', '15th Sept 2026', '10:00 AM', 'Krishna Hospitals'];
+          const presets = ['15th October 2026', '10:00 AM', patientName, 'Krishna Hospitals'];
           while (params.length < expectedParamCount) {
             params.push(presets[params.length % presets.length]);
           }
@@ -321,44 +384,49 @@ export const broadcastCampaign = asyncHandler(async (req, res) => {
         headerMediaUrl,
       });
 
-      // Fallback 1: Handle Meta Code 132000 (Parameter count mismatch) by trying all valid parameter counts
-      if (!result.success && result.errorCode === 132000) {
-        const paramOptions = [
+      // Combined Smart Recovery Matrix for Meta Code 132001 (Template/Language mismatch) & Error 132000 (Param Count mismatch)
+      if (!result.success && (result.errorCode === 132001 || result.errorCode === 132000)) {
+        const langCandidates = Array.from(new Set([
+          detectedMetaLanguage,
+          templateLanguage,
+          'en',
+          'en_US',
+          'en_GB',
+          'te',
+          'hi',
+        ])).filter(Boolean);
+
+        const paramCandidates = [
+          params,
+          ['15th October 2026', '10:00 AM'],
+          ['15 అక్టోబర్ 2026', 'ఉదయం 10:00 గంటలకు'],
           [],
           [patientName],
           [patientName, 'Krishna Hospitals'],
-          [patientName, 'Dr. Vijaywada', '15th Sept 2026'],
-          [patientName, 'Dr. Vijaywada', '15th Sept 2026', '10:00 AM'],
-          [patientName, 'Dr. Vijaywada', '15th Sept 2026', '10:00 AM', 'Krishna Hospitals'],
+          [patientName, 'Dr. Vijaywada', '15th October 2026'],
+          [patientName, 'Dr. Vijaywada', '15th October 2026', '10:00 AM'],
         ];
-        for (const altParams of paramOptions) {
-          if (altParams.length === params.length) continue;
-          result = await adapter.send({
-            phoneNumber: formattedPhone,
-            messageType: 'template',
-            templateName: templateName.trim(),
-            templateLanguage: langToUse,
-            templateParameters: altParams,
-            headerMediaUrl,
-          });
-          if (result.success) break;
-        }
-      }
 
-      // Fallback 2: Handle Meta Code 132001 (Template language mismatch)
-      if (!result.success && result.errorCode === 132001) {
-        const fallbacks = ['te', 'en', 'en_US'];
-        for (const fbLang of fallbacks) {
-          if (fbLang === langToUse) continue;
-          result = await adapter.send({
-            phoneNumber: formattedPhone,
-            messageType: 'template',
-            templateName: templateName.trim(),
-            templateLanguage: fbLang,
-            templateParameters: params,
-            headerMediaUrl,
-          });
-          if (result.success) break;
+        recoveryLoop: for (const fbLang of langCandidates) {
+          for (const fbParams of paramCandidates) {
+            if (fbLang === langToUse && fbParams.length === params.length) continue;
+
+            result = await adapter.send({
+              phoneNumber: formattedPhone,
+              messageType: 'template',
+              templateName: templateName.trim(),
+              templateLanguage: fbLang,
+              templateParameters: fbParams,
+              headerMediaUrl,
+            });
+
+            if (result.success) {
+              console.log(`[WhatsApp] Recovered from Meta error ${result.errorCode || '132001/132000'} using language '${fbLang}' and param count ${fbParams.length}`);
+              detectedMetaLanguage = fbLang;
+              expectedParamCount = fbParams.length;
+              break recoveryLoop;
+            }
+          }
         }
       }
 
@@ -383,24 +451,35 @@ export const broadcastCampaign = asyncHandler(async (req, res) => {
     {
       campaignId: campaignRecord._id,
       totalRecipients: totalCount,
+      recipientNumbers: recipientSummaryStr,
+      recipients: recipientPhoneList,
       title: campaignTitle,
     },
-    `Bulk WhatsApp campaign "${campaignTitle}" initiated for ${totalCount} patients!`,
+    `Bulk WhatsApp campaign "${campaignTitle}" initiated for ${totalCount} patients (${recipientSummaryStr})!`,
     200
   );
 });
 
 // 7. Get Approved Templates directly from Meta Graph API
 export const getTemplates = asyncHandler(async (req, res) => {
-  const { accessToken } = await adapter.getDynamicCredentials();
+  const { accessToken, phoneNumberId } = await adapter.getDynamicCredentials();
   const dbConfig = await WhatsAppConfig.findOne({ isConfigured: true }).sort({ updatedAt: -1 });
-  const wabaId = dbConfig?.wabaId || process.env.WHATSAPP_WABA_ID || '1956272015332745';
 
-  if (!accessToken || !wabaId) {
+  if (!accessToken) {
     return ApiResponse.success(res, [], 'Meta credentials not configured', 200);
   }
 
   try {
+    let wabaId = dbConfig?.wabaId;
+    if (!wabaId && phoneNumberId) {
+      wabaId = await getDynamicWabaId(accessToken, phoneNumberId);
+      if (wabaId && dbConfig) {
+        dbConfig.wabaId = wabaId;
+        await dbConfig.save().catch(() => {});
+      }
+    }
+    wabaId = wabaId || process.env.WHATSAPP_WABA_ID || '1956272015332745';
+
     const url = `https://graph.facebook.com/v22.0/${wabaId}/message_templates?limit=100`;
     const resp = await fetch(url, {
       headers: { Authorization: `Bearer ${accessToken}` },

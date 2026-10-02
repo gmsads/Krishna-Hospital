@@ -322,15 +322,16 @@ export function LaboratoryPage({ tests = initialLabTests, isDoctor = false, doct
 
         const handleConfirmLabPaymentSubmit = async (e) => {
           e.preventDefault();
-          const payingNum = parseFloat(amountPayingNow) || 0;
-          if (payingNum <= 0) {
+          const isFree = settlementMethod === 'Free' || settlementMethod === 'Free / Complimentary';
+          const payingNum = isFree ? due : (parseFloat(amountPayingNow) || 0);
+          if (!isFree && payingNum <= 0) {
             onNotify && onNotify('Please enter a valid amount being paid.');
             return;
           }
 
-          const newTotalPaid = prevPaid + payingNum;
-          const newBalance = Math.max(0, total - newTotalPaid);
-          const newStatus = newBalance <= 0 ? 'Paid' : 'Partial';
+          const newTotalPaid = isFree ? total : (prevPaid + payingNum);
+          const newBalance = isFree ? 0 : Math.max(0, total - newTotalPaid);
+          const newStatus = isFree ? 'Paid' : (newBalance <= 0 ? 'Paid' : 'Partial');
 
           const updatedOrderPayload = {
             ...paymentModalTest,
@@ -438,6 +439,7 @@ export function LaboratoryPage({ tests = initialLabTests, isDoctor = false, doct
                     <option value="UPI / Online">UPI / QR Payment</option>
                     <option value="Credit / Debit Card">Credit / Debit Card</option>
                     <option value="Bank Transfer">Bank Transfer</option>
+                    <option value="Free">Free / Complimentary</option>
                   </select>
                 </div>
 

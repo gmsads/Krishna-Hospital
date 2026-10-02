@@ -32,6 +32,8 @@ const router = Router();
 // Webhook Endpoints (Meta → ERP)
 router.get('/whatsapp/receiver/message', validateWebhook);
 router.post('/whatsapp/receiver/message', makeReceiverHandler);
+router.get('/marketing/webhook', validateWebhook);
+router.post('/marketing/webhook', makeReceiverHandler);
 
 // Admin Config & Campaign Endpoints (ERP → Meta)
 router.get('/marketing/config', getConfig);
