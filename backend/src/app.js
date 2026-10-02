@@ -70,6 +70,45 @@ app.get('/', (req, res, next) => {
   });
 });
 
+// Privacy Policy Route for Meta Developer Console App Verification
+app.get('/privacy-policy', (req, res) => {
+  res.status(200).send(`
+    <!DOCTYPE html>
+    <html lang="en">
+    <head>
+      <meta charset="UTF-8">
+      <meta name="viewport" content="width=device-width, initial-scale=1.0">
+      <title>Privacy Policy - Krishna Hospitals</title>
+      <style>
+        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; line-height: 1.6; max-width: 800px; margin: 0 auto; padding: 40px 20px; color: #1e293b; }
+        h1 { color: #0f172a; border-bottom: 2px solid #e2e8f0; padding-bottom: 12px; }
+        h2 { color: #1e293b; margin-top: 24px; }
+        p { color: #475569; }
+      </style>
+    </head>
+    <body>
+      <h1>Privacy Policy - Krishna Hospitals</h1>
+      <p>Last updated: October 2, 2026</p>
+      
+      <h2>1. Introduction</h2>
+      <p>Krishna Hospitals ("we", "our", or "us") is committed to protecting your privacy. This Privacy Policy explains how we collect, use, disclose, and safeguard your information when you visit our website or interact with our official WhatsApp communication channel.</p>
+      
+      <h2>2. Information We Collect</h2>
+      <p>We may collect personal information such as your name, phone number, appointment details, and health query history strictly for medical consultation, OPD appointment booking, and customer support purposes.</p>
+      
+      <h2>3. How We Use Your Information</h2>
+      <p>Your information is used solely to facilitate hospital appointments, provide medical information, send appointment reminders, and respond to your healthcare inquiries.</p>
+      
+      <h2>4. Data Protection & Privacy</h2>
+      <p>We do not sell, trade, or share your personal data with third parties for marketing purposes. All medical data is handled in strict compliance with healthcare privacy regulations.</p>
+      
+      <h2>5. Contact Us</h2>
+      <p>If you have any questions about this Privacy Policy, please contact us at Krishna Hospitals, Guntur.</p>
+    </body>
+    </html>
+  `);
+});
+
 // Health Check Route
 app.get('/api/v1/health', (req, res) => {
   res.status(200).json({
