@@ -106,19 +106,19 @@ export const getConfig = asyncHandler(async (req, res) => {
   const envToken = process.env.WHATSAPP_ACCESS_TOKEN || WHATSAPP_CONFIG.ACCESS_TOKEN;
   const envPhoneId = process.env.WHATSAPP_PHONE_NUMBER_ID || WHATSAPP_CONFIG.PHONE_NUMBER_ID;
 
-  const token = dbConfig?.accessToken || envToken;
-  const phoneId = dbConfig?.phoneNumberId || envPhoneId;
+  const token = envToken || dbConfig?.accessToken;
+  const phoneId = envPhoneId || dbConfig?.phoneNumberId;
 
   const isConfigured = Boolean(token && phoneId);
-  const source = dbConfig?.accessToken ? 'DATABASE' : (envToken ? 'ENVIRONMENT (.env)' : 'NONE');
+  const source = envToken ? 'ENVIRONMENT (.env)' : (dbConfig?.accessToken ? 'DATABASE' : 'NONE');
 
   return ApiResponse.success(
     res,
     {
       phoneNumberId: phoneId ? `${phoneId.slice(0, 4)}...${phoneId.slice(-4)}` : '',
-      rawPhoneNumberId: dbConfig?.phoneNumberId || envPhoneId || '',
+      rawPhoneNumberId: phoneId || '',
       accessToken: token ? `${token.slice(0, 8)}...` : '',
-      appSecret: dbConfig?.appSecret ? '••••••••' : (process.env.WHATSAPP_APP_SECRET ? '••••••••' : ''),
+      appSecret: process.env.WHATSAPP_APP_SECRET || dbConfig?.appSecret ? '••••••••' : '',
       defaultTemplate: dbConfig?.defaultTemplate || WHATSAPP_CONFIG.DEFAULT_TEMPLATE,
       isConfigured,
       source,

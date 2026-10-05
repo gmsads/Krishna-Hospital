@@ -72,36 +72,96 @@ import { SettingsPage } from './pages/SettingsPage';
 const roleNav = {
   'Super Admin': [
     { label: 'Dashboard', path: '/dashboard', icon: LayoutDashboard },
-    { label: 'Branches', path: '/branches', icon: Building2 },
-    { label: 'All Records', path: '/op-records', icon: ClipboardList },
-    { label: 'Laboratory', path: '/laboratory', icon: FlaskConical },
-    { label: 'Lab Inventory', path: '/laboratory/inventory', icon: Boxes },
-    { label: 'Pharmacy Workspace', path: '/pharmacy', icon: Pill },
-    { label: 'Pharmacy Credits', path: '/pharmacy/credits', icon: CreditCard },
-    { label: 'Lab Services', path: '/admin/services', icon: Layers },
-    { label: 'Expenses', path: '/expenses', icon: Receipt },
-    { label: 'Marketing', path: '/marketing', icon: MessageSquareShare },
-    { label: 'Meta Templates', path: '/templates', icon: FileText },
-    { label: 'WhatsApp Inbox', path: '/inbox', icon: MessageCircle },
-    { label: 'Finance', path: '/finance', icon: WalletCards },
-    { label: 'Doctors', path: '/doctors', icon: Stethoscope },
-    { label: 'Staff', path: '/staff', icon: UserRound },
+    {
+      group: 'Records & Finance',
+      icon: ClipboardList,
+      items: [
+        { label: 'All Records', path: '/op-records', icon: ClipboardList },
+        { label: 'Expenses', path: '/expenses', icon: Receipt },
+        { label: 'Finance', path: '/finance', icon: WalletCards },
+        { label: 'Branches', path: '/branches', icon: Building2 },
+      ],
+    },
+    {
+      group: 'Staff Management',
+      icon: UsersRound,
+      items: [
+        { label: 'Staff', path: '/staff', icon: UserRound },
+        { label: 'Doctors', path: '/doctors', icon: Stethoscope },
+      ],
+    },
+    {
+      group: 'Marketing',
+      icon: MessageSquareShare,
+      items: [
+        { label: 'Marketing', path: '/marketing', icon: MessageSquareShare },
+        { label: 'Meta Templates', path: '/templates', icon: FileText },
+        { label: 'WhatsApp Inbox', path: '/inbox', icon: MessageCircle },
+      ],
+    },
+    {
+      group: 'Pharmacy',
+      icon: Pill,
+      items: [
+        { label: 'Pharmacy Workspace', path: '/pharmacy', icon: Pill },
+        { label: 'Pharmacy Credits', path: '/pharmacy/credits', icon: CreditCard },
+      ],
+    },
+    {
+      group: 'Laboratory',
+      icon: FlaskConical,
+      items: [
+        { label: 'Laboratory Workspace', path: '/laboratory', icon: FlaskConical },
+        { label: 'Lab Inventory', path: '/laboratory/inventory', icon: Boxes },
+        { label: 'Lab Services', path: '/admin/services', icon: Layers },
+      ],
+    },
   ],
   Admin: [
     { label: 'Dashboard', path: '/dashboard', icon: LayoutDashboard },
-    { label: 'All Records', path: '/op-records', icon: ClipboardList },
-    { label: 'Laboratory', path: '/laboratory', icon: FlaskConical },
-    { label: 'Lab Inventory', path: '/laboratory/inventory', icon: Boxes },
-    { label: 'Pharmacy Workspace', path: '/pharmacy', icon: Pill },
-    { label: 'Pharmacy Credits', path: '/pharmacy/credits', icon: CreditCard },
-    { label: 'Lab Services', path: '/admin/services', icon: Layers },
-    { label: 'Expenses', path: '/expenses', icon: Receipt },
-    { label: 'Marketing', path: '/marketing', icon: MessageSquareShare },
-    { label: 'Meta Templates', path: '/templates', icon: FileText },
-    { label: 'WhatsApp Inbox', path: '/inbox', icon: MessageCircle },
-    { label: 'Finance', path: '/finance', icon: WalletCards },
-    { label: 'Doctors', path: '/doctors', icon: Stethoscope },
-    { label: 'Staff', path: '/staff', icon: UserRound },
+    {
+      group: 'Records & Finance',
+      icon: ClipboardList,
+      items: [
+        { label: 'All Records', path: '/op-records', icon: ClipboardList },
+        { label: 'Expenses', path: '/expenses', icon: Receipt },
+        { label: 'Finance', path: '/finance', icon: WalletCards },
+      ],
+    },
+    {
+      group: 'Staff Management',
+      icon: UsersRound,
+      items: [
+        { label: 'Staff', path: '/staff', icon: UserRound },
+        { label: 'Doctors', path: '/doctors', icon: Stethoscope },
+      ],
+    },
+    {
+      group: 'Marketing',
+      icon: MessageSquareShare,
+      items: [
+        { label: 'Marketing', path: '/marketing', icon: MessageSquareShare },
+        { label: 'Meta Templates', path: '/templates', icon: FileText },
+        { label: 'WhatsApp Inbox', path: '/inbox', icon: MessageCircle },
+      ],
+    },
+    {
+      group: 'Pharmacy',
+      icon: Pill,
+      items: [
+        { label: 'Pharmacy Workspace', path: '/pharmacy', icon: Pill },
+        { label: 'Pharmacy Credits', path: '/pharmacy/credits', icon: CreditCard },
+      ],
+    },
+    {
+      group: 'Laboratory',
+      icon: FlaskConical,
+      items: [
+        { label: 'Laboratory Workspace', path: '/laboratory', icon: FlaskConical },
+        { label: 'Lab Inventory', path: '/laboratory/inventory', icon: Boxes },
+        { label: 'Lab Services', path: '/admin/services', icon: Layers },
+      ],
+    },
   ],
   Doctor: [
     { label: 'Dashboard', path: '/dashboard', icon: LayoutDashboard },
@@ -209,16 +269,34 @@ export default function AppShell({ path = '/dashboard', navigate }) {
       .then((res) => res.json())
       .then((data) => {
         if (data.success && Array.isArray(data.data)) {
-          const mapped = data.data.map(r => ({
-            ...r,
-            id: r.regNo || r.id || r._id,
-            regNo: r.regNo || r.id,
-            patient: r.patientName || r.patient,
-            patientName: r.patientName || r.patient,
-            doctor: r.doctor || 'Dr. Unassigned',
-            branch: r.branch || '',
-            amount: `₹ ${r.charges || '300'}`,
-          }));
+          const mapped = data.data.map(r => {
+            const grossNum = parseFloat(String(r.charges || '300').replace(/[^0-9.]/g, '')) || 300;
+            const discountNum = typeof r.discount === 'number' ? r.discount : (parseFloat(String(r.discount || '0').replace(/[^0-9.]/g, '')) || 0);
+            const netNum = typeof r.netAmount === 'number' ? r.netAmount : Math.max(0, grossNum - discountNum);
+            const paidNum = typeof r.paidAmount === 'number' ? r.paidAmount : (parseFloat(String(r.amountPaid || r.paidAmount || '0').replace(/[^0-9.]/g, '')) || 0);
+            const dueNum = Math.max(0, netNum - paidNum);
+            const status = r.paymentStatus || (dueNum <= 0 ? 'Paid' : paidNum > 0 ? 'Partial' : 'Pending');
+
+            return {
+              ...r,
+              id: r.regNo || r.id || r._id,
+              regNo: r.regNo || r.id,
+              patient: r.patientName || r.patient,
+              patientName: r.patientName || r.patient,
+              doctor: r.doctor || 'Dr. Unassigned',
+              branch: r.branch || '',
+              charges: grossNum.toString(),
+              grossCharges: grossNum,
+              discount: discountNum,
+              netAmount: netNum,
+              paidAmount: paidNum,
+              amountPaid: paidNum.toString(),
+              dueBalance: dueNum,
+              paymentStatus: status,
+              amount: `₹ ${netNum}`,
+              surgeryName: r.surgeryName || '',
+            };
+          });
           setOpRecords(mapped);
         }
       })
@@ -350,13 +428,27 @@ export default function AppShell({ path = '/dashboard', navigate }) {
     email: 'contact@krishnahospital.org',
     address: 'House 14, MG Road, Central Campus, Central City',
     footerNote: 'Emergency Contact: 108 / +91 98470 00000 | Prescription valid for 7 days from issue.',
+    upiHandles: ['krishnahospital@okicici', 'krishnalab@ybl', 'krishnaglobal@hdfcbank'],
   }), []);
 
-  const [brandingMap, setBrandingMap] = useState({
-    All: defaultBranding,
-    'Central Campus': defaultBranding,
-    'City Extension': { ...defaultBranding, tagline: 'City Extension Branch' },
-    'North Hospital': { ...defaultBranding, tagline: 'North Medical Campus' },
+  const [brandingMap, setBrandingMap] = useState(() => {
+    try {
+      const saved = localStorage.getItem('kh_hospital_branding_map');
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (parsed && typeof parsed === 'object' && Object.keys(parsed).length > 0) {
+          return parsed;
+        }
+      }
+    } catch (e) {
+      console.warn('Could not parse kh_hospital_branding_map from localStorage:', e.message);
+    }
+    return {
+      All: defaultBranding,
+      'Central Campus': defaultBranding,
+      'City Extension': { ...defaultBranding, tagline: 'City Extension Branch' },
+      'North Hospital': { ...defaultBranding, tagline: 'North Medical Campus' },
+    };
   });
 
   const addMasterService = (newService) => {
@@ -380,6 +472,21 @@ export default function AppShell({ path = '/dashboard', navigate }) {
   const searchContainerRef = useRef(null);
 
   const [showMobileNav, setShowMobileNav] = useState(false);
+  const [openGroups, setOpenGroups] = useState({
+    'Records & Finance': false,
+    'Staff Management': false,
+    'Marketing': false,
+    'Pharmacy': false,
+    'Laboratory': false,
+  });
+
+  const toggleGroup = (groupName) => {
+    setOpenGroups((prev) => ({
+      ...prev,
+      [groupName]: !prev[groupName],
+    }));
+  };
+
   const [selectedTestForResult, setSelectedTestForResult] = useState(null);
   const [selectedPatientForHistory, setSelectedPatientForHistory] = useState(initialPatients[0]);
   const [isRequestLabModalOpen, setIsRequestLabModalOpen] = useState(false);
@@ -395,18 +502,25 @@ export default function AppShell({ path = '/dashboard', navigate }) {
 
   const handleSaveBranding = (updatedBranding) => {
     setBrandingMap((prev) => {
+      let nextMap;
       if (isSuperAdmin && activeBranch === 'All') {
-        const newMap = {};
+        nextMap = {};
         Object.keys(prev).forEach((bKey) => {
-          newMap[bKey] = { ...prev[bKey], ...updatedBranding };
+          nextMap[bKey] = { ...prev[bKey], ...updatedBranding };
         });
-        return newMap;
+      } else {
+        const targetBranch = effectiveBranch === 'All' ? 'Central Campus' : effectiveBranch;
+        nextMap = {
+          ...prev,
+          [targetBranch]: { ...prev[targetBranch], ...updatedBranding },
+        };
       }
-      const targetBranch = effectiveBranch === 'All' ? 'Central Campus' : effectiveBranch;
-      return {
-        ...prev,
-        [targetBranch]: { ...prev[targetBranch], ...updatedBranding },
-      };
+      try {
+        localStorage.setItem('kh_hospital_branding_map', JSON.stringify(nextMap));
+      } catch (e) {
+        console.warn('Could not save kh_hospital_branding_map to localStorage:', e.message);
+      }
+      return nextMap;
     });
   };
 
@@ -811,10 +925,24 @@ export default function AppShell({ path = '/dashboard', navigate }) {
     notify('OP record created successfully');
   };
 
-  const updateOPRecord = (updatedRecord) => {
+  const updateOPRecord = async (updatedRecord) => {
+    const recId = updatedRecord._id || updatedRecord.id || updatedRecord.regNo;
     setOpRecords((prev) =>
-      prev.map((r) => (r.id === updatedRecord.id ? updatedRecord : r))
+      prev.map((r) => (r.id === recId || r.regNo === recId || r._id === recId ? updatedRecord : r))
     );
+    try {
+      const token = localStorage.getItem('kh_auth_token');
+      await fetch(`/api/v1/op-records/${recId}`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(token ? { 'Authorization': `Bearer ${token}` } : {}),
+        },
+        body: JSON.stringify(updatedRecord),
+      });
+    } catch (err) {
+      console.warn('Could not persist OP Record settlement update to backend API:', err.message);
+    }
   };
 
   const deleteOPRecord = (recordId) => {
@@ -1126,18 +1254,116 @@ export default function AppShell({ path = '/dashboard', navigate }) {
         
         <div className="nav-label">WORKSPACE</div>
         
-        <nav className="main-nav">
-          {navItems.map(({ label, path: itemPath, icon: Icon }) => (
-            <button 
-              key={label} 
-              className={`nav-item ${isNavActive(itemPath) ? 'active' : ''}`} 
-              onClick={() => handleNavigate(itemPath)}
-            >
-              <Icon size={18} />
-              <span>{label}</span>
-              {label === 'Laboratory' && <em>{scopedLabTests.filter(t => t.status !== 'Result ready').length}</em>}
-            </button>
-          ))}
+        <nav className="main-nav" style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+          {navItems.map((item) => {
+            if (item.group && Array.isArray(item.items)) {
+              const groupName = item.group;
+              const GroupIcon = item.icon;
+              const isOpen = !!openGroups[groupName];
+              const isAnyChildActive = item.items.some((child) => isNavActive(child.path));
+
+              return (
+                <div key={groupName} className="nav-group-container" style={{ marginBottom: '2px' }}>
+                  <button
+                    type="button"
+                    className={`nav-group-header ${isAnyChildActive ? 'group-active' : ''}`}
+                    onClick={() => toggleGroup(groupName)}
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      width: '100%',
+                      gap: '12px',
+                      padding: '10px 12px',
+                      border: 0,
+                      borderRadius: '10px',
+                      color: isAnyChildActive ? '#1769d7' : '#5a6b82',
+                      background: isAnyChildActive ? '#edf4fe' : 'transparent',
+                      textAlign: 'left',
+                      fontSize: '13px',
+                      fontWeight: '700',
+                      cursor: 'pointer',
+                      transition: 'all 0.2s ease',
+                    }}
+                  >
+                    <GroupIcon size={18} style={{ color: isAnyChildActive ? '#1769d7' : '#8090a5' }} />
+                    <span style={{ flex: 1 }}>{groupName}</span>
+                    {isOpen ? <ChevronDown size={16} style={{ color: '#94a3b8' }} /> : <ChevronRight size={16} style={{ color: '#94a3b8' }} />}
+                  </button>
+
+                  {isOpen && (
+                    <div
+                      className="nav-group-children"
+                      style={{
+                        display: 'flex',
+                        flexDirection: 'column',
+                        gap: '3px',
+                        paddingLeft: '14px',
+                        marginTop: '3px',
+                        marginLeft: '12px',
+                        borderLeft: '2px solid #e2e8f0',
+                      }}
+                    >
+                      {item.items.map(({ label, path: itemPath, icon: Icon }) => {
+                        const active = isNavActive(itemPath);
+                        return (
+                          <button
+                            key={label}
+                            type="button"
+                            className={`nav-item ${active ? 'active' : ''}`}
+                            onClick={() => handleNavigate(itemPath)}
+                            style={{
+                              padding: '8px 10px',
+                              fontSize: '12px',
+                            }}
+                          >
+                            <Icon size={16} />
+                            <span>{label}</span>
+                            {(label === 'Laboratory' || label === 'Laboratory Workspace') && (
+                              <em>{scopedLabTests.filter((t) => t.status !== 'Result ready').length}</em>
+                            )}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
+              );
+            }
+
+            // Standalone nav item
+            const { label, path: itemPath, icon: Icon } = item;
+            const active = isNavActive(itemPath);
+            return (
+              <button
+                key={label}
+                type="button"
+                className={`nav-item ${active ? 'active' : ''}`}
+                onClick={() => handleNavigate(itemPath)}
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  width: '100%',
+                  gap: '12px',
+                  padding: '10px 12px',
+                  border: 0,
+                  borderRadius: '10px',
+                  color: active ? '#fff' : '#5a6b82',
+                  background: active ? '#1769d7' : 'transparent',
+                  textAlign: 'left',
+                  fontSize: '13px',
+                  fontWeight: '700',
+                  cursor: 'pointer',
+                  transition: 'all 0.2s ease',
+                }}
+              >
+                <Icon size={18} style={{ color: active ? '#fff' : '#8090a5' }} />
+                <span style={{ flex: 1, fontSize: '13px', fontWeight: '700' }}>{label}</span>
+                {(label === 'Laboratory' || label === 'Laboratory Workspace') && (
+                  <em>{scopedLabTests.filter((t) => t.status !== 'Result ready').length}</em>
+                )}
+              </button>
+            );
+          })}
         </nav>
         
         <div className="sidebar-bottom">
@@ -1528,6 +1754,7 @@ export default function AppShell({ path = '/dashboard', navigate }) {
             <OPRecordsPage 
               records={scopedOpRecords}
               upiHandles={currentBranding?.upiHandles}
+              branding={currentBranding}
               isDoctor={profile?.role === 'Doctor'}
               initialRecordTypeFilter={selectedRecordTypeFilter}
               onAddOP={() => handleNavigate('/op-records/new')} 

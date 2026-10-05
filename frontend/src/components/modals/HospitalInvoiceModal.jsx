@@ -17,14 +17,18 @@ export function HospitalInvoiceModal({ isOpen, onClose, record, type = 'record',
   
   // Financial Math
   const isLab = type === 'lab';
-  const rawTotal = isLab
+  const rawGross = isLab
     ? (typeof record.amount === 'number' ? record.amount : parseFloat(String(record.amount || '1200').replace(/[^0-9.]/g, '')) || 1200)
-    : (parseFloat(String(record.amount || '300').replace(/[^0-9.]/g, '')) || 300);
+    : (parseFloat(String(record.grossCharges || record.charges || record.amount || '300').replace(/[^0-9.]/g, '')) || 300);
+
+  const discountAmt = parseFloat(String(record.discount || 0)) || 0;
+  const rawTotal = isLab ? rawGross : Math.max(0, rawGross - discountAmt);
 
   const rawPaid = isLab
     ? (typeof record.paidAmount === 'number' ? record.paidAmount : (record.paymentStatus === 'Paid' || record.status === 'Result ready' ? rawTotal : 0))
     : (parseFloat(record.paidAmount || (record.paymentStatus === 'Paid' ? rawTotal : 0)) || 0);
 
+  const grossFee = rawGross;
   const totalFee = rawTotal;
   const paidAmount = rawPaid;
   const dueBalance = Math.max(0, totalFee - paidAmount);
@@ -35,8 +39,8 @@ export function HospitalInvoiceModal({ isOpen, onClose, record, type = 'record',
   };
 
   return (
-    <div className="modal-overlay" style={{ position: 'fixed', inset: 0, zIndex: 200, background: 'rgba(15, 45, 85, 0.55)', display: 'grid', placeItems: 'center', padding: '16px', overflowY: 'auto' }}>
-      <div className="modal" style={{ background: '#ffffff', borderRadius: '12px', padding: '28px', maxWidth: '640px', width: '100%', boxShadow: '0 24px 48px rgba(15, 45, 85, 0.25)', border: '1px solid #cbd5e1' }}>
+    <div className="modal-overlay print-overlay" style={{ position: 'fixed', inset: 0, zIndex: 200, background: 'rgba(15, 45, 85, 0.55)', display: 'grid', placeItems: 'center', padding: '16px', overflowY: 'auto' }}>
+      <div className="modal print-modal" style={{ background: '#ffffff', borderRadius: '12px', padding: '28px', maxWidth: '640px', width: '100%', boxShadow: '0 24px 48px rgba(15, 45, 85, 0.25)', border: '1px solid #cbd5e1' }}>
         
         {/* Top Actions Header (Screen only) */}
         <div className="no-print" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid #e2e8f0', paddingBottom: '12px', marginBottom: '20px' }}>
@@ -124,10 +128,10 @@ export function HospitalInvoiceModal({ isOpen, onClose, record, type = 'record',
                   {isLab ? `Pathology Lab Test - ${record.test || 'Diagnostic Suite'}` : `Hospital Care Consultation Fee - ${record.recordType || 'OP'}`}
                 </td>
                 <td style={{ textAlign: 'center', padding: '10px', color: '#64748b' }}>
-                  {isLab ? 'Diagnostic Test' : (record.recordType?.includes('IP') ? 'Inpatient Care' : 'Outpatient')}
+                  {isLab ? 'Diagnostic Test' : (record.recordType?.includes('IP') ? 'Inpatient Care' : record.recordType?.includes('Surgery') ? 'Surgery Care' : 'Outpatient')}
                 </td>
                 <td style={{ textAlign: 'right', padding: '10px', fontWeight: '700' }}>
-                  ₹ {totalFee.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                  ₹ {grossFee.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
                 </td>
               </tr>
             </tbody>
@@ -135,7 +139,7 @@ export function HospitalInvoiceModal({ isOpen, onClose, record, type = 'record',
 
           {/* Payment Breakdown & Summary */}
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', borderTop: '2px solid #e2e8f0', paddingTop: '12px', marginBottom: '14px' }}>
-            <div style={{ maxWidth: '320px' }}>
+            <div style={{ maxWidth: '300px' }}>
               <span style={{ fontSize: '11px', fontWeight: '800', color: '#475569', display: 'block' }}>Payment Method / Modes:</span>
               <span style={{ fontSize: '12px', fontWeight: '700', color: '#0369a1', display: 'block' }}>💳 {paymentMethod}</span>
               {record.upiTxnId && (
@@ -143,9 +147,17 @@ export function HospitalInvoiceModal({ isOpen, onClose, record, type = 'record',
               )}
             </div>
 
-            <div style={{ width: '220px', display: 'grid', gap: '4px', fontSize: '12px' }}>
+            <div style={{ width: '250px', display: 'grid', gap: '4px', fontSize: '12px' }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', color: '#475569' }}>
-                <span>Subtotal:</span>
+                <span>Gross Fee Charges:</span>
+                <span>₹ {grossFee.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</span>
+              </div>
+              <div style={{ display: 'flex', justifyContent: 'space-between', color: discountAmt > 0 ? '#dc2626' : '#64748b', fontWeight: discountAmt > 0 ? '700' : '400' }}>
+                <span>Discount Given:</span>
+                <span>{discountAmt > 0 ? `- ₹ ${discountAmt.toLocaleString('en-IN', { minimumFractionDigits: 2 })}` : '₹ 0.00'}</span>
+              </div>
+              <div style={{ display: 'flex', justifyContent: 'space-between', color: '#0f2d55', fontWeight: '800', borderTop: '1px solid #e2e8f0', paddingTop: '4px' }}>
+                <span>Net Amount Payable:</span>
                 <span>₹ {totalFee.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</span>
               </div>
               <div style={{ display: 'flex', justifyContent: 'space-between', color: '#15803d', fontWeight: '700' }}>

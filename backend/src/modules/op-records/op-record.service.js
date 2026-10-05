@@ -15,13 +15,18 @@ export const createOPRecord = async (recordData) => {
   if (!regNoToUse || regNoToUse.length < 5 || regNoToUse.includes('OPD-')) {
     regNoToUse = await generateNextRegNo(branchToUse);
   }
-  const chargesVal = parseFloat(String(recordData.charges || '300').replace(/[^0-9.]/g, '')) || 300;
-  const collectedVal = parseFloat(String(recordData.amountPaid || recordData.amountCollectingNow || chargesVal).replace(/[^0-9.]/g, '')) || chargesVal;
+  const grossChargesVal = parseFloat(String(recordData.grossCharges || recordData.charges || '300').replace(/[^0-9.]/g, '')) || 300;
+  const discountVal = parseFloat(String(recordData.discount || '0').replace(/[^0-9.]/g, '')) || 0;
+  const netVal = Math.max(0, grossChargesVal - discountVal);
+  const collectedVal = parseFloat(String(recordData.paidAmount ?? recordData.amountPaid ?? netVal).replace(/[^0-9.]/g, '')) || 0;
+  const dueVal = Math.max(0, netVal - collectedVal);
+  const statusToSet = recordData.paymentStatus || (dueVal <= 0 ? 'Paid' : collectedVal > 0 ? 'Partial' : 'Pending');
 
   const newRecord = await OPRecord.create({
     regNo: regNoToUse,
     recordType: recordData.recordType || 'OP',
     ipCareDetails: recordData.ipCareDetails || '',
+    surgeryName: recordData.surgeryName || '',
     regDate: recordData.regDate || new Date().toISOString().split('T')[0],
     regTime: recordData.regTime || new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
     patientName: recordData.patientName.trim(),
@@ -40,11 +45,13 @@ export const createOPRecord = async (recordData) => {
     referralDoctor: recordData.referralDoctor || '',
     visitValidity: recordData.visitValidity || '15',
     refCommPercent: recordData.refCommPercent || '0',
-    charges: chargesVal.toString(),
+    charges: grossChargesVal.toString(),
+    discount: discountVal,
+    netAmount: netVal,
     paymentMethod: recordData.paymentMethod || 'Cash',
     amountPaid: collectedVal.toString(),
     paidAmount: collectedVal,
-    paymentStatus: collectedVal >= chargesVal ? 'Paid' : collectedVal > 0 ? 'Partial' : 'Pending',
+    paymentStatus: statusToSet,
     upiTxnId: recordData.upiTxnId || '',
     receiptImage: recordData.receiptImage || '',
     branch: branchToUse,

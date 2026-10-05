@@ -25,13 +25,16 @@ export class WhatsAppAdapter {
   }
 
   async getDynamicCredentials() {
+    const envToken = process.env.WHATSAPP_ACCESS_TOKEN || WHATSAPP_CONFIG.ACCESS_TOKEN || this.accessToken;
+    const envPhoneId = process.env.WHATSAPP_PHONE_NUMBER_ID || WHATSAPP_CONFIG.PHONE_NUMBER_ID || this.phoneNumberId;
+
     try {
       const dbConfig = await WhatsAppConfig.findOne({ isConfigured: true }).sort({ updatedAt: -1 });
       if (dbConfig) {
         return {
-          accessToken: dbConfig.accessToken || this.accessToken,
-          phoneNumberId: dbConfig.phoneNumberId || this.phoneNumberId,
-          appSecret: dbConfig.appSecret || WHATSAPP_CONFIG.APP_SECRET,
+          accessToken: envToken || dbConfig.accessToken,
+          phoneNumberId: envPhoneId || dbConfig.phoneNumberId,
+          appSecret: dbConfig.appSecret || process.env.WHATSAPP_APP_SECRET || WHATSAPP_CONFIG.APP_SECRET,
           defaultTemplate: dbConfig.defaultTemplate || WHATSAPP_CONFIG.DEFAULT_TEMPLATE,
         };
       }
@@ -39,9 +42,9 @@ export class WhatsAppAdapter {
       console.warn('[WhatsAppAdapter] DB config lookup fallback:', err.message);
     }
     return {
-      accessToken: this.accessToken,
-      phoneNumberId: this.phoneNumberId,
-      appSecret: WHATSAPP_CONFIG.APP_SECRET,
+      accessToken: envToken,
+      phoneNumberId: envPhoneId,
+      appSecret: process.env.WHATSAPP_APP_SECRET || WHATSAPP_CONFIG.APP_SECRET,
       defaultTemplate: WHATSAPP_CONFIG.DEFAULT_TEMPLATE,
     };
   }

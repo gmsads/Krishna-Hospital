@@ -208,26 +208,56 @@ img, video, canvas, svg {
 }
 
 @media print {
+  @page {
+    margin: 8mm 10mm;
+  }
+  html, body {
+    height: auto !important;
+    min-height: 0 !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    background: #fff !important;
+    overflow: visible !important;
+  }
   body * {
     visibility: hidden;
   }
-  .print-overlay, .print-overlay * {
+  .print-overlay, .print-overlay *,
+  .modal-overlay, .modal-overlay *,
+  #printable-invoice, #printable-invoice * {
     visibility: visible;
   }
-  .print-overlay {
+  .print-overlay, .modal-overlay {
     position: absolute !important;
     left: 0 !important;
     top: 0 !important;
     width: 100% !important;
+    height: auto !important;
+    min-height: 0 !important;
+    display: block !important;
+    padding: 0 !important;
+    margin: 0 !important;
+    background: #fff !important;
+    box-shadow: none !important;
+    place-items: start !important;
+    align-items: flex-start !important;
+  }
+  .print-modal, .modal {
+    display: block !important;
+    position: relative !important;
+    top: 0 !important;
+    left: 0 !important;
+    max-width: 100% !important;
+    width: 100% !important;
+    box-shadow: none !important;
+    border: none !important;
     padding: 0 !important;
     margin: 0 !important;
     background: #fff !important;
   }
-  .print-modal {
-    max-width: 100% !important;
-    box-shadow: none !important;
-    border: none !important;
+  #printable-invoice {
     padding: 0 !important;
+    margin: 0 !important;
   }
   .no-print {
     display: none !important;

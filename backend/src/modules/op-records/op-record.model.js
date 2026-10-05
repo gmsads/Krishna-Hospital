@@ -9,12 +9,23 @@ const opRecordSchema = new mongoose.Schema(
     },
     recordType: {
       type: String,
-      enum: ['OP', 'IP', 'Emergency'],
       default: 'OP',
     },
     ipCareDetails: {
       type: String,
       default: '',
+    },
+    surgeryName: {
+      type: String,
+      default: '',
+    },
+    discount: {
+      type: Number,
+      default: 0,
+    },
+    netAmount: {
+      type: Number,
+      default: 0,
     },
     regDate: {
       type: String,

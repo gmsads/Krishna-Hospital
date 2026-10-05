@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   Save,
   Mail,
@@ -76,11 +76,28 @@ export function SettingsPage({ profile, currentBranding, onSaveBranding, onNotif
     currentBranding?.footerNote || 'Emergency Contact: 108 / +91 98470 00000 | Prescription valid for 7 days from date of issue.'
   );
 
-  // Hospital Available UPI Handles List State
   const [upiList, setUpiList] = useState(
     currentBranding?.upiHandles || ['krishnahospital@okicici', 'krishnalab@ybl', 'krishnaglobal@hdfcbank']
   );
   const [newUpiInput, setNewUpiInput] = useState('');
+
+  // Keep form fields synced when currentBranding changes or loads
+  useEffect(() => {
+    if (currentBranding) {
+      if (currentBranding.logo !== undefined) setHospitalLogo(currentBranding.logo);
+      if (currentBranding.signature !== undefined) setDigitalSignature(currentBranding.signature);
+      if (currentBranding.watermark !== undefined) setWatermarkImage(currentBranding.watermark);
+      if (currentBranding.hospitalName !== undefined) setHospitalName(currentBranding.hospitalName);
+      if (currentBranding.tagline !== undefined) setTagline(currentBranding.tagline);
+      if (currentBranding.registrationNo !== undefined) setRegistrationNo(currentBranding.registrationNo);
+      if (currentBranding.gstin !== undefined) setGstin(currentBranding.gstin);
+      if (currentBranding.phone !== undefined) setHospitalPhone(currentBranding.phone);
+      if (currentBranding.email !== undefined) setHospitalEmail(currentBranding.email);
+      if (currentBranding.address !== undefined) setHospitalAddress(currentBranding.address);
+      if (currentBranding.footerNote !== undefined) setPrescriptionFooter(currentBranding.footerNote);
+      if (currentBranding.upiHandles !== undefined) setUpiList(currentBranding.upiHandles);
+    }
+  }, [currentBranding]);
 
   const handleAddUpiHandle = (e) => {
     e.preventDefault();

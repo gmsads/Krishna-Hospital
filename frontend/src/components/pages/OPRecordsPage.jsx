@@ -7,6 +7,7 @@ import { HospitalInvoiceModal } from '../modals/HospitalInvoiceModal';
 export function OPRecordsPage({
   records = initialOPRecords,
   upiHandles = ['krishnahospital@okicici', 'krishnalab@ybl', 'krishnaglobal@hdfcbank'],
+  branding,
   isDoctor = false,
   initialRecordTypeFilter = 'all',
   onAddOP,
@@ -100,6 +101,15 @@ export function OPRecordsPage({
     }));
   };
 
+  const handleQuickFillSettlement = (amountVal) => {
+    const activeKeys = Object.keys(selectedSettlementMethods).filter((k) => selectedSettlementMethods[k]);
+    const targetKey = activeKeys.length > 0 ? activeKeys[0] : 'Cash';
+    setSettlementSplitAmounts((prev) => ({
+      ...prev,
+      [targetKey]: amountVal.toString(),
+    }));
+  };
+
   const activeSettlementModes = Object.keys(selectedSettlementMethods).filter((k) => selectedSettlementMethods[k]);
 
   const calculatedSettlementTotal = activeSettlementModes.reduce((sum, key) => {
@@ -139,7 +149,7 @@ export function OPRecordsPage({
       return;
     }
 
-    const total = parseFloat((paymentModalRecord.amount || '300').replace(/[^0-9.]/g, '')) || 300;
+    const total = paymentModalRecord.netAmount !== undefined ? paymentModalRecord.netAmount : (parseFloat((paymentModalRecord.amount || '300').replace(/[^0-9.]/g, '')) || 300);
     const prevPaid = parseFloat(paymentModalRecord.paidAmount || (paymentModalRecord.paymentStatus === 'Paid' ? total : 0)) || 0;
     const newTotalPaid = prevPaid + payingNum;
     const newBalance = Math.max(0, total - newTotalPaid);
@@ -206,7 +216,7 @@ export function OPRecordsPage({
       if (filterMode === 'monthly') dateMatch = recDate.startsWith(selectedMonth);
       if (filterMode === 'yearly') dateMatch = recDate.startsWith(selectedYear);
 
-      const total = parseFloat((r.amount || '300').replace(/[^0-9.]/g, '')) || 300;
+      const total = r.netAmount !== undefined ? r.netAmount : (parseFloat((r.amount || '300').replace(/[^0-9.]/g, '')) || 300);
       const paid = parseFloat(r.paidAmount || (r.paymentStatus === 'Paid' ? total : 0)) || 0;
       const isDue = (total - paid) > 0 || r.paymentStatus === 'Pay Later (Pending)' || r.paymentMethod === 'Pay Later (Post-Pay)';
       
@@ -304,6 +314,7 @@ export function OPRecordsPage({
                 { key: 'all', label: 'All Types' },
                 { key: 'OP', label: '🔵 OP (Outpatient)' },
                 { key: 'IP', label: '🟣 IP (Inpatient)' },
+                { key: 'Surgery', label: '🔪 Surgery' },
                 { key: 'Emergency', label: '⚡ Emergency' },
               ].map((tab) => (
                 <button
@@ -455,8 +466,8 @@ export function OPRecordsPage({
               </tr>
             </thead>
             <tbody>
-              {filteredRecords.map((record) => {
-                const total = parseFloat((record.amount || '300').replace(/[^0-9.]/g, '')) || 300;
+              {filteredRecords.map((record, idx) => {
+                const total = record.netAmount !== undefined ? record.netAmount : (parseFloat((record.amount || '300').replace(/[^0-9.]/g, '')) || 300);
                 const paid = parseFloat(record.paidAmount || (record.paymentStatus === 'Paid' ? total : 0)) || 0;
                 const due = Math.max(0, total - paid);
                 const hasDue = due > 0 || record.paymentStatus === 'Pay Later (Pending)' || record.paymentMethod === 'Pay Later (Post-Pay)';
@@ -464,6 +475,8 @@ export function OPRecordsPage({
 
                 const badgeStyle = recType.startsWith('Emergency')
                   ? { bg: '#fff1f2', border: '#fda4af', color: '#e11d48', label: recType.includes('(') ? `⚡ ${recType}` : '⚡ Emergency' }
+                  : recType.startsWith('Surgery')
+                  ? { bg: '#fff1f2', border: '#fecdd3', color: '#be123c', label: recType.includes('(') ? `🔪 ${recType}` : '🔪 Surgery' }
                   : recType.startsWith('IP')
                   ? { bg: '#f3e8ff', border: '#e9d5ff', color: '#7e22ce', label: recType.includes('(') ? `🟣 ${recType}` : '🟣 IP (Inpatient)' }
                   : { bg: '#f0f9ff', border: '#bae6fd', color: '#0284c7', label: recType.includes('(') ? `🔵 ${recType}` : '🔵 OP (Outpatient)' };
@@ -471,7 +484,7 @@ export function OPRecordsPage({
                 const bCode = record.branchCode || (record.branch === 'City Extension' ? 'EXT-CITY' : record.branch === 'North Hospital' ? 'NORTH-MED' : 'HQ-CENTRAL');
 
                 return (
-                  <tr key={record.id}>
+                  <tr key={record._id || `${record.id || 'op'}-${idx}`}>
                     <td><span className="muted-code">{record.id}</span></td>
                     <td>
                       <span style={{ fontSize: '11px', fontWeight: '800', color: badgeStyle.color, background: badgeStyle.bg, border: `1px solid ${badgeStyle.border}`, padding: '2px 8px', borderRadius: '12px' }}>
@@ -626,10 +639,10 @@ export function OPRecordsPage({
 
       {/* COLLECT PAYMENT SETTLEMENT MODAL */}
       {paymentModalRecord && (() => {
-        const totalFee = parseFloat((paymentModalRecord.amount || '300').replace(/[^0-9.]/g, '')) || 300;
+        const totalFee = paymentModalRecord.netAmount !== undefined ? paymentModalRecord.netAmount : (parseFloat((paymentModalRecord.amount || '300').replace(/[^0-9.]/g, '')) || 300);
         const paidSoFar = parseFloat(paymentModalRecord.paidAmount || (paymentModalRecord.paymentStatus === 'Paid' ? totalFee : 0)) || 0;
         const currentDue = Math.max(0, totalFee - paidSoFar);
-        const payingNum = parseFloat(amountPayingNow) || 0;
+        const payingNum = parseFloat(calculatedSettlementTotal) || 0;
         const remainingBal = Math.max(0, currentDue - payingNum);
 
         return (
@@ -658,37 +671,28 @@ export function OPRecordsPage({
                   </div>
                 </div>
 
-                {/* Amount Being Paid Input & Quick Fill Buttons */}
-                <div className="field">
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '4px' }}>
-                    <span style={{ fontSize: '11px', fontWeight: '700', color: '#dc2626' }}>Amount Being Paid Now (₹) *</span>
-                    <div style={{ display: 'flex', gap: '6px' }}>
-                      <button
-                        type="button"
-                        onClick={() => setAmountPayingNow(currentDue.toString())}
-                        style={{ border: '1px solid #b8d5f7', background: '#f4f8fe', color: '#1769d7', fontSize: '10px', padding: '2px 8px', borderRadius: '4px', cursor: 'pointer', fontWeight: '700' }}
-                      >
-                        Full Due (₹{currentDue})
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => setAmountPayingNow((Math.round(currentDue / 2)).toString())}
-                        style={{ border: '1px solid #fed7aa', background: '#fff7ed', color: '#c2410c', fontSize: '10px', padding: '2px 8px', borderRadius: '4px', cursor: 'pointer', fontWeight: '700' }}
-                      >
-                        Half (₹{Math.round(currentDue / 2)})
-                      </button>
-                    </div>
+                {/* Outstanding Due & Quick Fill Buttons Banner */}
+                <div style={{ background: '#fef2f2', border: '1px solid #fca5a5', padding: '10px 12px', borderRadius: '8px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '8px' }}>
+                  <div>
+                    <span style={{ fontSize: '10px', fontWeight: '800', color: '#dc2626', textTransform: 'uppercase' }}>OUTSTANDING BALANCE DUE</span>
+                    <strong style={{ fontSize: '18px', color: '#dc2626', display: 'block' }}>₹ {currentDue}</strong>
                   </div>
-                  <input
-                    type="number"
-                    step="0.01"
-                    min="1"
-                    max={currentDue}
-                    value={amountPayingNow}
-                    onChange={(e) => setAmountPayingNow(e.target.value)}
-                    required
-                    style={{ padding: '10px 12px', border: '1px solid #fca5a5', borderRadius: '7px', fontSize: '16px', background: '#fef2f2', fontWeight: '800', color: '#dc2626' }}
-                  />
+                  <div style={{ display: 'flex', gap: '6px' }}>
+                    <button
+                      type="button"
+                      onClick={() => handleQuickFillSettlement(currentDue)}
+                      style={{ border: '1px solid #b8d5f7', background: '#f4f8fe', color: '#1769d7', fontSize: '11px', padding: '5px 10px', borderRadius: '6px', cursor: 'pointer', fontWeight: '700' }}
+                    >
+                      ⚡ Full Due (₹{currentDue})
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => handleQuickFillSettlement(Math.round(currentDue / 2))}
+                      style={{ border: '1px solid #fed7aa', background: '#fff7ed', color: '#c2410c', fontSize: '11px', padding: '5px 10px', borderRadius: '6px', cursor: 'pointer', fontWeight: '700' }}
+                    >
+                      Half Due (₹{Math.round(currentDue / 2)})
+                    </button>
+                  </div>
                 </div>
 
                 {/* Live Remaining Balance Box */}
@@ -871,6 +875,7 @@ export function OPRecordsPage({
         onClose={() => setActiveInvoiceRecord(null)}
         record={activeInvoiceRecord}
         type="record"
+        branding={branding}
       />
     </>
   );

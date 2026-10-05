@@ -33,8 +33,9 @@ export function CreateOPRecordForm({
   }, [effectiveBranch, branchesList]);
 
   // Streamlined Form State (16 Required Fields)
-  const [recordType, setRecordType] = useState('OP'); // Options: OP, IP, Emergency
+  const [recordType, setRecordType] = useState('OP'); // Options: OP, IP, Surgery, Emergency
   const [ipCareDetails, setIpCareDetails] = useState('');
+  const [surgeryName, setSurgeryName] = useState('');
   const [opNumber, setOpNumber] = useState('Reg-2026-0001'); // Default Reg Number: Reg-2026-0001
   const [regDate, setRegDate] = useState(dateStr);
   const [regTime, setRegTime] = useState(timeStr);
@@ -93,13 +94,18 @@ export function CreateOPRecordForm({
   const [bloodGroup, setBloodGroup] = useState('O+');
   const [bp, setBp] = useState('120/80');
 
-  // Doctor, Referral, Charges
+  // Doctor, Referral, Charges & Discount
   const [department, setDepartment] = useState('General medicine');
   const [doctor, setDoctor] = useState('Dr. Meera Nair');
   const [referralDoctor, setReferralDoctor] = useState('');
   const [visitValidity, setVisitValidity] = useState('15'); // Default Visit Validity: 15 Days
   const [refCommPercent, setRefCommPercent] = useState('0');
   const [charges, setCharges] = useState('300.00');
+  const [discount, setDiscount] = useState('0.00');
+
+  const grossChargesNum = parseFloat(String(charges || '0').replace(/[^0-9.]/g, '')) || 0;
+  const discountNum = parseFloat(String(discount || '0').replace(/[^0-9.]/g, '')) || 0;
+  const netPayableNum = Math.max(0, grossChargesNum - discountNum);
 
   // MULTI-SELECT PAYMENT METHODS & SPLIT AMOUNT COLLECTION
   const [selectedMethods, setSelectedMethods] = useState({
@@ -129,14 +135,33 @@ export function CreateOPRecordForm({
   const [receiptImageName, setReceiptImageName] = useState('');
   const [autoFetchMsg, setAutoFetchMsg] = useState('');
 
-  // EDITABLE FEE HANDLER
+  // EDITABLE FEE & DISCOUNT HANDLERS
   const handleFeeChargesChange = (val) => {
     setCharges(val);
+    const newGross = parseFloat(String(val || '0').replace(/[^0-9.]/g, '')) || 0;
+    const currentDisc = parseFloat(String(discount || '0').replace(/[^0-9.]/g, '')) || 0;
+    const newNet = Math.max(0, newGross - currentDisc);
+
     const activeKeys = Object.keys(selectedMethods).filter((k) => selectedMethods[k] && k !== 'Pay Later');
     if (activeKeys.length === 1) {
       setSplitAmounts((prev) => ({
         ...prev,
-        [activeKeys[0]]: val,
+        [activeKeys[0]]: newNet.toString(),
+      }));
+    }
+  };
+
+  const handleDiscountChange = (val) => {
+    setDiscount(val);
+    const currentGross = parseFloat(String(charges || '0').replace(/[^0-9.]/g, '')) || 0;
+    const newDisc = parseFloat(String(val || '0').replace(/[^0-9.]/g, '')) || 0;
+    const newNet = Math.max(0, currentGross - newDisc);
+
+    const activeKeys = Object.keys(selectedMethods).filter((k) => selectedMethods[k] && k !== 'Pay Later');
+    if (activeKeys.length === 1) {
+      setSplitAmounts((prev) => ({
+        ...prev,
+        [activeKeys[0]]: newNet.toString(),
       }));
     }
   };
@@ -215,10 +240,10 @@ export function CreateOPRecordForm({
   const handleCollectFullFee = () => {
     const activeKeys = Object.keys(selectedMethods).filter((k) => selectedMethods[k] && k !== 'Pay Later');
     if (activeKeys.length === 1) {
-      setSplitAmounts((prev) => ({ ...prev, [activeKeys[0]]: charges }));
+      setSplitAmounts((prev) => ({ ...prev, [activeKeys[0]]: netPayableNum.toString() }));
     } else if (activeKeys.length > 1) {
       const newSplits = { ...splitAmounts };
-      newSplits[activeKeys[0]] = charges;
+      newSplits[activeKeys[0]] = netPayableNum.toString();
       activeKeys.slice(1).forEach((k) => {
         newSplits[k] = '0';
       });
@@ -344,12 +369,22 @@ export function CreateOPRecordForm({
       return;
     }
 
-    const finalRecordType = recordType === 'IP' && ipCareDetails.trim() ? `IP (${ipCareDetails.trim()})` : recordType;
-    const totalNum = parseFloat(String(charges).replace(/[^0-9.]/g, '')) || 0;
+    let finalRecordType = recordType;
+    if (recordType === 'IP' && ipCareDetails.trim()) {
+      finalRecordType = `IP (${ipCareDetails.trim()})`;
+    } else if (recordType === 'Surgery') {
+      const sName = surgeryName.trim() || ipCareDetails.trim() || 'General Surgery';
+      finalRecordType = `Surgery (${sName})`;
+    }
+
+    const grossNum = parseFloat(String(charges).replace(/[^0-9.]/g, '')) || 0;
+    const discNum = parseFloat(String(discount).replace(/[^0-9.]/g, '')) || 0;
+    const netNum = Math.max(0, grossNum - discNum);
+
     const isFree = !!selectedMethods['Free'];
     const isPayLater = !isFree && selectedMethods['Pay Later'];
-    const paidNum = isFree ? totalNum : (isPayLater ? 0 : calculatedTotalCollected);
-    const dueNum = isFree ? 0 : Math.max(0, totalNum - paidNum);
+    const paidNum = isFree ? netNum : (isPayLater ? 0 : calculatedTotalCollected);
+    const dueNum = isFree ? 0 : Math.max(0, netNum - paidNum);
     const payStatus = isFree ? 'Paid' : (isPayLater ? 'Pay Later (Pending)' : dueNum <= 0 ? 'Paid' : paidNum > 0 ? 'Partial' : 'Pay Later (Pending)');
     const savedPaymentMethod = isFree ? 'Free / Complimentary' : (isPayLater ? 'Pay Later (Post-Pay)' : (paymentSummaryStr || activeModes.join(', ') || 'Cash'));
 
@@ -376,6 +411,8 @@ export function CreateOPRecordForm({
       id: opNumber,
       regNo: opNumber,
       recordType: finalRecordType,
+      ipCareDetails: ipCareDetails.trim(),
+      surgeryName: surgeryName.trim() || ipCareDetails.trim(),
       patient: patientName.trim(),
       patientName: patientName.trim(),
       gender,
@@ -392,8 +429,11 @@ export function CreateOPRecordForm({
       time: regTime,
       date: regDate,
       charges: charges,
-      amount: `₹ ${charges}`,
-      totalAmount: totalNum,
+      discount: discNum,
+      netAmount: netNum,
+      amount: `₹ ${netNum}`,
+      totalAmount: netNum,
+      grossCharges: grossNum,
       amountPaid: paidNum.toString(),
       paidAmount: paidNum,
       dueBalance: dueNum,
@@ -427,7 +467,7 @@ export function CreateOPRecordForm({
           ...data.data,
           id: data.data.regNo || data.data.id || opNumber,
           patient: data.data.patientName || opRecord.patient,
-          amount: `₹ ${data.data.charges || charges}`,
+          amount: `₹ ${data.data.netAmount !== undefined ? data.data.netAmount : (data.data.charges || charges)}`,
         };
         notify && notify(`OP Record ${savedObj.regNo} saved to MongoDB!`);
       }
@@ -521,6 +561,7 @@ export function CreateOPRecordForm({
                 >
                   <option value="OP">🔵 OP (Outpatient)</option>
                   <option value="IP">🟣 IP (Inpatient)</option>
+                  <option value="Surgery">🔪 Surgery</option>
                   <option value="Emergency">⚡ Emergency</option>
                 </select>
                 {/* CONDITIONAL SPECIFY IP DETAILS FIELD */}
@@ -529,9 +570,21 @@ export function CreateOPRecordForm({
                     <input
                       value={ipCareDetails}
                       onChange={(e) => setIpCareDetails(e.target.value)}
-                      placeholder="Specify IP Care (e.g. Surgery, Treatment, Ward, ICU)"
+                      placeholder="Specify IP Care (e.g. Treatment, Ward, ICU)"
                       required
                       style={{ padding: '8px 10px', border: '1px solid #c084fc', borderRadius: '6px', background: '#f3e8ff', fontSize: '11px', fontWeight: '700', color: '#6b21a8', width: '100%', boxSizing: 'border-box' }}
+                    />
+                  </div>
+                )}
+                {/* CONDITIONAL SPECIFY SURGERY NAME FIELD */}
+                {recordType === 'Surgery' && (
+                  <div style={{ marginTop: '6px' }}>
+                    <input
+                      value={surgeryName}
+                      onChange={(e) => setSurgeryName(e.target.value)}
+                      placeholder="Enter Surgery Name (e.g. Appendectomy, Cataract, Orthopedic)"
+                      required
+                      style={{ padding: '8px 10px', border: '1px solid #f43f5e', borderRadius: '6px', background: '#fff1f2', fontSize: '11px', fontWeight: '700', color: '#be123c', width: '100%', boxSizing: 'border-box' }}
                     />
                   </div>
                 )}
@@ -758,9 +811,9 @@ export function CreateOPRecordForm({
               </select>
             </div>
 
-            {/* Fee (₹) Editable Input */}
+            {/* Fee (Gross ₹) Editable Input */}
             <div className="field">
-              <span style={{ color: '#4a5e7a', fontSize: '10px', fontWeight: '700' }}>Fee (₹) *</span>
+              <span style={{ color: '#4a5e7a', fontSize: '10px', fontWeight: '700' }}>Gross Fee (₹) *</span>
               <input
                 type="number"
                 step="any"
@@ -768,6 +821,31 @@ export function CreateOPRecordForm({
                 onChange={(e) => handleFeeChargesChange(e.target.value)}
                 required
                 style={{ padding: '8px 10px', border: '1px solid #dde7f1', borderRadius: '6px', fontWeight: '800', fontSize: '12px', color: '#1769d7', background: '#f4f8fe', width: '100%', boxSizing: 'border-box' }}
+              />
+            </div>
+
+            {/* Discount Amount (₹) Input (Default: 0.00) */}
+            <div className="field">
+              <span style={{ color: '#dc2626', fontSize: '10px', fontWeight: '700' }}>Discount Amount (₹)</span>
+              <input
+                type="number"
+                step="any"
+                min="0"
+                value={discount}
+                onChange={(e) => handleDiscountChange(e.target.value)}
+                placeholder="0.00"
+                style={{ padding: '8px 10px', border: '1px solid #fca5a5', borderRadius: '6px', fontWeight: '800', fontSize: '12px', color: '#dc2626', background: '#fef2f2', width: '100%', boxSizing: 'border-box' }}
+              />
+            </div>
+
+            {/* Net Amount Payable (Read-only Calculation) */}
+            <div className="field">
+              <span style={{ color: '#15803d', fontSize: '10px', fontWeight: '800' }}>Final Net Payable (₹)</span>
+              <input
+                type="number"
+                disabled
+                value={netPayableNum}
+                style={{ padding: '8px 10px', border: '1px solid #86efac', borderRadius: '6px', fontWeight: '800', fontSize: '12px', color: '#15803d', background: '#f0fdf4', width: '100%', boxSizing: 'border-box' }}
               />
             </div>
 
@@ -844,7 +922,7 @@ export function CreateOPRecordForm({
                     onClick={handleCollectFullFee}
                     style={{ fontSize: '10px', background: '#0284c7', color: '#fff', border: 'none', padding: '4px 10px', borderRadius: '4px', cursor: 'pointer', fontWeight: '800' }}
                   >
-                    ⚡ Auto-Set Full Fee (₹ {charges})
+                    ⚡ Auto-Set Net Fee (₹ {netPayableNum})
                   </button>
                 </div>
               )}
