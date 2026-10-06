@@ -235,6 +235,27 @@ export default function AppShell({ path = '/dashboard', navigate }) {
       })
       .catch((err) => console.warn('Could not fetch branches from backend API:', err.message));
 
+    fetch('/api/v1/settings')
+      .then((res) => res.json())
+      .then((data) => {
+        if (data.success && data.data) {
+          if (data.data.allMap && Object.keys(data.data.allMap).length > 0) {
+            setBrandingMap((prev) => ({
+              ...prev,
+              ...data.data.allMap,
+              All: data.data.current || data.data.allMap.Global || prev.All,
+            }));
+          } else if (data.data.current) {
+            setBrandingMap((prev) => ({
+              ...prev,
+              All: data.data.current,
+              'Central Campus': data.data.current,
+            }));
+          }
+        }
+      })
+      .catch((err) => console.warn('Could not fetch Hospital Settings from MongoDB:', err.message));
+
     fetch('/api/v1/staff', {
       headers: {
         ...(token ? { 'Authorization': `Bearer ${token}` } : {}),
@@ -500,7 +521,9 @@ export default function AppShell({ path = '/dashboard', navigate }) {
   const effectiveBranch = isSuperAdmin ? activeBranch : (profile?.branch || 'Central Campus');
   const currentBranding = brandingMap[effectiveBranch] || brandingMap['All'] || defaultBranding;
 
-  const handleSaveBranding = (updatedBranding) => {
+  const handleSaveBranding = async (updatedBranding) => {
+    const targetBranch = (isSuperAdmin && activeBranch === 'All') ? 'Global' : (effectiveBranch === 'All' ? 'Central Campus' : effectiveBranch);
+
     setBrandingMap((prev) => {
       let nextMap;
       if (isSuperAdmin && activeBranch === 'All') {
@@ -509,7 +532,6 @@ export default function AppShell({ path = '/dashboard', navigate }) {
           nextMap[bKey] = { ...prev[bKey], ...updatedBranding };
         });
       } else {
-        const targetBranch = effectiveBranch === 'All' ? 'Central Campus' : effectiveBranch;
         nextMap = {
           ...prev,
           [targetBranch]: { ...prev[targetBranch], ...updatedBranding },
@@ -522,6 +544,24 @@ export default function AppShell({ path = '/dashboard', navigate }) {
       }
       return nextMap;
     });
+
+    try {
+      const token = localStorage.getItem('kh_auth_token');
+      await fetch(`/api/v1/settings?branch=${encodeURIComponent(targetBranch)}`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
+        body: JSON.stringify({
+          branchKey: targetBranch,
+          ...updatedBranding,
+        }),
+      });
+      notify('Hospital Settings & Cloudinary Branding saved to MongoDB Atlas permanently!');
+    } catch (err) {
+      console.warn('Could not persist Settings to backend MongoDB:', err.message);
+    }
   };
 
   const [expensesList, setExpensesList] = useState(initialExpenses);
