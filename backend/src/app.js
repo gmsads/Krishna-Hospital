@@ -19,6 +19,7 @@ import pharmacyRoutes from './modules/pharmacy/pharmacy.routes.js';
 import expenseRoutes from './modules/expenses/expense.routes.js';
 import marketingRoutes from './modules/marketing/whatsapp.routes.js';
 import labInventoryRoutes from './modules/lab-inventory/lab-inventory.routes.js';
+import uploadRoutes from './modules/uploads/upload.routes.js';
 
 const app = express();
 
@@ -129,6 +130,7 @@ app.use('/api/v1/lab-services', labServiceRoutes);
 app.use('/api/v1/pharmacy', pharmacyRoutes);
 app.use('/api/v1/expenses', expenseRoutes);
 app.use('/api/v1/lab-inventory', labInventoryRoutes);
+app.use('/api/v1/upload', uploadRoutes);
 app.use('/api/v1', marketingRoutes);
 
 // SPA Client-side Route Fallback: For non-API browser routes like /dashboard or /login, serve index.html

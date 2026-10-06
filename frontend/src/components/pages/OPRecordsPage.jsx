@@ -3,6 +3,7 @@ import { Calendar, ChevronDown, ClipboardList, History, Plus, UserCheck, UserPlu
 import { StatCard } from '../common/StatCard';
 import { initialOPRecords } from '../data/initialData';
 import { HospitalInvoiceModal } from '../modals/HospitalInvoiceModal';
+import { uploadImageToCloudinary } from '../../lib/uploadHelper';
 
 export function OPRecordsPage({
   records = initialOPRecords,
@@ -126,16 +127,14 @@ export function OPRecordsPage({
 
   const settlementSummaryStr = settlementSummaryParts.join(' + ');
 
-  const handleReceiptUpload = (e) => {
+  const handleReceiptUpload = async (e) => {
     const file = e.target.files?.[0];
     if (file) {
-      const reader = new FileReader();
-      reader.onload = (event) => {
-        setSettlementReceipt(event.target?.result);
-        setSettlementReceiptName(file.name);
-        onNotify && onNotify(`Attached payment receipt proof: ${file.name}`);
-      };
-      reader.readAsDataURL(file);
+      onNotify && onNotify('Uploading settlement receipt proof to Cloudinary...');
+      const url = await uploadImageToCloudinary(file, 'receipts/settlements');
+      setSettlementReceipt(url);
+      setSettlementReceiptName(file.name);
+      onNotify && onNotify(`Attached & uploaded payment receipt proof: ${file.name}`);
     }
   };
 

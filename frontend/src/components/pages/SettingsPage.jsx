@@ -26,6 +26,7 @@ import {
 import { PanelHeader } from '../common/PanelHeader';
 
 import { useAuth } from '../../lib/auth';
+import { uploadImageToCloudinary } from '../../lib/uploadHelper';
 
 export function SettingsPage({ profile, currentBranding, onSaveBranding, onNotify }) {
   const { updateAuthProfile } = useAuth();
@@ -115,40 +116,34 @@ export function SettingsPage({ profile, currentBranding, onSaveBranding, onNotif
     onNotify && onNotify(`Removed UPI Handle: ${handleToRemove}`);
   };
 
-  // Image Upload File Handlers
-  const handleLogoUpload = (e) => {
+  // Image Upload File Handlers via Cloudinary
+  const handleLogoUpload = async (e) => {
     const file = e.target.files?.[0];
     if (file) {
-      const reader = new FileReader();
-      reader.onload = (event) => {
-        setHospitalLogo(event.target?.result);
-        onNotify && onNotify('Hospital Logo updated successfully!');
-      };
-      reader.readAsDataURL(file);
+      onNotify && onNotify('Uploading Hospital Logo to Cloudinary...');
+      const url = await uploadImageToCloudinary(file, 'branding/logos');
+      setHospitalLogo(url);
+      onNotify && onNotify('Hospital Logo uploaded successfully!');
     }
   };
 
-  const handleSignatureUpload = (e) => {
+  const handleSignatureUpload = async (e) => {
     const file = e.target.files?.[0];
     if (file) {
-      const reader = new FileReader();
-      reader.onload = (event) => {
-        setDigitalSignature(event.target?.result);
-        onNotify && onNotify('Digital Signature updated successfully!');
-      };
-      reader.readAsDataURL(file);
+      onNotify && onNotify('Uploading Digital Signature to Cloudinary...');
+      const url = await uploadImageToCloudinary(file, 'branding/signatures');
+      setDigitalSignature(url);
+      onNotify && onNotify('Digital Signature uploaded successfully!');
     }
   };
 
-  const handleWatermarkUpload = (e) => {
+  const handleWatermarkUpload = async (e) => {
     const file = e.target.files?.[0];
     if (file) {
-      const reader = new FileReader();
-      reader.onload = (event) => {
-        setWatermarkImage(event.target?.result);
-        onNotify && onNotify('Watermark image updated successfully!');
-      };
-      reader.readAsDataURL(file);
+      onNotify && onNotify('Uploading Watermark image to Cloudinary...');
+      const url = await uploadImageToCloudinary(file, 'branding/watermarks');
+      setWatermarkImage(url);
+      onNotify && onNotify('Watermark image uploaded successfully!');
     }
   };
 

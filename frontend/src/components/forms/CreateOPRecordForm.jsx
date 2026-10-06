@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { Plus, CheckCircle2, UserCheck, Upload, CreditCard, AlertTriangle, FileImage } from 'lucide-react';
 import { initialPatients, initialOPRecords } from '../data/initialData';
+import { uploadImageToCloudinary } from '../../lib/uploadHelper';
 
 export function CreateOPRecordForm({
   patients = initialPatients,
@@ -269,16 +270,14 @@ export function CreateOPRecordForm({
 
   const paymentSummaryStr = paymentSummaryParts.join(' + ');
 
-  const handleReceiptImageUpload = (e) => {
+  const handleReceiptImageUpload = async (e) => {
     const file = e.target.files?.[0];
     if (file) {
-      const reader = new FileReader();
-      reader.onload = (event) => {
-        setReceiptImage(event.target?.result);
-        setReceiptImageName(file.name);
-        notify && notify(`Attached receipt proof image: ${file.name}`);
-      };
-      reader.readAsDataURL(file);
+      notify && notify('Uploading receipt image to Cloudinary...');
+      const url = await uploadImageToCloudinary(file, 'receipts/op');
+      setReceiptImage(url);
+      setReceiptImageName(file.name);
+      notify && notify(`Attached & uploaded receipt proof image: ${file.name}`);
     }
   };
 
