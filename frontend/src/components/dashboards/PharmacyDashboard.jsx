@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useRef } from 'react';
 import {
   Pill,
   Plus,
@@ -24,6 +24,10 @@ import {
   User,
   Phone,
   Layers,
+  Download,
+  Upload,
+  MapPin,
+  FileText,
 } from 'lucide-react';
 import { StatCard } from '../common/StatCard';
 import { TimeFilterBar } from '../common/TimeFilterBar';
@@ -61,11 +65,18 @@ export function PharmacyDashboard({
   const [creditFormData, setCreditFormData] = useState({
     partyName: '',
     partyPhone: '',
+    partyAddress: '',
     creditAmount: '',
-    dueDate: '',
+    recordDate: new Date().toISOString().split('T')[0],
+    dueDate: new Date(Date.now() + 14 * 86400000).toISOString().split('T')[0],
     notes: '',
     branch: effectiveBranch === 'All' ? userBranch : effectiveBranch,
   });
+
+  // Customer / Supplier Ledger Modal State
+  const [isLedgerModalOpen, setIsLedgerModalOpen] = useState(false);
+  const [selectedLedgerParty, setSelectedLedgerParty] = useState({ name: '', phone: '', address: '' });
+  const fileInputRef = useRef(null);
 
   // Partial Payment Modal State
   const [isPaymentModalOpen, setIsPaymentModalOpen] = useState(false);
@@ -86,7 +97,39 @@ export function PharmacyDashboard({
 
   // Branch & Role-Based Scoping Computation
   // Super Admin: View all across all branches and all creators
-  // Admin: View credits & sales matching their branch and pharmacy users created under them/their branch
+  // Helper to extract normalized date parts (year, month: YYYY-MM, fullDate: YYYY-MM-DD)
+  const getItemDateParts = (item) => {
+    const rawDate = item.date || item.recordDate || item.createdAt || item.updatedAt || '';
+    if (!rawDate) return { year: '', month: '', fullDate: '' };
+
+    let d = new Date(rawDate);
+
+    // Support string formats like "DD-MM-YYYY" or "YYYY-MM-DD"
+    if (isNaN(d.getTime()) && typeof rawDate === 'string') {
+      const parts = rawDate.split(/[-/]/);
+      if (parts.length === 3) {
+        if (parts[0].length === 4) {
+          d = new Date(`${parts[0]}-${parts[1]}-${parts[2]}`);
+        } else if (parts[2].length === 4) {
+          d = new Date(`${parts[2]}-${parts[1]}-${parts[0]}`);
+        }
+      }
+    }
+
+    if (isNaN(d.getTime())) return { year: '', month: '', fullDate: '' };
+
+    const year = d.getFullYear().toString();
+    const monthNum = String(d.getMonth() + 1).padStart(2, '0');
+    const dayNum = String(d.getDate()).padStart(2, '0');
+
+    return {
+      year,
+      month: `${year}-${monthNum}`,
+      fullDate: `${year}-${monthNum}-${dayNum}`,
+    };
+  };
+
+  // Branch, Role & TimeFilter Scoping Computation
   const activeSales = useMemo(() => {
     let list = allSalesCombined;
 
@@ -110,8 +153,44 @@ export function PharmacyDashboard({
       });
     }
 
+    // 3. Time Filter Bar Scoping (all, date, monthly, yearly, etc.)
+    if (filterState && filterState.filterMode && filterState.filterMode !== 'all') {
+      list = list.filter((item) => {
+        const { year, month, fullDate } = getItemDateParts(item);
+        if (!year && !fullDate) return true;
+
+        if (filterState.filterMode === 'date') {
+          if (!filterState.selectedDate) return true;
+          return fullDate === filterState.selectedDate;
+        }
+
+        if (filterState.filterMode === 'monthly') {
+          if (!filterState.selectedMonth) return true;
+          return month === filterState.selectedMonth;
+        }
+
+        if (filterState.filterMode === 'yearly') {
+          if (!filterState.selectedYear) return true;
+          return year === filterState.selectedYear;
+        }
+
+        if (filterState.filterMode === 'today') {
+          const todayStr = new Date().toISOString().split('T')[0];
+          return fullDate === todayStr;
+        }
+
+        if (filterState.filterMode === 'yesterday') {
+          const y = new Date();
+          y.setDate(y.getDate() - 1);
+          return fullDate === y.toISOString().split('T')[0];
+        }
+
+        return true;
+      });
+    }
+
     return list;
-  }, [allSalesCombined, isSuperAdmin, isAdmin, effectiveBranch, userBranch, profile?.email]);
+  }, [allSalesCombined, isSuperAdmin, isAdmin, effectiveBranch, userBranch, profile?.email, filterState]);
 
   // Separate Credit Records (Credit Given to Patients vs Credit Taken from Suppliers)
   const creditGivenList = useMemo(() => {
@@ -339,13 +418,154 @@ export function PharmacyDashboard({
     setSelectedCreditForPayment(null);
   };
 
+  // Phone number auto-lookup in Credit Modal
+  const handleCreditPhoneChange = (val) => {
+    setCreditFormData((prev) => {
+      const updated = { ...prev, partyPhone: val };
+      const cleanNum = val.replace(/\D/g, '');
+      if (cleanNum.length >= 6) {
+        const match = allSalesCombined.find(
+          (s) =>
+            (s.partyPhone && s.partyPhone.replace(/\D/g, '').includes(cleanNum)) ||
+            (s.phone && s.phone.replace(/\D/g, '').includes(cleanNum))
+        );
+        if (match) {
+          if (match.partyName || match.patientName) updated.partyName = match.partyName || match.patientName;
+          if (match.partyAddress || match.address) updated.partyAddress = match.partyAddress || match.address;
+        }
+      }
+      return updated;
+    });
+  };
+
+  // Open Customer / Supplier Ledger View
+  const handleOpenLedger = (cRecord) => {
+    const phone = cRecord.partyPhone || cRecord.phone || '';
+    const name = cRecord.partyName || cRecord.patientName || 'Party Customer';
+    const address = cRecord.partyAddress || cRecord.address || 'Address not listed';
+
+    setSelectedLedgerParty({ name, phone, address });
+    setIsLedgerModalOpen(true);
+  };
+
+  // Compute ledger transactions matching selected party phone or name
+  const ledgerTransactions = useMemo(() => {
+    if (!selectedLedgerParty.phone && !selectedLedgerParty.name) return [];
+    const pClean = selectedLedgerParty.phone ? selectedLedgerParty.phone.replace(/\D/g, '') : '';
+    const nClean = selectedLedgerParty.name ? selectedLedgerParty.name.toLowerCase().trim() : '';
+
+    return allSalesCombined.filter((s) => {
+      const sPhone = (s.partyPhone || s.phone || '').replace(/\D/g, '');
+      const sName = (s.partyName || s.patientName || '').toLowerCase().trim();
+      if (pClean && sPhone && sPhone.includes(pClean)) return true;
+      if (nClean && sName && sName === nClean) return true;
+      return false;
+    });
+  }, [allSalesCombined, selectedLedgerParty]);
+
+  // Export Excel/CSV Handler (Exports current filtered data list)
+  const handleExportCSV = (customList = null) => {
+    let listToExport = customList;
+    if (!listToExport || !Array.isArray(listToExport)) {
+      listToExport = isCreditsPage
+        ? (creditTab === 'given' ? creditGivenList : creditTakenList)
+        : filteredSales;
+    }
+
+    if (listToExport.length === 0) {
+      onNotify && onNotify('No records available in current view/filter to export.');
+      return;
+    }
+
+    const headers = ['Sale/Receipt No', 'Date', 'Party/Customer Name', 'Phone', 'Address', 'Collection/Credit Amount (₹)', 'Expense (₹)', 'Purchase (₹)', 'Settled Amount (₹)', 'Due Date', 'Status', 'Branch'];
+    const rows = listToExport.map((s) => [
+      `"${s.saleNo || s.id || ''}"`,
+      `"${s.date || s.recordDate || s.createdAt || ''}"`,
+      `"${s.partyName || s.patientName || ''}"`,
+      `"${s.partyPhone || s.phone || ''}"`,
+      `"${s.partyAddress || s.address || ''}"`,
+      `"${s.collectingAmount || s.creditAmount || s.totalCollection || 0}"`,
+      `"${s.totalExpense || 0}"`,
+      `"${s.totalPurchase || 0}"`,
+      `"${s.paidAmount || 0}"`,
+      `"${s.dueDate || ''}"`,
+      `"${s.creditStatus || s.status || ''}"`,
+      `"${s.branch || ''}"`,
+    ]);
+
+    const csvContent = '\uFEFF' + [headers.join(','), ...rows.map((e) => e.join(','))].join('\n');
+    const blob = new Blob([csvContent], { type: 'application/vnd.ms-excel;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.setAttribute('href', url);
+    link.setAttribute('download', `pharmacy_filtered_export_${new Date().toISOString().split('T')[0]}.csv`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+    onNotify && onNotify(`Exported ${listToExport.length} filtered records to Excel/CSV format!`);
+  };
+
+  // Import CSV Handler
+  const handleImportCSV = (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = (evt) => {
+      try {
+        const text = evt.target.result;
+        const lines = text.split('\n').filter((l) => l.trim().length > 0);
+        if (lines.length <= 1) {
+          onNotify && onNotify('CSV file is empty or invalid.');
+          return;
+        }
+
+        const importedItems = [];
+        for (let i = 1; i < lines.length; i++) {
+          const cols = lines[i].split(',').map((c) => c.replace(/^"|"$/g, '').trim());
+          if (cols.length >= 3) {
+            importedItems.push({
+              saleNo: cols[0] || `CRD-${Date.now()}-${i}`,
+              date: cols[1] || new Date().toISOString().split('T')[0],
+              partyName: cols[2] || 'Imported Party',
+              patientName: cols[2] || 'Imported Party',
+              partyPhone: cols[3] || '',
+              phone: cols[3] || '',
+              partyAddress: cols[4] || '',
+              address: cols[4] || '',
+              creditType: cols[5] || 'Given',
+              creditAmount: Number(cols[6]) || 0,
+              collectingAmount: Number(cols[6]) || 0,
+              paidAmount: Number(cols[7]) || 0,
+              dueDate: cols[8] || '',
+              creditStatus: cols[9] || 'Pending',
+              branch: cols[10] || effectiveBranch,
+              status: 'Completed',
+            });
+          }
+        }
+
+        if (importedItems.length > 0) {
+          setLocalSales((prev) => [...importedItems, ...prev]);
+          onNotify && onNotify(`Successfully imported ${importedItems.length} records from CSV!`);
+        }
+      } catch (err) {
+        onNotify && onNotify('Failed to parse CSV file.');
+      }
+    };
+    reader.readAsText(file);
+  };
+
   // Record New Credit Modal Handler
   const handleOpenCreditModal = (type) => {
     setCreditModalType(type);
     setCreditFormData({
       partyName: '',
       partyPhone: '',
+      partyAddress: '',
       creditAmount: '',
+      recordDate: new Date().toISOString().split('T')[0],
       dueDate: new Date(Date.now() + 14 * 86400000).toISOString().split('T')[0],
       notes: type === 'Given' ? 'Credit given to customer/patient' : 'Credit taken from supplier/distributor',
       branch: effectiveBranch === 'All' ? userBranch : effectiveBranch,
@@ -365,9 +585,12 @@ export function PharmacyDashboard({
 
     const newCreditObj = {
       saleNo: `CRD-${Date.now().toString().slice(-5)}`,
+      date: creditFormData.recordDate || new Date().toISOString().split('T')[0],
       creditType: creditModalType,
       partyName: creditFormData.partyName.trim(),
       partyPhone: creditFormData.partyPhone.trim(),
+      partyAddress: creditFormData.partyAddress.trim(),
+      address: creditFormData.partyAddress.trim(),
       patientName: creditModalType === 'Given' ? creditFormData.partyName.trim() : 'Supplier Purchase',
       creditAmount: amt,
       collectingAmount: amt,
@@ -553,12 +776,9 @@ export function PharmacyDashboard({
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
             <CreditCard size={20} color="#1d4ed8" />
             <h2 style={{ margin: 0, fontSize: '16px', color: '#0f2d55', fontWeight: '800' }}>
-              Pharmacy Credits & Debits Manager (Branch Scoped)
+              Pharmacy Credits & Debits Manager
             </h2>
           </div>
-          <span style={{ fontSize: '12px', color: '#64748b' }}>
-            Track from whom credit was taken (Suppliers) & to whom credit was given (Patients/Customers)
-          </span>
         </div>
 
         <div style={{ display: 'flex', gap: '8px', background: '#f1f5f9', padding: '4px', borderRadius: '10px', flexWrap: 'wrap', width: '100%', maxWidth: '100%' }}>
@@ -602,6 +822,31 @@ export function PharmacyDashboard({
         </div>
       </div>
 
+      {/* Table Export & Import Filter Controls */}
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '10px', marginBottom: '12px' }}>
+        <span style={{ fontSize: '12px', fontWeight: '700', color: '#475569' }}>
+          Showing {(creditTab === 'given' ? creditGivenList : creditTakenList).length} filtered {creditTab === 'given' ? 'Customer Receivable' : 'Supplier Payable'} credit records
+        </span>
+        <div style={{ display: 'flex', gap: '8px', marginLeft: 'auto' }}>
+          <button
+            className="secondary-button"
+            onClick={() => fileInputRef.current?.click()}
+            style={{ background: '#f0fdf4', borderColor: '#bbf7d0', color: '#16a34a', fontWeight: '800', gap: '5px', fontSize: '12px', padding: '6px 12px' }}
+            title="Import Excel / CSV data file into database"
+          >
+            <Upload size={14} /> Import Excel / CSV
+          </button>
+          <button
+            className="secondary-button"
+            onClick={() => handleExportCSV(creditTab === 'given' ? creditGivenList : creditTakenList)}
+            style={{ background: '#eff6ff', borderColor: '#bfdbfe', color: '#1d4ed8', fontWeight: '800', gap: '5px', fontSize: '12px', padding: '6px 12px' }}
+            title="Download current filtered table data to Excel / CSV format"
+          >
+            <Download size={14} /> Export Filtered Data (Excel / CSV)
+          </button>
+        </div>
+      </div>
+
       {/* Credits Directory Table */}
       <div className="table-responsive" style={{ overflowX: 'auto', WebkitOverflowScrolling: 'touch', width: '100%' }}>
         <table className="data-table" style={{ width: '100%', minWidth: '760px', borderCollapse: 'separate', borderSpacing: 0 }}>
@@ -637,8 +882,32 @@ export function PharmacyDashboard({
                       </strong>
                       <span style={{ fontSize: '10px', color: '#64748b' }}>Ref: {cRecord.saleNo || cRecord.id}</span>
                     </td>
-                    <td style={{ padding: '12px', fontSize: '12px', color: '#475569', fontWeight: '600' }}>
-                      {cRecord.partyPhone || cRecord.phone || 'N/A'}
+                    <td style={{ padding: '12px' }}>
+                      {cRecord.partyPhone || cRecord.phone ? (
+                        <button
+                          type="button"
+                          onClick={() => handleOpenLedger(cRecord)}
+                          style={{
+                            background: '#eff6ff',
+                            color: '#1d4ed8',
+                            border: '1px solid #bfdbfe',
+                            padding: '4px 8px',
+                            borderRadius: '6px',
+                            fontSize: '12px',
+                            fontWeight: '700',
+                            cursor: 'pointer',
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            gap: '4px',
+                          }}
+                          title="Click to view Customer / Supplier Ledger"
+                        >
+                          <Phone size={12} />
+                          {cRecord.partyPhone || cRecord.phone}
+                        </button>
+                      ) : (
+                        <span style={{ fontSize: '12px', color: '#94a3b8' }}>N/A</span>
+                      )}
                     </td>
                     <td style={{ padding: '12px' }}>
                       <span style={{ fontSize: '14px', fontWeight: '900', color: creditTab === 'given' ? '#1d4ed8' : '#b91c1c' }}>
@@ -727,11 +996,15 @@ export function PharmacyDashboard({
             <div>
               <div className="eyebrow">Pharmacy Operations & Credit Manager</div>
               <h1>Pharmacy Credits & Debits Manager</h1>
-              <p>
-                Track from whom credit was taken (Suppliers) & to whom credit was given (Patients/Customers) for <strong>{effectiveBranch === 'All' ? 'All Campuses' : effectiveBranch}</strong> ({userRole})
-              </p>
             </div>
             <div className="heading-actions" style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+              <input
+                type="file"
+                ref={fileInputRef}
+                accept=".csv"
+                style={{ display: 'none' }}
+                onChange={handleImportCSV}
+              />
               <button
                 className="secondary-button"
                 onClick={() => handleOpenCreditModal('Given')}
@@ -924,15 +1197,35 @@ export function PharmacyDashboard({
                 </div>
               </div>
 
-              <div style={{ position: 'relative', maxWidth: '320px', width: '100%' }}>
-                <input
-                  type="text"
-                  placeholder="Search receipt, customer, branch..."
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                  style={{ width: '100%', padding: '9px 12px 9px 34px', border: '1px solid #cbd5e1', borderRadius: '8px', fontSize: '12px', background: '#f8fafc' }}
-                />
-                <Search size={15} color="#64748b" style={{ position: 'absolute', left: '11px', top: '10px' }} />
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+                <div style={{ position: 'relative', maxWidth: '280px', width: '100%' }}>
+                  <input
+                    type="text"
+                    placeholder="Search receipt, customer, branch..."
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                    style={{ width: '100%', padding: '9px 12px 9px 34px', border: '1px solid #cbd5e1', borderRadius: '8px', fontSize: '12px', background: '#f8fafc' }}
+                  />
+                  <Search size={15} color="#64748b" style={{ position: 'absolute', left: '11px', top: '10px' }} />
+                </div>
+
+                <button
+                  className="secondary-button"
+                  onClick={() => fileInputRef.current?.click()}
+                  style={{ background: '#f0fdf4', borderColor: '#bbf7d0', color: '#16a34a', fontWeight: '800', gap: '5px', fontSize: '12px', padding: '7px 12px' }}
+                  title="Import Excel / CSV data file into database"
+                >
+                  <Upload size={14} /> Import Excel / CSV
+                </button>
+
+                <button
+                  className="secondary-button"
+                  onClick={() => handleExportCSV(filteredSales)}
+                  style={{ background: '#eff6ff', borderColor: '#bfdbfe', color: '#1d4ed8', fontWeight: '800', gap: '5px', fontSize: '12px', padding: '7px 12px' }}
+                  title="Download current filtered transactions to Excel / CSV format"
+                >
+                  <Download size={14} /> Export Filtered Data (Excel / CSV)
+                </button>
               </div>
             </div>
 
@@ -964,6 +1257,28 @@ export function PharmacyDashboard({
                         </td>
                         <td style={{ padding: '12px' }}>
                           <div style={{ fontWeight: '700', color: '#162d4a', fontSize: '12px' }}>{sale.partyName || sale.patientName || 'Walk-In Customer'}</div>
+                          {(sale.partyPhone || sale.phone) && (
+                            <button
+                              type="button"
+                              onClick={() => handleOpenLedger(sale)}
+                              style={{
+                                background: 'none',
+                                border: 'none',
+                                padding: 0,
+                                color: '#1d4ed8',
+                                fontSize: '11px',
+                                fontWeight: '600',
+                                cursor: 'pointer',
+                                display: 'inline-flex',
+                                alignItems: 'center',
+                                gap: '3px',
+                                marginTop: '2px',
+                              }}
+                              title="Click to view Customer / Supplier Ledger"
+                            >
+                              <Phone size={11} /> {sale.partyPhone || sale.phone}
+                            </button>
+                          )}
                         </td>
                         <td style={{ padding: '12px' }}>
                           <span style={{ color: '#15803d', fontSize: '13px', fontWeight: '900', background: '#f0fdf4', padding: '4px 8px', borderRadius: '6px', border: '1px solid #bbf7d0', display: 'inline-block' }}>
@@ -1055,14 +1370,46 @@ export function PharmacyDashboard({
               </div>
 
               <div className="field">
-                <span style={{ fontSize: '11px', fontWeight: '700', color: '#475569' }}>Contact Phone Number</span>
+                <span style={{ fontSize: '11px', fontWeight: '700', color: '#475569' }}>Contact Phone Number (Auto-Fetches Data)</span>
                 <input
-                  type="text"
+                  type="tel"
                   placeholder="+91 98470 00000"
                   value={creditFormData.partyPhone}
-                  onChange={(e) => setCreditFormData({ ...creditFormData, partyPhone: e.target.value })}
+                  onChange={(e) => handleCreditPhoneChange(e.target.value)}
                   style={{ padding: '10px 12px', border: '1px solid #cbd5e1', borderRadius: '7px', fontSize: '13px' }}
                 />
+              </div>
+
+              <div className="field">
+                <span style={{ fontSize: '11px', fontWeight: '700', color: '#475569' }}>Address Section</span>
+                <input
+                  type="text"
+                  placeholder="e.g. Street, Colony, City"
+                  value={creditFormData.partyAddress}
+                  onChange={(e) => setCreditFormData({ ...creditFormData, partyAddress: e.target.value })}
+                  style={{ padding: '10px 12px', border: '1px solid #cbd5e1', borderRadius: '7px', fontSize: '13px' }}
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-3" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
+                <div className="field">
+                  <span style={{ fontSize: '11px', fontWeight: '700', color: '#475569' }}>Record Date (Default Today)</span>
+                  <input
+                    type="date"
+                    value={creditFormData.recordDate}
+                    onChange={(e) => setCreditFormData({ ...creditFormData, recordDate: e.target.value })}
+                    style={{ padding: '10px 12px', border: '1px solid #cbd5e1', borderRadius: '7px', fontSize: '13px' }}
+                  />
+                </div>
+                <div className="field">
+                  <span style={{ fontSize: '11px', fontWeight: '700', color: '#475569' }}>Due Date</span>
+                  <input
+                    type="date"
+                    value={creditFormData.dueDate}
+                    onChange={(e) => setCreditFormData({ ...creditFormData, dueDate: e.target.value })}
+                    style={{ padding: '10px 12px', border: '1px solid #cbd5e1', borderRadius: '7px', fontSize: '13px' }}
+                  />
+                </div>
               </div>
 
               <div className="field">
@@ -1074,16 +1421,6 @@ export function PharmacyDashboard({
                   value={creditFormData.creditAmount}
                   onChange={(e) => setCreditFormData({ ...creditFormData, creditAmount: e.target.value })}
                   style={{ padding: '10px 12px', border: '2px solid #86efac', borderRadius: '7px', fontSize: '15px', fontWeight: '900', color: '#16a34a', background: '#f0fdf4' }}
-                />
-              </div>
-
-              <div className="field">
-                <span style={{ fontSize: '11px', fontWeight: '700', color: '#475569' }}>Expected Settlement Due Date</span>
-                <input
-                  type="date"
-                  value={creditFormData.dueDate}
-                  onChange={(e) => setCreditFormData({ ...creditFormData, dueDate: e.target.value })}
-                  style={{ padding: '10px 12px', border: '1px solid #cbd5e1', borderRadius: '7px', fontSize: '13px' }}
                 />
               </div>
 
@@ -1110,6 +1447,155 @@ export function PharmacyDashboard({
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* CUSTOMER / SUPPLIER LEDGER MODAL */}
+      {isLedgerModalOpen && (
+        <div style={{ position: 'fixed', inset: 0, zIndex: 140, background: 'rgba(15, 45, 85, 0.55)', display: 'grid', placeItems: 'center', padding: '16px' }}>
+          <div style={{ background: '#ffffff', borderRadius: '16px', padding: '24px', maxWidth: '780px', width: '100%', maxHeight: '90vh', overflowY: 'auto', boxShadow: '0 25px 50px rgba(16, 45, 85, 0.25)', border: '1px solid #cbd5e1' }}>
+            
+            {/* Header */}
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', borderBottom: '1px solid #edf2f8', paddingBottom: '14px', marginBottom: '16px' }}>
+              <div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  <FileText size={22} color="#1d4ed8" />
+                  <h2 style={{ margin: 0, fontSize: '18px', color: '#0f2d55', fontWeight: '800' }}>
+                    Party Statement & Ledger View
+                  </h2>
+                </div>
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: '12px', marginTop: '6px', fontSize: '12px', color: '#475569' }}>
+                  <span style={{ fontWeight: '700', color: '#0f2d55' }}>
+                    👤 {selectedLedgerParty.name || 'Walk-In Customer'}
+                  </span>
+                  <span>
+                    📞 {selectedLedgerParty.phone || 'No phone number'}
+                  </span>
+                  <span>
+                    📍 {selectedLedgerParty.address || 'Address not listed'}
+                  </span>
+                </div>
+              </div>
+              <button className="icon-button" onClick={() => setIsLedgerModalOpen(false)}>
+                <X size={20} />
+              </button>
+            </div>
+
+            {/* Summary KPI Cards */}
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', gap: '10px', marginBottom: '18px' }}>
+              <div style={{ background: '#eff6ff', borderRadius: '10px', padding: '12px', border: '1px solid #bfdbfe' }}>
+                <span style={{ fontSize: '11px', color: '#1e40af', fontWeight: '700', display: 'block' }}>Total Credit Given</span>
+                <strong style={{ fontSize: '16px', color: '#1d4ed8' }}>
+                  ₹ {ledgerTransactions.filter(t => t.creditType === 'Given').reduce((s, t) => s + Number(t.creditAmount || t.collectingAmount || 0), 0).toLocaleString('en-IN')}
+                </strong>
+              </div>
+
+              <div style={{ background: '#fef2f2', borderRadius: '10px', padding: '12px', border: '1px solid #fecaca' }}>
+                <span style={{ fontSize: '11px', color: '#991b1b', fontWeight: '700', display: 'block' }}>Total Credit Taken</span>
+                <strong style={{ fontSize: '16px', color: '#b91c1c' }}>
+                  ₹ {ledgerTransactions.filter(t => t.creditType === 'Taken').reduce((s, t) => s + Number(t.creditAmount || t.collectingAmount || 0), 0).toLocaleString('en-IN')}
+                </strong>
+              </div>
+
+              <div style={{ background: '#f0fdf4', borderRadius: '10px', padding: '12px', border: '1px solid #bbf7d0' }}>
+                <span style={{ fontSize: '11px', color: '#166534', fontWeight: '700', display: 'block' }}>Total Settled Amount</span>
+                <strong style={{ fontSize: '16px', color: '#16a34a' }}>
+                  ₹ {ledgerTransactions.reduce((s, t) => s + Number(t.paidAmount || 0), 0).toLocaleString('en-IN')}
+                </strong>
+              </div>
+
+              <div style={{ background: '#fffbeb', borderRadius: '10px', padding: '12px', border: '1px solid #fde68a' }}>
+                <span style={{ fontSize: '11px', color: '#92400e', fontWeight: '700', display: 'block' }}>Net Outstanding Balance</span>
+                <strong style={{ fontSize: '16px', color: '#d97706' }}>
+                  ₹ {ledgerTransactions.reduce((s, t) => s + (Math.max(0, Number(t.creditAmount || t.collectingAmount || 0) - Number(t.paidAmount || 0))), 0).toLocaleString('en-IN')}
+                </strong>
+              </div>
+            </div>
+
+            {/* Transactions History Table */}
+            <div className="table-responsive" style={{ overflowX: 'auto' }}>
+              <table className="data-table" style={{ width: '100%', borderCollapse: 'separate', borderSpacing: 0, fontSize: '12px' }}>
+                <thead>
+                  <tr style={{ background: '#f8fafc' }}>
+                    <th style={{ padding: '10px', textAlign: 'left', borderBottom: '2px solid #cbd5e1' }}>Date</th>
+                    <th style={{ padding: '10px', textAlign: 'left', borderBottom: '2px solid #cbd5e1' }}>Ref / Sale No</th>
+                    <th style={{ padding: '10px', textAlign: 'left', borderBottom: '2px solid #cbd5e1' }}>Type</th>
+                    <th style={{ padding: '10px', textAlign: 'right', borderBottom: '2px solid #cbd5e1' }}>Total Credit (₹)</th>
+                    <th style={{ padding: '10px', textAlign: 'right', borderBottom: '2px solid #cbd5e1' }}>Paid / Settled (₹)</th>
+                    <th style={{ padding: '10px', textAlign: 'right', borderBottom: '2px solid #cbd5e1' }}>Balance Due (₹)</th>
+                    <th style={{ padding: '10px', textAlign: 'center', borderBottom: '2px solid #cbd5e1' }}>Status</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {ledgerTransactions.length > 0 ? (
+                    ledgerTransactions.map((tx) => {
+                      const totalAmt = Number(tx.creditAmount || tx.collectingAmount || 0);
+                      const paidAmt = Number(tx.paidAmount || 0);
+                      const dueAmt = Math.max(0, totalAmt - paidAmt);
+                      const isSettled = tx.creditStatus === 'Settled' || dueAmt <= 0;
+
+                      return (
+                        <tr key={tx._id || tx.id || tx.saleNo} style={{ borderBottom: '1px solid #edf2f8' }}>
+                          <td style={{ padding: '10px', color: '#64748b' }}>
+                            {tx.date || tx.recordDate || 'Recent'}
+                          </td>
+                          <td style={{ padding: '10px', fontWeight: '800', fontFamily: 'monospace' }}>
+                            {tx.saleNo || tx.id}
+                          </td>
+                          <td style={{ padding: '10px' }}>
+                            <span style={{
+                              padding: '2px 6px',
+                              borderRadius: '4px',
+                              fontWeight: '800',
+                              fontSize: '11px',
+                              background: tx.creditType === 'Given' ? '#dbeafe' : tx.creditType === 'Taken' ? '#fee2e2' : '#f1f5f9',
+                              color: tx.creditType === 'Given' ? '#1e40af' : tx.creditType === 'Taken' ? '#991b1b' : '#334155',
+                            }}>
+                              {tx.creditType ? `Credit ${tx.creditType}` : 'Direct Sale'}
+                            </span>
+                          </td>
+                          <td style={{ padding: '10px', textAlign: 'right', fontWeight: '800' }}>
+                            ₹ {totalAmt.toLocaleString('en-IN')}
+                          </td>
+                          <td style={{ padding: '10px', textAlign: 'right', fontWeight: '700', color: '#16a34a' }}>
+                            ₹ {paidAmt.toLocaleString('en-IN')}
+                          </td>
+                          <td style={{ padding: '10px', textAlign: 'right', fontWeight: '900', color: dueAmt > 0 ? '#b91c1c' : '#16a34a' }}>
+                            ₹ {dueAmt.toLocaleString('en-IN')}
+                          </td>
+                          <td style={{ padding: '10px', textAlign: 'center' }}>
+                            <span style={{
+                              padding: '2px 8px',
+                              borderRadius: '6px',
+                              fontSize: '10px',
+                              fontWeight: '800',
+                              background: isSettled ? '#dcfce7' : paidAmt > 0 ? '#fef3c7' : '#fee2e2',
+                              color: isSettled ? '#15803d' : paidAmt > 0 ? '#b45309' : '#991b1b',
+                            }}>
+                              {isSettled ? 'SETTLED' : paidAmt > 0 ? 'PARTIAL' : 'PENDING'}
+                            </span>
+                          </td>
+                        </tr>
+                      );
+                    })
+                  ) : (
+                    <tr>
+                      <td colSpan={7} style={{ textAlign: 'center', padding: '20px', color: '#64748b' }}>
+                        No ledger transactions logged for {selectedLedgerParty.name || 'this contact'}.
+                      </td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
+
+            <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: '16px' }}>
+              <button className="primary-button" onClick={() => setIsLedgerModalOpen(false)}>
+                Close Ledger
+              </button>
+            </div>
+
           </div>
         </div>
       )}

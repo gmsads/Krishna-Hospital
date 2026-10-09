@@ -345,7 +345,7 @@ export default function AppShell({ path = '/dashboard', navigate }) {
               testName: l.testName || l.test,
               patient: l.patientName || l.patient,
               patientName: l.patientName || l.patient,
-              doctor: l.doctor || l.orderingDoctor || 'Dr. Unassigned',
+              doctor: l.doctor || l.orderingDoctor || 'Self Created / Walk-In',
               notes: l.clinicalNotes || l.notes || '',
               requested: l.sampleCollectedAt || l.requested || 'Today, just now',
               amount: feeNum,
@@ -1018,10 +1018,19 @@ export default function AppShell({ path = '/dashboard', navigate }) {
           if (data.success && Array.isArray(data.data)) {
             data.data.forEach((invItem) => {
               if (invItem.itemType === 'Consumable') {
-                const itemLower = invItem.itemName.toLowerCase();
-                const isMatch = testNameLower.includes('thyroid')
-                  ? (itemLower.includes('thyroid') || itemLower.includes('t1') || itemLower.includes('t2') || testRows.some((r) => itemLower.includes(r.name.toLowerCase())))
-                  : testRows.some((r) => itemLower.includes(r.name.toLowerCase()));
+                const itemLower = (invItem.itemName || '').toLowerCase();
+                const linkedLower = (invItem.linkedServiceName || '').toLowerCase();
+                const cleanTestName = testNameLower.replace(/\(.*\)/g, '').trim();
+
+                const isLinkedMatch = linkedLower && (cleanTestName.includes(linkedLower) || linkedLower.includes(cleanTestName));
+                const isNameMatch = itemLower && (cleanTestName.includes(itemLower) || itemLower.includes(cleanTestName));
+                const isThyroidMatch = testNameLower.includes('thyroid') && (itemLower.includes('thyroid') || itemLower.includes('t1') || itemLower.includes('t2') || linkedLower.includes('thyroid'));
+                const isRowMatch = testRows.some((r) => {
+                  const rName = (r.name || '').toLowerCase();
+                  return rName && ((itemLower && itemLower.includes(rName)) || (linkedLower && linkedLower.includes(rName)));
+                });
+
+                const isMatch = isLinkedMatch || isNameMatch || isThyroidMatch || isRowMatch;
 
                 if (isMatch && invItem.stockQuantity > 0) {
                   fetch(`/api/v1/lab-inventory/${invItem._id || invItem.id}/consume`, {
@@ -1853,6 +1862,7 @@ export default function AppShell({ path = '/dashboard', navigate }) {
               profile={profile}
               effectiveBranch={effectiveBranch}
               branchesList={branchesList}
+              masterServices={masterServices}
               onNotify={notify}
             />
           )}

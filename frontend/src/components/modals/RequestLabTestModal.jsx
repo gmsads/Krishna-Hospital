@@ -362,78 +362,80 @@ export function RequestLabTestModal({
             >
               {masterServices.map((srv) => (
                 <option key={srv.id || srv.name} value={srv.name}>
-                  {srv.name} (Rate: ₹ {srv.rate})
+                  {isLabAssistant ? `${srv.name} (Rate: ₹ ${srv.rate})` : srv.name}
                 </option>
               ))}
             </select>
           </div>
 
-          {/* Test Fee & Upfront Payment Compact Box */}
-          <div style={{ background: '#f8fafc', padding: '8px 10px', borderRadius: '6px', border: '1px solid #e2e8f0', display: 'grid', gap: '8px' }}>
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
-              <div className="field">
-                <span style={{ fontSize: '10px', fontWeight: '800', color: '#dc2626' }}>Total Fee (₹) *</span>
-                <input
-                  type="number"
-                  value={testFee}
-                  onChange={(e) => {
-                    setTestFee(e.target.value);
-                    setAmountPaidNow(e.target.value);
-                  }}
-                  required
-                  style={{ padding: '6px 8px', border: '1px solid #fca5a5', borderRadius: '5px', fontSize: '11px', fontWeight: '800', color: '#dc2626', background: '#fef2f2' }}
-                />
-              </div>
-
-              <div className="field">
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                  <span style={{ fontSize: '10px', fontWeight: '800', color: '#15803d' }}>Paying Now (₹)</span>
-                  <button
-                    type="button"
-                    onClick={() => setAmountPaidNow(testFee)}
-                    style={{ fontSize: '9px', background: '#dcfce7', color: '#15803d', border: '1px solid #86efac', padding: '1px 5px', borderRadius: '3px', cursor: 'pointer', fontWeight: '800' }}
-                  >
-                    ⚡ Full
-                  </button>
-                </div>
-                <input
-                  type="number"
-                  value={amountPaidNow}
-                  onChange={(e) => setAmountPaidNow(e.target.value)}
-                  style={{ padding: '6px 8px', border: '1px solid #86efac', borderRadius: '5px', fontSize: '11px', fontWeight: '800', color: '#15803d', background: '#f0fdf4' }}
-                />
-              </div>
-            </div>
-
-            <div style={{ display: 'grid', gridTemplateColumns: paymentMethod === 'UPI / Online' ? '1fr 1fr' : '1fr', gap: '8px' }}>
-              <div className="field">
-                <span style={{ fontSize: '10px', fontWeight: '700', color: '#475569' }}>Payment Mode *</span>
-                <select
-                  value={paymentMethod}
-                  onChange={(e) => setPaymentMethod(e.target.value)}
-                  style={{ padding: '5px 8px', border: '1px solid #cbd5e1', borderRadius: '5px', fontSize: '11px' }}
-                >
-                  <option value="Cash">Cash</option>
-                  <option value="UPI / Online">UPI / QR Payment</option>
-                  <option value="Credit / Debit Card">Credit / Debit Card</option>
-                  <option value="Free">Free / Complimentary</option>
-                  <option value="Pay Later (Pending)">Pay Later (Post-Pay)</option>
-                </select>
-              </div>
-
-              {paymentMethod === 'UPI / Online' && (
+          {/* Test Fee & Upfront Payment Compact Box (Only visible for Lab Assistant) */}
+          {isLabAssistant && (
+            <div style={{ background: '#f8fafc', padding: '8px 10px', borderRadius: '6px', border: '1px solid #e2e8f0', display: 'grid', gap: '8px' }}>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
                 <div className="field">
-                  <span style={{ fontSize: '10px', fontWeight: '700', color: '#0369a1' }}>UPI Ref / Txn ID</span>
+                  <span style={{ fontSize: '10px', fontWeight: '800', color: '#dc2626' }}>Total Fee (₹) *</span>
                   <input
-                    value={upiTxnId}
-                    onChange={(e) => setUpiTxnId(e.target.value)}
-                    placeholder="e.g. UPI-94029104"
-                    style={{ padding: '5px 8px', border: '1px solid #93c5fd', borderRadius: '5px', fontSize: '11px' }}
+                    type="number"
+                    value={testFee}
+                    onChange={(e) => {
+                      setTestFee(e.target.value);
+                      setAmountPaidNow(e.target.value);
+                    }}
+                    required
+                    style={{ padding: '6px 8px', border: '1px solid #fca5a5', borderRadius: '5px', fontSize: '11px', fontWeight: '800', color: '#dc2626', background: '#fef2f2' }}
                   />
                 </div>
-              )}
+
+                <div className="field">
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <span style={{ fontSize: '10px', fontWeight: '800', color: '#15803d' }}>Paying Now (₹)</span>
+                    <button
+                      type="button"
+                      onClick={() => setAmountPaidNow(testFee)}
+                      style={{ fontSize: '9px', background: '#dcfce7', color: '#15803d', border: '1px solid #86efac', padding: '1px 5px', borderRadius: '3px', cursor: 'pointer', fontWeight: '800' }}
+                    >
+                      ⚡ Full
+                    </button>
+                  </div>
+                  <input
+                    type="number"
+                    value={amountPaidNow}
+                    onChange={(e) => setAmountPaidNow(e.target.value)}
+                    style={{ padding: '6px 8px', border: '1px solid #86efac', borderRadius: '5px', fontSize: '11px', fontWeight: '800', color: '#15803d', background: '#f0fdf4' }}
+                  />
+                </div>
+              </div>
+
+              <div style={{ display: 'grid', gridTemplateColumns: paymentMethod === 'UPI / Online' ? '1fr 1fr' : '1fr', gap: '8px' }}>
+                <div className="field">
+                  <span style={{ fontSize: '10px', fontWeight: '700', color: '#475569' }}>Payment Mode *</span>
+                  <select
+                    value={paymentMethod}
+                    onChange={(e) => setPaymentMethod(e.target.value)}
+                    style={{ padding: '5px 8px', border: '1px solid #cbd5e1', borderRadius: '5px', fontSize: '11px' }}
+                  >
+                    <option value="Cash">Cash</option>
+                    <option value="UPI / Online">UPI / QR Payment</option>
+                    <option value="Credit / Debit Card">Credit / Debit Card</option>
+                    <option value="Free">Free / Complimentary</option>
+                    <option value="Pay Later (Pending)">Pay Later (Post-Pay)</option>
+                  </select>
+                </div>
+
+                {paymentMethod === 'UPI / Online' && (
+                  <div className="field">
+                    <span style={{ fontSize: '10px', fontWeight: '700', color: '#0369a1' }}>UPI Ref / Txn ID</span>
+                    <input
+                      value={upiTxnId}
+                      onChange={(e) => setUpiTxnId(e.target.value)}
+                      placeholder="e.g. UPI-94029104"
+                      style={{ padding: '5px 8px', border: '1px solid #93c5fd', borderRadius: '5px', fontSize: '11px' }}
+                    />
+                  </div>
+                )}
+              </div>
             </div>
-          </div>
+          )}
 
           {/* Status & Priority */}
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>

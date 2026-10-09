@@ -25,6 +25,7 @@ export function LabInventoryPage({
   profile,
   effectiveBranch = 'Central Campus',
   branchesList = [],
+  masterServices = [],
   onNotify = () => {},
 }) {
   const [activeTab, setActiveTab] = useState('consumables'); // 'consumables' | 'machines'
@@ -33,6 +34,25 @@ export function LabInventoryPage({
   const [searchQuery, setSearchQuery] = useState('');
   const [categoryFilter, setCategoryFilter] = useState('all');
   const [statusFilter, setStatusFilter] = useState('all');
+  const [selectedServiceTest, setSelectedServiceTest] = useState('');
+
+  // Formatted List of Lab Service Categories & Tests for Dropdown
+  const labServiceOptions = useMemo(() => {
+    const list = Array.isArray(masterServices) && masterServices.length > 0 ? masterServices : [
+      { name: 'Thyroid Profile (T3, T4, TSH)', category: 'Kits & Reagents' },
+      { name: 'Complete Blood Count (CBC)', category: 'Kits & Reagents' },
+      { name: 'Lipid Profile', category: 'Kits & Reagents' },
+      { name: 'Liver Function Test (LFT)', category: 'Kits & Reagents' },
+      { name: 'Renal Function Test (KFT)', category: 'Kits & Reagents' },
+      { name: 'HbA1c Blood Sugar Test', category: 'Kits & Reagents' },
+      { name: 'Dengue NS1 Antigen Rapid Test', category: 'Kits & Reagents' },
+      { name: 'Widal Typhoid Test', category: 'Strips & Vials' },
+      { name: 'Troponin-I Cardiac Test', category: 'Kits & Reagents' },
+      { name: 'Urine Routine & Microscopy', category: 'Strips & Vials' },
+      { name: 'Vitamin D3 & B12 Panel', category: 'Kits & Reagents' },
+    ];
+    return list;
+  }, [masterServices]);
 
   // Modals state
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
@@ -989,19 +1009,71 @@ export function LabInventoryPage({
             </div>
 
             <form onSubmit={handleSaveNewItem} className="p-6 space-y-4 text-xs font-semibold text-slate-700">
-              <div>
-                <label className="block text-slate-500 mb-1">
-                  {addType === 'Consumable' ? 'Kit / Item Name *' : 'Machine Name *'}
-                </label>
-                <input
-                  type="text"
-                  required
-                  placeholder={addType === 'Consumable' ? 'e.g., Thyroid T1 Kit' : 'e.g., Immunoassay Analyzer X-500'}
-                  value={formData.itemName}
-                  onChange={(e) => setFormData({ ...formData, itemName: e.target.value })}
-                  className="w-full px-3 py-2 border border-slate-200 rounded-xl focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none"
-                />
-              </div>
+              {addType === 'Consumable' ? (
+                <div>
+                  <label className="block font-bold text-blue-700 mb-1">
+                    Select Kit Name / Lab Service Category *
+                  </label>
+                  <select
+                    value={selectedServiceTest}
+                    onChange={(e) => {
+                      const val = e.target.value;
+                      setSelectedServiceTest(val);
+                      if (val === 'MANUAL_CUSTOM') {
+                        setFormData((prev) => ({ ...prev, itemName: '', linkedServiceName: '' }));
+                      } else if (val) {
+                        const matched = labServiceOptions.find((s) => (s.name || s.test) === val);
+                        const testNameStr = matched ? (matched.name || matched.test) : val;
+                        setFormData((prev) => ({
+                          ...prev,
+                          itemName: testNameStr.includes('Kit') ? testNameStr : `${testNameStr} Kit`,
+                          linkedServiceName: testNameStr,
+                          category: matched?.category || prev.category || 'Kits & Reagents',
+                        }));
+                      }
+                    }}
+                    className="w-full px-3 py-2 border border-blue-300 rounded-xl focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none font-bold text-slate-800 bg-blue-50/40 mb-2"
+                  >
+                    <option value="">-- Select from Lab Service Categories --</option>
+                    {labServiceOptions.map((srv, i) => {
+                      const title = srv.name || srv.test;
+                      const cat = srv.category || 'Lab Category';
+                      return (
+                        <option key={srv.id || `${title}-${i}`} value={title}>
+                          🧪 {title} ({cat})
+                        </option>
+                      );
+                    })}
+                    <option value="MANUAL_CUSTOM">✍️ Enter Manual / Custom Kit Name...</option>
+                  </select>
+
+                  {(selectedServiceTest === 'MANUAL_CUSTOM' || !selectedServiceTest) && (
+                    <div className="mt-2">
+                      <label className="block text-slate-500 mb-1">Custom / Manual Kit Name *</label>
+                      <input
+                        type="text"
+                        required={selectedServiceTest === 'MANUAL_CUSTOM'}
+                        placeholder="e.g., Custom Reagent Solution B"
+                        value={formData.itemName}
+                        onChange={(e) => setFormData({ ...formData, itemName: e.target.value, linkedServiceName: e.target.value })}
+                        className="w-full px-3 py-2 border border-slate-200 rounded-xl focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none"
+                      />
+                    </div>
+                  )}
+                </div>
+              ) : (
+                <div>
+                  <label className="block text-slate-500 mb-1">Machine Name *</label>
+                  <input
+                    type="text"
+                    required
+                    placeholder="e.g., Immunoassay Analyzer X-500"
+                    value={formData.itemName}
+                    onChange={(e) => setFormData({ ...formData, itemName: e.target.value })}
+                    className="w-full px-3 py-2 border border-slate-200 rounded-xl focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none"
+                  />
+                </div>
+              )}
 
               {addType === 'Consumable' ? (
                 <>

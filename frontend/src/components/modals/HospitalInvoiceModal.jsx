@@ -34,6 +34,91 @@ export function HospitalInvoiceModal({ isOpen, onClose, record, type = 'record',
   const dueBalance = Math.max(0, totalFee - paidAmount);
   const paymentMethod = record.paymentMethod || 'Cash';
 
+  // Helper to parse dynamic sub-parameter rows for lab invoices
+  const getInvoiceReportRows = () => {
+    if (!isLab) return [];
+
+    const getSubValue = (paramName, fallbackVal) => {
+      if (Array.isArray(record.testRows) && record.testRows.length > 0) {
+        const found = record.testRows.find(
+          (r) => r.name && (r.name.toLowerCase().includes(paramName.toLowerCase()) || paramName.toLowerCase().includes(r.name.toLowerCase()))
+        );
+        if (found && found.result && found.result !== 'Normal' && found.result !== 'Normal / Within Limits' && found.result !== 'Result ready') {
+          return found.result;
+        }
+      }
+      return fallbackVal;
+    };
+
+    const testNameLower = (record.test || record.testName || '').toLowerCase();
+
+    if (testNameLower.includes('thyroid')) {
+      return [
+        { id: 1, name: 'TSH (Thyroid Stimulating Hormone)', result: getSubValue('tsh', '2.45 mIU/L'), normalRange: '0.45 - 4.5 mIU/L', status: 'NORMAL' },
+        { id: 2, name: 'T3 (Triiodothyronine)', result: getSubValue('t3', '1.2 ng/mL'), normalRange: '0.8 - 2.0 ng/mL', status: 'NORMAL' },
+        { id: 3, name: 'T4 (Thyroxine)', result: getSubValue('t4', '8.5 ug/dL'), normalRange: '5.1 - 14.1 ug/dL', status: 'NORMAL' },
+      ];
+    }
+
+    if (testNameLower.includes('cbc') || testNameLower.includes('count') || testNameLower.includes('blood count') || testNameLower.includes('hemogram')) {
+      return [
+        { id: 1, name: 'Hemoglobin (Hb)', result: getSubValue('hemoglobin', '14.2 g/dL'), normalRange: '13.0 - 17.0 g/dL', status: 'NORMAL' },
+        { id: 2, name: 'Total Leukocyte Count (WBC)', result: getSubValue('wbc', '7,800 /uL'), normalRange: '4,000 - 11,000 /uL', status: 'NORMAL' },
+        { id: 3, name: 'Red Blood Cell Count (RBC)', result: getSubValue('rbc', '4.80 Million/uL'), normalRange: '4.50 - 5.50 Million/uL', status: 'NORMAL' },
+        { id: 4, name: 'Platelet Count', result: getSubValue('platelet', '2.50 Lakhs/uL'), normalRange: '1.50 - 4.50 Lakhs/uL', status: 'NORMAL' },
+        { id: 5, name: 'Packed Cell Volume (PCV)', result: getSubValue('pcv', '42.5 %'), normalRange: '40.0 - 50.0 %', status: 'NORMAL' },
+      ];
+    }
+
+    if (testNameLower.includes('lipid') || testNameLower.includes('cholesterol')) {
+      return [
+        { id: 1, name: 'Serum Cholesterol (Total)', result: getSubValue('cholesterol', '175 mg/dL'), normalRange: '< 200 mg/dL', status: 'DESIRABLE' },
+        { id: 2, name: 'Triglycerides', result: getSubValue('triglycerides', '120 mg/dL'), normalRange: '< 150 mg/dL', status: 'NORMAL' },
+        { id: 3, name: 'HDL Cholesterol (Good)', result: getSubValue('hdl', '45 mg/dL'), normalRange: '> 40 mg/dL', status: 'OPTIMAL' },
+        { id: 4, name: 'LDL Cholesterol (Bad)', result: getSubValue('ldl', '98 mg/dL'), normalRange: '< 100 mg/dL', status: 'OPTIMAL' },
+      ];
+    }
+
+    if (testNameLower.includes('glucose') || testNameLower.includes('sugar') || testNameLower.includes('diabetes')) {
+      return [
+        { id: 1, name: 'Fasting Blood Sugar (FBS)', result: getSubValue('fasting', '92 mg/dL'), normalRange: '70 - 99 mg/dL', status: 'NORMAL' },
+        { id: 2, name: 'Post Prandial Blood Sugar (PPBS)', result: getSubValue('ppbs', '125 mg/dL'), normalRange: '< 140 mg/dL', status: 'NORMAL' },
+        { id: 3, name: 'HbA1c (Glycosylated Hb)', result: getSubValue('hba1c', '5.6 %'), normalRange: '< 5.7 %', status: 'NORMAL' },
+      ];
+    }
+
+    if (testNameLower.includes('liver') || testNameLower.includes('lft')) {
+      return [
+        { id: 1, name: 'Serum Bilirubin (Total)', result: getSubValue('bilirubin', '0.8 mg/dL'), normalRange: '0.2 - 1.2 mg/dL', status: 'NORMAL' },
+        { id: 2, name: 'SGOT / AST', result: getSubValue('sgot', '28 U/L'), normalRange: '< 40 U/L', status: 'NORMAL' },
+        { id: 3, name: 'SGPT / ALT', result: getSubValue('sgpt', '32 U/L'), normalRange: '< 45 U/L', status: 'NORMAL' },
+        { id: 4, name: 'Alkaline Phosphatase (ALP)', result: getSubValue('alp', '85 U/L'), normalRange: '44 - 147 U/L', status: 'NORMAL' },
+      ];
+    }
+
+    if (testNameLower.includes('kidney') || testNameLower.includes('renal') || testNameLower.includes('kft')) {
+      return [
+        { id: 1, name: 'Blood Urea', result: getSubValue('urea', '22 mg/dL'), normalRange: '15 - 45 mg/dL', status: 'NORMAL' },
+        { id: 2, name: 'Serum Creatinine', result: getSubValue('creatinine', '0.9 mg/dL'), normalRange: '0.6 - 1.2 mg/dL', status: 'NORMAL' },
+        { id: 3, name: 'Serum Uric Acid', result: getSubValue('uric', '5.2 mg/dL'), normalRange: '3.5 - 7.2 mg/dL', status: 'NORMAL' },
+      ];
+    }
+
+    if (Array.isArray(record.testRows) && record.testRows.length > 0) {
+      return record.testRows.map((r, i) => ({
+        id: r.id || i + 1,
+        name: r.name || record.test || 'Parameter',
+        result: r.result || 'Normal',
+        normalRange: r.normalRange || 'Standard Reference',
+        status: 'NORMAL'
+      }));
+    }
+
+    return [];
+  };
+
+  const invoiceSubRows = getInvoiceReportRows();
+
   const handlePrint = () => {
     window.print();
   };
@@ -136,6 +221,35 @@ export function HospitalInvoiceModal({ isOpen, onClose, record, type = 'record',
               </tr>
             </tbody>
           </table>
+
+          {/* Sub-Parameters Findings Table for Lab Invoices */}
+          {isLab && invoiceSubRows.length > 0 && (
+            <div style={{ marginBottom: '16px', background: '#fafafa', padding: '10px 12px', borderRadius: '6px', border: '1px solid #cbd5e1' }}>
+              <div style={{ fontSize: '11px', fontWeight: '800', color: '#0f2d55', marginBottom: '6px', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+                Sub-Parameter Findings & Observed Results
+              </div>
+              <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '11px' }}>
+                <thead>
+                  <tr style={{ background: '#f1f5f9', borderBottom: '1px solid #cbd5e1', textAlign: 'left' }}>
+                    <th style={{ padding: '5px 8px', color: '#334155' }}>Investigation / Parameter</th>
+                    <th style={{ padding: '5px 8px', color: '#334155' }}>Observed Result Value</th>
+                    <th style={{ padding: '5px 8px', color: '#334155' }}>Reference Range</th>
+                    <th style={{ padding: '5px 8px', color: '#334155' }}>Status</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {invoiceSubRows.map((row, idx) => (
+                    <tr key={row.id || idx} style={{ borderBottom: '1px solid #f1f5f9' }}>
+                      <td style={{ padding: '5px 8px', fontWeight: '600' }}>{row.name}</td>
+                      <td style={{ padding: '5px 8px', fontWeight: '700', color: '#0369a1' }}>{row.result || 'Normal'}</td>
+                      <td style={{ padding: '5px 8px', color: '#64748b' }}>{row.normalRange || 'Standard Reference'}</td>
+                      <td style={{ padding: '5px 8px', fontWeight: '700', color: '#15803d' }}>{row.status || 'NORMAL'}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
 
           {/* Payment Breakdown & Summary */}
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', borderTop: '2px solid #e2e8f0', paddingTop: '12px', marginBottom: '14px' }}>

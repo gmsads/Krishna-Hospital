@@ -10,14 +10,64 @@ export function AddPharmacySaleForm({ onSave, notify, effectiveBranch = 'All', b
     : effectiveBranch;
   const [selectedBranch, setSelectedBranch] = useState(initialBranchName);
 
-  // Streamlined Form Fields (As requested: Sale No, Collection Amount, Purchase Amount, Expenses)
+  // Form Fields
+  const [recordDate, setRecordDate] = useState(() => new Date().toISOString().split('T')[0]);
   const [collectingAmount, setCollectingAmount] = useState('');
   const [totalPurchase, setTotalPurchase] = useState('');
   const [totalExpense, setTotalExpense] = useState('');
-  const [creditType, setCreditType] = useState('None');
   const [partyName, setPartyName] = useState('');
   const [partyPhone, setPartyPhone] = useState('');
+  const [partyAddress, setPartyAddress] = useState('');
   const [submitting, setSubmitting] = useState(false);
+
+  // Phone number auto-lookup for existing customer/party name & address
+  const handlePhoneChange = (e) => {
+    const val = e.target.value;
+    setPartyPhone(val);
+
+    const cleanNum = val.replace(/\D/g, '');
+    if (cleanNum.length >= 6) {
+      const token = localStorage.getItem('kh_auth_token');
+
+      // 1. Check local/API pharmacy sales
+      fetch(`/api/v1/pharmacy?search=${encodeURIComponent(val)}`, {
+        headers: { ...(token ? { Authorization: `Bearer ${token}` } : {}) },
+      })
+        .then((res) => res.json())
+        .then((data) => {
+          if (data.success && Array.isArray(data.data) && data.data.length > 0) {
+            const match = data.data.find(
+              (s) =>
+                (s.partyPhone && s.partyPhone.includes(cleanNum)) ||
+                (s.phone && s.phone.includes(cleanNum))
+            );
+            if (match) {
+              if (match.partyName || match.patientName) setPartyName(match.partyName || match.patientName);
+              if (match.partyAddress || match.address) setPartyAddress(match.partyAddress || match.address);
+            }
+          }
+        })
+        .catch(() => {});
+
+      // 2. Check patients database
+      fetch(`/api/v1/patients?search=${encodeURIComponent(val)}`, {
+        headers: { ...(token ? { Authorization: `Bearer ${token}` } : {}) },
+      })
+        .then((res) => res.json())
+        .then((data) => {
+          if (data.success && Array.isArray(data.data) && data.data.length > 0) {
+            const pMatch = data.data.find(
+              (p) => p.phone && p.phone.replace(/\D/g, '').includes(cleanNum)
+            );
+            if (pMatch) {
+              if (pMatch.full_name || pMatch.name) setPartyName(pMatch.full_name || pMatch.name);
+              if (pMatch.address) setPartyAddress(pMatch.address);
+            }
+          }
+        })
+        .catch(() => {});
+    }
+  };
 
   // Fetch next branch-scoped PHARM-0001 format Sale No on mount / branch change
   useEffect(() => {
@@ -59,18 +109,21 @@ export function AddPharmacySaleForm({ onSave, notify, effectiveBranch = 'All', b
 
     const newSale = {
       saleNo,
+      date: recordDate || new Date().toISOString().split('T')[0],
       patientName: partyName.trim() || 'Walk-In Customer',
       partyName: partyName.trim() || 'Walk-In Customer',
       partyPhone: partyPhone.trim() || '',
       phone: partyPhone.trim() || '',
+      partyAddress: partyAddress.trim() || '',
+      address: partyAddress.trim() || '',
       collectingAmount: collectingNum,
       totalCollection: collectingNum,
       totalExpense: totalExpense ? parseFloat(totalExpense) : 0,
       totalPurchase: totalPurchase ? parseFloat(totalPurchase) : 0,
       paymentMethod: 'Cash',
-      creditType,
-      creditAmount: creditType !== 'None' ? collectingNum : 0,
-      notes: creditType !== 'None' ? `Credit ${creditType} record` : 'Pharmacy Record',
+      creditType: 'None',
+      creditAmount: 0,
+      notes: 'Pharmacy Record',
       branch: assignedBranch,
       branchCode: assignedCode,
       status: 'Completed',
@@ -108,6 +161,7 @@ export function AddPharmacySaleForm({ onSave, notify, effectiveBranch = 'All', b
     setTotalExpense('');
     setPartyName('');
     setPartyPhone('');
+    setPartyAddress('');
 
     // Fetch next sequential PHARM-0001 ID
     fetch('/api/v1/pharmacy/next-saleno')
@@ -141,7 +195,7 @@ export function AddPharmacySaleForm({ onSave, notify, effectiveBranch = 'All', b
           </div>
         </div>
 
-        {/* 4 Fields: Receipt No, Collection Amount, Purchase Amount, Expenses */}
+        {/* Fields Grid */}
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '14px', width: '100%' }}>
           
           {/* 1. Receipt / Sale No (Auto Generation) */}
@@ -151,6 +205,17 @@ export function AddPharmacySaleForm({ onSave, notify, effectiveBranch = 'All', b
               value={saleNo}
               readOnly
               style={{ padding: '10px 12px', border: '1px solid #e2e8f0', borderRadius: '7px', background: '#f8fafc', fontWeight: '800', color: '#0f2d55', fontSize: '14px', width: '100%', minHeight: '42px', boxSizing: 'border-box' }}
+            />
+          </div>
+
+          {/* Date (Defaults to Today) */}
+          <div className="field" style={{ width: '100%' }}>
+            <span style={{ fontSize: '11px', fontWeight: '800', color: '#64748b' }}>Date (Default Today)</span>
+            <input
+              type="date"
+              value={recordDate}
+              onChange={(e) => setRecordDate(e.target.value)}
+              style={{ padding: '10px 12px', border: '1px solid #cbd5e1', borderRadius: '7px', fontSize: '13px', background: '#ffffff', width: '100%', minHeight: '42px', boxSizing: 'border-box' }}
             />
           </div>
 
@@ -190,50 +255,6 @@ export function AddPharmacySaleForm({ onSave, notify, effectiveBranch = 'All', b
               style={{ padding: '10px 12px', border: '1px solid #fecaca', borderRadius: '7px', fontSize: '14px', background: '#fef2f2', width: '100%', minHeight: '42px', boxSizing: 'border-box' }}
             />
           </div>
-
-          {/* 5. Credit Mode Selection (Optional) */}
-          <div className="field" style={{ width: '100%' }}>
-            <span style={{ fontSize: '11px', fontWeight: '800', color: '#1d4ed8' }}>Credit Status (Optional)</span>
-            <select
-              value={creditType}
-              onChange={(e) => setCreditType(e.target.value)}
-              style={{ padding: '10px 12px', border: '1px solid #cbd5e1', borderRadius: '7px', fontSize: '13px', background: '#ffffff', width: '100%', minHeight: '42px', boxSizing: 'border-box' }}
-            >
-              <option value="None">Direct Settlement (No Credit)</option>
-              <option value="Given">Credit Given (Customer Receivable)</option>
-              <option value="Taken">Credit Taken (Supplier Payable)</option>
-            </select>
-          </div>
-
-          {creditType !== 'None' && (
-            <>
-              <div className="field" style={{ width: '100%' }}>
-                <span style={{ fontSize: '11px', fontWeight: '800', color: '#0f2d55' }}>
-                  {creditType === 'Given' ? 'Customer / Patient Name' : 'Supplier / Vendor Name'}
-                </span>
-                <input
-                  type="text"
-                  value={partyName}
-                  onChange={(e) => setPartyName(e.target.value)}
-                  placeholder={creditType === 'Given' ? 'Customer name' : 'Supplier name'}
-                  style={{ padding: '10px 12px', border: '1px solid #cbd5e1', borderRadius: '7px', fontSize: '13px', width: '100%', minHeight: '42px', boxSizing: 'border-box' }}
-                />
-              </div>
-
-              <div className="field" style={{ width: '100%' }}>
-                <span style={{ fontSize: '11px', fontWeight: '800', color: '#0f2d55' }}>
-                  Contact Phone Number
-                </span>
-                <input
-                  type="tel"
-                  value={partyPhone}
-                  onChange={(e) => setPartyPhone(e.target.value)}
-                  placeholder="e.g. +91 9876543210"
-                  style={{ padding: '10px 12px', border: '1px solid #cbd5e1', borderRadius: '7px', fontSize: '13px', width: '100%', minHeight: '42px', boxSizing: 'border-box' }}
-                />
-              </div>
-            </>
-          )}
 
         </div>
 

@@ -68,7 +68,7 @@ export function EnterLabResultForm({
   const [patientName, setPatientName] = useState(initialSelectedTest?.patientName || initialSelectedTest?.patient || '');
   const [phone, setPhone] = useState(initialSelectedTest?.phone || '');
   const [availableDoctors, setAvailableDoctors] = useState([]);
-  const [doctor, setDoctor] = useState(initialSelectedTest?.doctor || initialSelectedTest?.orderingDoctor || 'Dr. Unassigned');
+  const [doctor, setDoctor] = useState(initialSelectedTest?.doctor || initialSelectedTest?.orderingDoctor || 'Self Created / Walk-In');
   const [status, setStatus] = useState(initialSelectedTest?.status || 'Sample collected');
   const [autoFetchSuccess, setAutoFetchSuccess] = useState(false);
 
@@ -104,9 +104,6 @@ export function EnterLabResultForm({
       .then((data) => {
         if (data.success && Array.isArray(data.data) && data.data.length > 0) {
           setAvailableDoctors(data.data);
-          if (!initialSelectedTest?.doctor && (doctor === 'Dr. Meera Nair' || doctor === 'Dr. Unassigned')) {
-            setDoctor(data.data[0].name);
-          }
         }
       })
       .catch((err) => console.warn('Could not fetch doctors in EnterLabResultForm:', err.message));
@@ -151,9 +148,11 @@ export function EnterLabResultForm({
       if (initialSelectedTest.test || initialSelectedTest.testName) {
         const tName = initialSelectedTest.test || initialSelectedTest.testName;
         setTestName(tName);
-      }
-      if (initialSelectedTest.testRows && initialSelectedTest.testRows.length > 0) {
-        setTestRows(initialSelectedTest.testRows);
+        if (initialSelectedTest.testRows && initialSelectedTest.testRows.length > 0) {
+          setTestRows(initialSelectedTest.testRows);
+        } else {
+          setTestRows(getInitialRowsForTest(tName, masterServices));
+        }
       }
       if (initialSelectedTest.notes) setNotes(initialSelectedTest.notes);
       if (initialSelectedTest.amount || initialSelectedTest.testFee) {
@@ -248,8 +247,8 @@ export function EnterLabResultForm({
       .join(', ');
 
     const targetBranch = effectiveBranch === 'All' ? (branchesList[0]?.name || 'Central Campus') : effectiveBranch;
-    const isSelfCreated = !initialSelectedTest?.opNumber || opNumber.startsWith('LAB-');
     const assignedDoctor = initialSelectedTest?.doctor || initialSelectedTest?.orderingDoctor || doctor || 'Self Created / Walk-In';
+    const isSelfCreated = !assignedDoctor || assignedDoctor === 'Self Created / Walk-In' || assignedDoctor === 'Self / Walk-in' || assignedDoctor === 'Unassigned' || assignedDoctor === 'Walk-In';
 
     const payload = {
       id: initialSelectedTest?.id || initialSelectedTest?._id || opNumber.trim(),

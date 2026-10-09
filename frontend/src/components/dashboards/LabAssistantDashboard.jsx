@@ -36,13 +36,23 @@ export function LabAssistantDashboard({ profile, onNavigate, onEnterResult, labT
   if (filterState.filterMode === 'monthly') multiplier = 24;
   if (filterState.filterMode === 'yearly') multiplier = 280;
 
+  const isDoctorPrescribed = (t) => {
+    if (t.isSelfCreated === true) return false;
+    const doc = (t.doctor || t.orderingDoctor || '').trim();
+    const lowerDoc = doc.toLowerCase();
+    if (!doc || lowerDoc.includes('self') || lowerDoc.includes('unassigned') || lowerDoc.includes('walk-in') || lowerDoc.includes('walkin') || lowerDoc.includes('lab assistant')) {
+      return false;
+    }
+    return true;
+  };
+
   const filteredTests = labTests.filter((t) => {
-    if (activeSourceTab === 'Doctor Assigned') return t.createdBy === 'Doctor' || (t.doctor && !t.doctor.includes('Self'));
-    if (activeSourceTab === 'Self Created') return t.createdBy === 'Lab Assistant' || (t.doctor && t.doctor.includes('Self'));
+    if (activeSourceTab === 'Doctor Assigned') return isDoctorPrescribed(t);
+    if (activeSourceTab === 'Self Created') return !isDoctorPrescribed(t);
     return true;
   });
 
-  const doctorAssignedCount = labTests.filter((t) => (t.createdBy === 'Doctor' || (t.doctor && !t.doctor.includes('Self'))) && t.status !== 'Completed' && t.status !== 'Result ready').length * multiplier;
+  const doctorAssignedCount = labTests.filter((t) => isDoctorPrescribed(t) && t.status !== 'Completed' && t.status !== 'Result ready').length * multiplier;
   const samplesCollectedCount = labTests.filter((t) => t.status === 'Sample Collected' || t.status === 'In Progress').length * multiplier;
   const readyCount = labTests.filter((t) => t.status === 'Completed' || t.status === 'Result ready').length * multiplier;
 
@@ -88,7 +98,7 @@ export function LabAssistantDashboard({ profile, onNavigate, onEnterResult, labT
             </div>
 
             {/* Filter Tabs: All, Doctor Assigned, Self Created */}
-            <div style={{ display: 'flex', gap: '6px', background: '#f1f5f9', padding: '3px', borderRadius: '8px' }}>
+            <div style={{ display: 'flex', gap: '6px', background: '#f1f5f9', padding: '3px', borderRadius: '8px', flexWrap: 'wrap' }}>
               <button
                 className="secondary-button"
                 onClick={() => setActiveSourceTab('All')}
@@ -119,7 +129,7 @@ export function LabAssistantDashboard({ profile, onNavigate, onEnterResult, labT
                   boxShadow: activeSourceTab === 'Doctor Assigned' ? '0 1px 3px rgba(0,0,0,0.1)' : 'none',
                 }}
               >
-                🩺 Doctor Prescribed ({labTests.filter((t) => t.createdBy === 'Doctor' || (t.doctor && !t.doctor.includes('Self'))).length})
+                🩺 Doctor Prescribed ({labTests.filter((t) => isDoctorPrescribed(t)).length})
               </button>
               <button
                 className="secondary-button"
@@ -135,59 +145,62 @@ export function LabAssistantDashboard({ profile, onNavigate, onEnterResult, labT
                   boxShadow: activeSourceTab === 'Self Created' ? '0 1px 3px rgba(0,0,0,0.1)' : 'none',
                 }}
               >
-                🔬 Self Created ({labTests.filter((t) => t.createdBy === 'Lab Assistant' || (t.doctor && t.doctor.includes('Self'))).length})
+                🔬 Self Created ({labTests.filter((t) => !isDoctorPrescribed(t)).length})
               </button>
             </div>
           </div>
 
           <div className="lab-cards" style={{ marginTop: '16px', display: 'grid', gap: '12px' }}>
-            {filteredTests.map((test) => (
-              <div
-                className="lab-card"
-                key={test.id || test.test}
-                style={{
-                  borderLeft: test.priority === 'Urgent / Stat' ? '4px solid #dc2626' : '4px solid #1769d7',
-                  background: test.status === 'Awaiting sample' ? '#fbfcfe' : '#fff',
-                }}
-              >
-                <div className="lab-card-icon">
-                  <FlaskConical size={18} color={test.priority === 'Urgent / Stat' ? '#dc2626' : '#1769d7'} />
-                </div>
-                
-                <div className="lab-card-main">
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                    <strong style={{ fontSize: '14px', color: '#162d4a' }}>{test.test}</strong>
-                    
-                    {/* Source Tag Badge */}
-                    <span
-                      style={{
-                        fontSize: '10px',
-                        padding: '1px 7px',
-                        borderRadius: '10px',
-                        fontWeight: '800',
-                        background: test.createdBy === 'Doctor' || !!test.doctor ? '#f0f6fe' : '#f0fdf4',
-                        color: test.createdBy === 'Doctor' || !!test.doctor ? '#1769d7' : '#15803d',
-                        border: '1px solid',
-                        borderColor: test.createdBy === 'Doctor' || !!test.doctor ? '#b8d5f7' : '#bbf7d0',
-                      }}
-                    >
-                      {test.createdBy === 'Doctor' || !!test.doctor ? '🩺 Doctor Prescribed' : '🔬 Self Created'}
+            {filteredTests.map((test, idx) => {
+              const hasDocPrescriber = isDoctorPrescribed(test);
+
+              return (
+                <div
+                  className="lab-card"
+                  key={`${test.id || 'test'}-${test.test || 'name'}-${idx}`}
+                  style={{
+                    borderLeft: test.priority === 'Urgent / Stat' ? '4px solid #dc2626' : '4px solid #1769d7',
+                    background: test.status === 'Awaiting sample' ? '#fbfcfe' : '#fff',
+                  }}
+                >
+                  <div className="lab-card-icon">
+                    <FlaskConical size={18} color={test.priority === 'Urgent / Stat' ? '#dc2626' : '#1769d7'} />
+                  </div>
+                  
+                  <div className="lab-card-main">
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                      <strong style={{ fontSize: '14px', color: '#162d4a' }}>{test.test}</strong>
+                      
+                      {/* Source Tag Badge */}
+                      <span
+                        style={{
+                          fontSize: '10px',
+                          padding: '1px 7px',
+                          borderRadius: '10px',
+                          fontWeight: '800',
+                          background: hasDocPrescriber ? '#f0f6fe' : '#f0fdf4',
+                          color: hasDocPrescriber ? '#1769d7' : '#15803d',
+                          border: '1px solid',
+                          borderColor: hasDocPrescriber ? '#b8d5f7' : '#bbf7d0',
+                        }}
+                      >
+                        {hasDocPrescriber ? '🩺 Doctor Prescribed' : '🔬 Self Created'}
+                      </span>
+
+                      {test.priority === 'Urgent / Stat' && (
+                        <span style={{ fontSize: '10px', background: '#fef2f2', color: '#dc2626', border: '1px solid #fecaca', padding: '1px 6px', borderRadius: '10px', fontWeight: '800' }}>
+                          URGENT / STAT
+                        </span>
+                      )}
+                    </div>
+
+                    <span style={{ display: 'block', marginTop: '3px', fontSize: '12px', color: '#475569' }}>
+                      Patient: <strong>{test.patient}</strong> {test.opNumber ? `(${test.opNumber})` : ''}
                     </span>
 
-                    {test.priority === 'Urgent / Stat' && (
-                      <span style={{ fontSize: '10px', background: '#fef2f2', color: '#dc2626', border: '1px solid #fecaca', padding: '1px 6px', borderRadius: '10px', fontWeight: '800' }}>
-                        URGENT / STAT
-                      </span>
-                    )}
-                  </div>
-
-                  <span style={{ display: 'block', marginTop: '3px', fontSize: '12px', color: '#475569' }}>
-                    Patient: <strong>{test.patient}</strong> {test.opNumber ? `(${test.opNumber})` : ''}
-                  </span>
-
-                  <span style={{ fontSize: '11px', color: '#1769d7', fontWeight: '700', display: 'inline-flex', alignItems: 'center', gap: '4px', marginTop: '3px' }}>
-                    <Stethoscope size={12} /> Assigned Doctor: {test.doctor || 'Self / Walk-in'}
-                  </span>
+                    <span style={{ fontSize: '11px', color: hasDocPrescriber ? '#1769d7' : '#15803d', fontWeight: '700', display: 'inline-flex', alignItems: 'center', gap: '4px', marginTop: '3px' }}>
+                      <Stethoscope size={12} /> {hasDocPrescriber ? `Assigned Doctor: ${test.doctor || test.orderingDoctor}` : 'Created by: Self / Walk-in (Lab Assistant)'}
+                    </span>
 
                   {test.notes && (
                     <div style={{ background: '#f0f6fe', border: '1px solid #d4e4f7', padding: '6px 10px', borderRadius: '6px', fontSize: '11px', color: '#1a3354', marginTop: '6px' }}>
@@ -209,23 +222,24 @@ export function LabAssistantDashboard({ profile, onNavigate, onEnterResult, labT
                   </b>
                 </div>
 
-                <div style={{ display: 'flex', gap: '6px' }}>
-                  {test.status === 'Result ready' ? (
-                    <button
-                      className="primary-button"
-                      style={{ padding: '6px 12px', fontSize: '11px', gap: '4px', background: '#15803d', borderColor: '#15803d' }}
-                      onClick={() => setActivePdfModalTest(test)}
-                    >
-                      <Printer size={13} /> View PDF & Print
-                    </button>
-                  ) : null}
+                  <div style={{ display: 'flex', gap: '6px' }}>
+                    {test.status === 'Result ready' ? (
+                      <button
+                        className="primary-button"
+                        style={{ padding: '6px 12px', fontSize: '11px', gap: '4px', background: '#15803d', borderColor: '#15803d' }}
+                        onClick={() => setActivePdfModalTest(test)}
+                      >
+                        <Printer size={13} /> View PDF & Print
+                      </button>
+                    ) : null}
 
-                  <button className="secondary-button" style={{ padding: '6px 12px', fontSize: '11px', gap: '4px' }} onClick={() => onEnterResult(test)}>
-                    <Plus size={14} /> {test.result ? 'Edit result' : 'Enter result'}
-                  </button>
+                    <button className="secondary-button" style={{ padding: '6px 12px', fontSize: '11px', gap: '4px' }} onClick={() => onEnterResult(test)}>
+                      <Plus size={14} /> {test.result ? 'Edit result' : 'Enter result'}
+                    </button>
+                  </div>
                 </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
         </section>
 

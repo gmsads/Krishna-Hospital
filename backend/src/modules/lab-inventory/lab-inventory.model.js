@@ -19,6 +19,17 @@ const labInventorySchema = new mongoose.Schema(
       default: 'Kits & Reagents',
       trim: true,
     },
+    // Optional Link to Lab Service Category / Test
+    linkedServiceId: {
+      type: String,
+      default: '',
+      trim: true,
+    },
+    linkedServiceName: {
+      type: String,
+      default: '',
+      trim: true,
+    },
     // For Consumables & Test Kits
     stockQuantity: {
       type: Number,

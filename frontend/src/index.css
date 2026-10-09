@@ -264,3 +264,36 @@ img, video, canvas, svg {
   }
 }
 
+/* Universal Responsive Grid & Lab Card Layout System */
+@media (max-width: 1200px) {
+  .dashboard-grid, .lower-grid, .finance-grid {
+    grid-template-columns: 1fr !important;
+    gap: 16px !important;
+  }
+}
+
+.panel {
+  min-width: 0 !important;
+  box-sizing: border-box !important;
+}
+
+.lab-card {
+  display: flex !important;
+  flex-wrap: wrap !important;
+  align-items: center !important;
+  justify-content: space-between !important;
+  gap: 12px !important;
+  min-width: 0 !important;
+  width: 100% !important;
+  box-sizing: border-box !important;
+}
+
+.lab-card-main {
+  flex: 1 1 240px !important;
+  min-width: 0 !important;
+}
+
+.lab-card-meta {
+  flex: 0 0 auto !important;
+}
+

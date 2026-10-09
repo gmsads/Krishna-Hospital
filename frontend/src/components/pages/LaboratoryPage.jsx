@@ -27,6 +27,17 @@ export function LaboratoryPage({ tests = initialLabTests, isDoctor = false, doct
     setSettlementTxnId('');
   };
 
+  // Helper to reliably check if a test was prescribed by a Doctor vs created manually by Lab Assistant
+  const isDoctorPrescribed = (t) => {
+    if (t.isSelfCreated === true) return false;
+    const doc = (t.doctor || t.orderingDoctor || '').trim();
+    const lowerDoc = doc.toLowerCase();
+    if (!doc || lowerDoc.includes('self') || lowerDoc.includes('unassigned') || lowerDoc.includes('walk-in') || lowerDoc.includes('walkin') || lowerDoc.includes('lab assistant')) {
+      return false;
+    }
+    return true;
+  };
+
   // Filter tests strictly assigned to this doctor when in Doctor mode, or by source tab
   const displayTests = useMemo(() => {
     let list = tests;
@@ -39,9 +50,9 @@ export function LaboratoryPage({ tests = initialLabTests, isDoctor = false, doct
     }
 
     if (activeSourceTab === 'Hospital Records') {
-      list = list.filter((t) => (t.createdBy === 'Doctor' || (t.doctor && t.doctor !== 'Self Created / Walk-In' && t.doctor !== 'Dr. Unassigned')) && !t.isSelfCreated);
+      list = list.filter((t) => isDoctorPrescribed(t));
     } else if (activeSourceTab === 'Self Created') {
-      list = list.filter((t) => t.createdBy === 'Lab Assistant' || t.createdBy === 'Self Created' || t.isSelfCreated === true || t.doctor === 'Self Created / Walk-In' || t.labOrderNo?.startsWith('LAB-') || t.opNumber?.startsWith('LAB-'));
+      list = list.filter((t) => !isDoctorPrescribed(t));
     }
 
     return list;
@@ -139,21 +150,23 @@ export function LaboratoryPage({ tests = initialLabTests, isDoctor = false, doct
               No lab test reports found.
             </div>
           ) : (
-            displayTests.map((test) => {
+            displayTests.map((test, idx) => {
               const totalFee = typeof test.amount === 'number' ? test.amount : (parseFloat(String(test.amount || '1200').replace(/[^0-9.]/g, '')) || 1200);
               const paidFee = typeof test.paidAmount === 'number' ? test.paidAmount : (test.paymentStatus === 'Paid' || test.status === 'Result ready' ? totalFee : 0);
               const dueFee = Math.max(0, totalFee - paidFee);
               const isPaid = dueFee <= 0;
+              const hasDocPrescriber = isDoctorPrescribed(test);
+              const isSelf = !hasDocPrescriber;
 
               return (
-                <div className="lab-card" key={test.id || test.test} style={{ borderLeft: test.priority === 'Urgent / Stat' ? '4px solid #dc2626' : '4px solid #1769d7' }}>
+                <div className="lab-card" key={`${test.id || 'test'}-${test.test || 'name'}-${idx}`} style={{ borderLeft: test.priority === 'Urgent / Stat' ? '4px solid #dc2626' : '4px solid #1769d7' }}>
                   <div className="lab-card-icon"><FlaskConical size={18} color={test.priority === 'Urgent / Stat' ? '#dc2626' : '#1769d7'} /></div>
                   <div className="lab-card-main">
                     <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
                       <strong style={{ fontSize: '14px', color: '#162d4a' }}>{test.test}</strong>
 
                       {/* Source Tag Badge */}
-                      {test.createdBy === 'Doctor' || test.createdBy === 'Hospital Record' || !!test.doctor ? (
+                      {hasDocPrescriber ? (
                         <span
                           style={{
                             fontSize: '10px',
@@ -183,19 +196,21 @@ export function LaboratoryPage({ tests = initialLabTests, isDoctor = false, doct
                         </span>
                       )}
 
-                      {/* Payment Status Badge */}
-                      {isPaid ? (
-                        <span style={{ fontSize: '10px', background: '#f0fdf4', color: '#15803d', border: '1px solid #bbf7d0', padding: '1px 7px', borderRadius: '10px', fontWeight: '800' }}>
-                          ✓ Paid (₹{totalFee})
-                        </span>
-                      ) : paidFee > 0 ? (
-                        <span style={{ fontSize: '10px', background: '#fffbebf0', color: '#d97706', border: '1px solid #fcd34d', padding: '1px 7px', borderRadius: '10px', fontWeight: '800' }}>
-                          ⚡ Partial (Paid ₹{paidFee}, Due ₹{dueFee})
-                        </span>
-                      ) : (
-                        <span style={{ fontSize: '10px', background: '#fef2f2', color: '#dc2626', border: '1px solid #fca5a5', padding: '1px 7px', borderRadius: '10px', fontWeight: '800' }}>
-                          ⏳ Fee Due (₹{dueFee})
-                        </span>
+                      {/* Payment Status Badge - Hidden for Doctor Role */}
+                      {!isDoctor && (
+                        isPaid ? (
+                          <span style={{ fontSize: '10px', background: '#f0fdf4', color: '#15803d', border: '1px solid #bbf7d0', padding: '1px 7px', borderRadius: '10px', fontWeight: '800' }}>
+                            ✓ Paid (₹{totalFee})
+                          </span>
+                        ) : paidFee > 0 ? (
+                          <span style={{ fontSize: '10px', background: '#fffbebf0', color: '#d97706', border: '1px solid #fcd34d', padding: '1px 7px', borderRadius: '10px', fontWeight: '800' }}>
+                            ⚡ Partial (Paid ₹{paidFee}, Due ₹{dueFee})
+                          </span>
+                        ) : (
+                          <span style={{ fontSize: '10px', background: '#fef2f2', color: '#dc2626', border: '1px solid #fca5a5', padding: '1px 7px', borderRadius: '10px', fontWeight: '800' }}>
+                            ⏳ Fee Due (₹{dueFee})
+                          </span>
+                        )
                       )}
 
                       {/* Branch Tag Badge */}
@@ -214,9 +229,15 @@ export function LaboratoryPage({ tests = initialLabTests, isDoctor = false, doct
                       Patient: <strong>{test.patient}</strong> {test.opNumber ? `(${test.opNumber})` : ''}
                     </span>
 
-                    <span style={{ fontSize: '11px', color: '#1769d7', fontWeight: '700', display: 'block', marginTop: '3px' }}>
-                      🩺 Prescribed by Doctor: {test.doctor || 'Self / Walk-in'}
-                    </span>
+                    {hasDocPrescriber ? (
+                      <span style={{ fontSize: '11px', color: '#1769d7', fontWeight: '700', display: 'block', marginTop: '3px' }}>
+                        🩺 Prescribed by Doctor: {test.doctor || test.orderingDoctor}
+                      </span>
+                    ) : (
+                      <span style={{ fontSize: '11px', color: '#15803d', fontWeight: '700', display: 'block', marginTop: '3px' }}>
+                        🔬 Created by: Self / Walk-in (Lab Assistant)
+                      </span>
+                    )}
 
                     {test.notes && (
                       <div style={{ background: '#f0f6fe', border: '1px solid #d4e4f7', padding: '4px 8px', borderRadius: '6px', fontSize: '11px', color: '#1a3354', marginTop: '4px' }}>
@@ -243,25 +264,29 @@ export function LaboratoryPage({ tests = initialLabTests, isDoctor = false, doct
                   </div>
 
                   <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap', alignItems: 'center' }}>
-                    {/* Toggle: Show Collect Fee when dues are pending, replace with Print Invoice once cleared */}
-                    {dueFee > 0 && !isDoctor ? (
-                      <button
-                        className="primary-button"
-                        style={{ padding: '6px 12px', fontSize: '11px', gap: '4px', background: '#ef4444', borderColor: '#dc2626' }}
-                        onClick={() => handleOpenLabPaymentModal(test)}
-                        title="Collect lab test fee payment"
-                      >
-                        <WalletCards size={13} /> Collect Fee
-                      </button>
-                    ) : (
-                      <button
-                        className="secondary-button"
-                        style={{ padding: '6px 12px', fontSize: '11px', gap: '4px', background: '#f0fdf4', borderColor: '#bbf7d0', color: '#15803d', fontWeight: '700' }}
-                        onClick={() => setActiveInvoiceRecord(test)}
-                        title="Print official lab tax invoice"
-                      >
-                        <Printer size={13} /> Print Invoice
-                      </button>
+                    {/* Toggle: Show Collect Fee when dues are pending (Non-Doctor only) */}
+                    {!isDoctor && (
+                      dueFee > 0 ? (
+                        <button
+                          className="primary-button"
+                          style={{ padding: '6px 12px', fontSize: '11px', gap: '4px', background: '#ef4444', borderColor: '#dc2626' }}
+                          onClick={() => handleOpenLabPaymentModal(test)}
+                          title="Collect lab test fee payment"
+                        >
+                          <WalletCards size={13} /> Collect Fee
+                        </button>
+                      ) : (
+                        test.status === 'Result ready' && (
+                          <button
+                            className="secondary-button"
+                            style={{ padding: '6px 12px', fontSize: '11px', gap: '4px', background: '#f0fdf4', borderColor: '#bbf7d0', color: '#15803d', fontWeight: '700' }}
+                            onClick={() => setActiveInvoiceRecord(test)}
+                            title="Print official lab tax invoice"
+                          >
+                            <Printer size={13} /> Print Invoice
+                          </button>
+                        )
+                      )
                     )}
 
                     {test.status === 'Result ready' ? (
@@ -273,19 +298,15 @@ export function LaboratoryPage({ tests = initialLabTests, isDoctor = false, doct
                         <Printer size={13} /> View PDF Report
                       </button>
                     ) : (
-                      <button
-                        className="secondary-button"
-                        style={{ padding: '6px 12px', fontSize: '11px' }}
-                        onClick={() => {
-                          if (isDoctor) {
-                            setActiveModalTest(test);
-                          } else {
-                            onEnterResult(test);
-                          }
-                        }}
-                      >
-                        {isDoctor ? 'View Report' : 'Enter Result'}
-                      </button>
+                      !isDoctor && (
+                        <button
+                          className="secondary-button"
+                          style={{ padding: '6px 12px', fontSize: '11px' }}
+                          onClick={() => onEnterResult(test)}
+                        >
+                          Enter Result
+                        </button>
+                      )
                     )}
                   </div>
                 </div>
