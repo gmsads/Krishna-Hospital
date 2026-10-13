@@ -4,7 +4,6 @@ import * as inventoryService from './lab-inventory.service.js';
 
 export const getItems = asyncHandler(async (req, res) => {
   const branchFilter = req.query.branch;
-  await inventoryService.seedInitialInventoryIfEmpty();
   const items = await inventoryService.getAllInventoryItems(branchFilter);
   return ApiResponse.success(res, items, 'Lab inventory items fetched successfully', 200);
 });

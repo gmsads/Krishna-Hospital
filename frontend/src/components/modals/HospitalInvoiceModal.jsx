@@ -25,14 +25,43 @@ export function HospitalInvoiceModal({ isOpen, onClose, record, type = 'record',
   const rawTotal = isLab ? rawGross : Math.max(0, rawGross - discountAmt);
 
   const rawPaid = isLab
-    ? (typeof record.paidAmount === 'number' ? record.paidAmount : (record.paymentStatus === 'Paid' || record.status === 'Result ready' ? rawTotal : 0))
-    : (parseFloat(record.paidAmount || (record.paymentStatus === 'Paid' ? rawTotal : 0)) || 0);
+    ? (typeof record.paidAmount === 'number'
+        ? record.paidAmount
+        : typeof record.paidAmount === 'string' && record.paidAmount !== ''
+        ? parseFloat(record.paidAmount) || 0
+        : typeof record.amountPaid === 'number'
+        ? record.amountPaid
+        : typeof record.amountPaid === 'string' && record.amountPaid !== ''
+        ? parseFloat(record.amountPaid) || 0
+        : (record.paymentStatus === 'Paid' || record.status === 'Result ready' ? rawTotal : 0))
+    : (typeof record.paidAmount === 'number'
+        ? record.paidAmount
+        : typeof record.paidAmount === 'string' && record.paidAmount !== ''
+        ? parseFloat(record.paidAmount) || 0
+        : typeof record.amountPaid === 'number'
+        ? record.amountPaid
+        : typeof record.amountPaid === 'string' && record.amountPaid !== ''
+        ? parseFloat(record.amountPaid) || 0
+        : (record.paymentStatus === 'Paid' ? rawTotal : 0));
 
   const grossFee = rawGross;
   const totalFee = rawTotal;
   const paidAmount = rawPaid;
   const dueBalance = Math.max(0, totalFee - paidAmount);
   const paymentMethod = record.paymentMethod || 'Cash';
+
+  const effectivePaymentHistory = (Array.isArray(record.paymentHistory) && record.paymentHistory.length > 0)
+    ? record.paymentHistory
+    : (paidAmount > 0
+        ? [{
+            date: recordDate,
+            dateStr: recordDate,
+            timeStr: recordTime,
+            method: paymentMethod,
+            amount: paidAmount,
+            refId: record.upiTxnId || record.referenceNo || ''
+          }]
+        : []);
 
   // Helper to parse dynamic sub-parameter rows for lab invoices
   const getInvoiceReportRows = () => {
@@ -253,11 +282,20 @@ export function HospitalInvoiceModal({ isOpen, onClose, record, type = 'record',
 
           {/* Payment Breakdown & Summary */}
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', borderTop: '2px solid #e2e8f0', paddingTop: '12px', marginBottom: '14px' }}>
-            <div style={{ maxWidth: '300px' }}>
-              <span style={{ fontSize: '11px', fontWeight: '800', color: '#475569', display: 'block' }}>Payment Method / Modes:</span>
-              <span style={{ fontSize: '12px', fontWeight: '700', color: '#0369a1', display: 'block' }}>💳 {paymentMethod}</span>
+            <div style={{ maxWidth: '320px' }}>
+              <span style={{ fontSize: '11px', fontWeight: '800', color: '#475569', display: 'block', marginBottom: '4px' }}>Payment Method / Modes:</span>
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: '4px', marginBottom: '4px' }}>
+                {paymentMethod.split('+').map((m, idx) => (
+                  <span key={idx} style={{ background: '#f0f9ff', color: '#0369a1', padding: '2px 8px', borderRadius: '4px', fontSize: '11px', fontWeight: '700', border: '1px solid #bae6fd' }}>
+                    💳 {m.trim()}
+                  </span>
+                ))}
+              </div>
               {record.upiTxnId && (
                 <span style={{ fontSize: '10px', color: '#64748b', display: 'block' }}>Txn Ref: {record.upiTxnId}</span>
+              )}
+              {record.upiId && (
+                <span style={{ fontSize: '10px', color: '#64748b', display: 'block' }}>UPI ID: {record.upiId}</span>
               )}
             </div>
 
@@ -286,7 +324,7 @@ export function HospitalInvoiceModal({ isOpen, onClose, record, type = 'record',
           </div>
 
           {/* OFFICIAL PAYMENT TRANSACTION HISTORY LOG */}
-          {Array.isArray(record.paymentHistory) && record.paymentHistory.length > 0 && (
+          {effectivePaymentHistory.length > 0 && (
             <div style={{ marginBottom: '18px', borderTop: '1px dashed #cbd5e1', paddingTop: '10px' }}>
               <span style={{ fontSize: '10px', fontWeight: '800', color: '#0369a1', display: 'block', marginBottom: '6px', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
                 📜 Official Payment History &amp; Transaction Log
@@ -300,13 +338,14 @@ export function HospitalInvoiceModal({ isOpen, onClose, record, type = 'record',
                   </tr>
                 </thead>
                 <tbody>
-                  {record.paymentHistory.map((h, idx) => (
+                  {effectivePaymentHistory.map((h, idx) => (
                     <tr key={idx} style={{ borderBottom: '1px solid #edf2f7' }}>
                       <td style={{ padding: '5px 8px', color: '#475569' }}>
-                        {h.dateStr || (h.date ? new Date(h.date).toLocaleDateString('en-IN') : 'Date')} {h.timeStr || ''}
+                        {h.dateStr || (h.date ? new Date(h.date).toLocaleDateString('en-IN') : recordDate)} {h.timeStr || ''}
                       </td>
                       <td style={{ padding: '5px 8px', color: '#0f2d55', fontWeight: '700' }}>
-                        {h.method || 'Cash'}
+                        {h.method || paymentMethod || 'Cash'}
+                        {h.refId ? <span style={{ fontSize: '10px', color: '#64748b', fontWeight: 'normal', marginLeft: '6px' }}>(Ref: {h.refId})</span> : null}
                       </td>
                       <td style={{ padding: '5px 8px', textAlign: 'right', color: '#15803d', fontWeight: '800' }}>
                         ₹ {parseFloat(String(h.amount || 0)).toLocaleString('en-IN', { minimumFractionDigits: 2 })}

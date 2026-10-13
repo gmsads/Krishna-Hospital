@@ -282,8 +282,15 @@ export function LabServicesPage({
           </div>
 
           <div style={{ display: 'grid', gap: '12px' }}>
-            {masterServices.map((srv) => (
-              <div key={srv.id || srv.name} style={{ background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: '9px', padding: '14px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            {masterServices.length === 0 ? (
+              <div style={{ textAlign: 'center', padding: '36px 16px', color: '#64748b', fontSize: '13px', background: '#f8fafc', borderRadius: '9px', border: '1px dashed #cbd5e1' }}>
+                <FlaskConical size={32} color="#94a3b8" style={{ margin: '0 auto 8px', display: 'block' }} />
+                <p style={{ margin: '0 0 4px', fontWeight: '700', color: '#475569' }}>No lab service categories saved yet.</p>
+                <p style={{ margin: 0, fontSize: '11px', color: '#94a3b8' }}>Create your first lab test category using the form on the left.</p>
+              </div>
+            ) : (
+              masterServices.map((srv) => (
+                <div key={srv.id || srv.name} style={{ background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: '9px', padding: '14px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                 <div>
                   <strong style={{ fontSize: '14px', color: '#162d4a', display: 'block' }}>{srv.name}</strong>
                   <p style={{ margin: '3px 0 0', fontSize: '11px', color: '#64748b' }}>{srv.description}</p>
@@ -335,7 +342,7 @@ export function LabServicesPage({
                   </button>
                 </div>
               </div>
-            ))}
+            )))}
           </div>
         </section>
       </div>

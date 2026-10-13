@@ -25,7 +25,7 @@ export function RequestLabTestModal({
   const [orderingDoctor, setOrderingDoctor] = useState(initialPatient?.doctor || doctorName || (doctorsList[0]?.name || ''));
   const [availableLabAssistants, setAvailableLabAssistants] = useState([]);
   const [assignedLabAssistant, setAssignedLabAssistant] = useState('');
-  const [testName, setTestName] = useState(masterServices[0]?.name || 'Complete blood count');
+  const [testName, setTestName] = useState(masterServices[0]?.name || '');
   const [priority, setPriority] = useState('Routine');
   
   const initialBranchName = effectiveBranch === 'All'
@@ -107,11 +107,160 @@ export function RequestLabTestModal({
   }, [selectedBranch, effectiveBranch]);
   
   // Lab Fee & Upfront Payment State
-  const initialRate = parseFloat(masterServices.find(s => s.name === (masterServices[0]?.name || 'Complete blood count'))?.rate) || 1200;
+  const initialRate = parseFloat(masterServices.find(s => s.name === (masterServices[0]?.name || ''))?.rate) || 0;
   const [testFee, setTestFee] = useState(initialRate.toString());
-  const [amountPaidNow, setAmountPaidNow] = useState(initialRate.toString());
-  const [paymentMethod, setPaymentMethod] = useState('Cash');
+
+  // Auto-sync test name and fee when masterServices load
+  React.useEffect(() => {
+    if (!testName && masterServices.length > 0) {
+      setTestName(masterServices[0].name);
+      const r = parseFloat(masterServices[0].rate) || 0;
+      setTestFee(r.toString());
+    }
+  }, [masterServices, testName]);
+
+  // MULTI-SELECT PAYMENT METHODS & SPLIT AMOUNT COLLECTION (Exact Match to OP Record)
+  const [selectedMethods, setSelectedMethods] = useState({
+    Cash: true,
+    UPI: false,
+    Card: false,
+    Cheque: false,
+    'Bank Transfer': false,
+    Free: false,
+    Others: false,
+    'Pay Later': false,
+  });
+
+  const [splitAmounts, setSplitAmounts] = useState({
+    Cash: initialRate.toString(),
+    UPI: '0',
+    Card: '0',
+    Cheque: '0',
+    'Bank Transfer': '0',
+    Free: '0',
+    Others: '0',
+  });
+
+  const upiHandles = ['krishnahospital@okicici', 'krishnalab@ybl', 'krishnaglobal@hdfcbank'];
+  const [selectedUpiHandle, setSelectedUpiHandle] = useState('krishnalab@ybl');
   const [upiTxnId, setUpiTxnId] = useState('');
+
+  const handleFeeChargesChange = (val) => {
+    setTestFee(val);
+    const newGross = parseFloat(String(val || '0').replace(/[^0-9.]/g, '')) || 0;
+    const activeKeys = Object.keys(selectedMethods).filter((k) => selectedMethods[k] && k !== 'Pay Later');
+    if (activeKeys.length === 1) {
+      setSplitAmounts((prev) => ({
+        ...prev,
+        [activeKeys[0]]: newGross.toString(),
+      }));
+    }
+  };
+
+  const togglePaymentMethod = (modeKey) => {
+    setSelectedMethods((prev) => {
+      if (modeKey === 'Free') {
+        const isCurrentlySelected = prev['Free'];
+        if (!isCurrentlySelected) {
+          setSplitAmounts((prevSplits) => ({
+            ...prevSplits,
+            Free: testFee,
+          }));
+          return {
+            Cash: false,
+            UPI: false,
+            Card: false,
+            Cheque: false,
+            'Bank Transfer': false,
+            Free: true,
+            Others: false,
+            'Pay Later': false,
+          };
+        } else {
+          return {
+            ...prev,
+            Cash: true,
+            Free: false,
+          };
+        }
+      } else if (modeKey === 'Pay Later') {
+        const isCurrentlySelected = prev['Pay Later'];
+        if (!isCurrentlySelected) {
+          return {
+            Cash: false,
+            UPI: false,
+            Card: false,
+            Cheque: false,
+            'Bank Transfer': false,
+            Free: false,
+            Others: false,
+            'Pay Later': true,
+          };
+        } else {
+          return {
+            ...prev,
+            Cash: true,
+            'Pay Later': false,
+          };
+        }
+      } else {
+        const nextState = { ...prev, [modeKey]: !prev[modeKey], 'Pay Later': false, Free: false };
+        const anyChecked = Object.keys(nextState).some((k) => nextState[k]);
+        if (!anyChecked) {
+          nextState.Cash = true;
+        }
+        if (nextState[modeKey] && (!splitAmounts[modeKey] || splitAmounts[modeKey] === '0')) {
+          setSplitAmounts((prevSplits) => ({
+            ...prevSplits,
+            [modeKey]: modeKey === 'Cash' && !prev[modeKey] ? testFee : '0',
+          }));
+        }
+        return nextState;
+      }
+    });
+  };
+
+  const handleSplitAmountChange = (modeKey, val) => {
+    setSplitAmounts((prev) => ({
+      ...prev,
+      [modeKey]: val,
+    }));
+  };
+
+  const handleCollectFullFee = () => {
+    const feeNum = parseFloat(String(testFee || '0').replace(/[^0-9.]/g, '')) || 0;
+    const activeKeys = Object.keys(selectedMethods).filter((k) => selectedMethods[k] && k !== 'Pay Later');
+    if (activeKeys.length === 1) {
+      setSplitAmounts((prev) => ({ ...prev, [activeKeys[0]]: feeNum.toString() }));
+    } else if (activeKeys.length > 1) {
+      const newSplits = { ...splitAmounts };
+      newSplits[activeKeys[0]] = feeNum.toString();
+      activeKeys.slice(1).forEach((k) => {
+        newSplits[k] = '0';
+      });
+      setSplitAmounts(newSplits);
+    }
+  };
+
+  const activeModes = Object.keys(selectedMethods).filter((k) => selectedMethods[k] && k !== 'Pay Later');
+
+  const calculatedTotalCollected = selectedMethods['Pay Later']
+    ? 0
+    : selectedMethods['Free']
+    ? (parseFloat(String(testFee || '0').replace(/[^0-9.]/g, '')) || 0)
+    : activeModes.reduce((sum, key) => {
+        const val = parseFloat(String(splitAmounts[key] || '0').replace(/[^0-9.]/g, '')) || 0;
+        return sum + val;
+      }, 0);
+
+  const paymentSummaryParts = activeModes
+    .map((key) => {
+      const amt = parseFloat(String(splitAmounts[key] || '0').replace(/[^0-9.]/g, '')) || 0;
+      return amt > 0 ? `${key} (₹${amt})` : null;
+    })
+    .filter(Boolean);
+
+  const paymentSummaryStr = paymentSummaryParts.join(' + ');
 
   // Default Status: Automatically 'Sample Collected' (Editable)
   const [status, setStatus] = useState('Sample Collected');
@@ -124,7 +273,13 @@ export function RequestLabTestModal({
     if (foundSrv && foundSrv.rate) {
       const rateStr = parseFloat(foundSrv.rate).toString();
       setTestFee(rateStr);
-      setAmountPaidNow(rateStr);
+      const activeKeys = Object.keys(selectedMethods).filter((k) => selectedMethods[k] && k !== 'Pay Later');
+      if (activeKeys.length === 1) {
+        setSplitAmounts((prev) => ({
+          ...prev,
+          [activeKeys[0]]: rateStr,
+        }));
+      }
     }
   };
 
@@ -162,11 +317,29 @@ export function RequestLabTestModal({
       return;
     }
 
-    const feeNum = parseFloat(testFee) || 0;
-    const isFree = paymentMethod === 'Free' || paymentMethod === 'Free / Complimentary';
-    const paidNum = isFree ? feeNum : (parseFloat(amountPaidNow) || 0);
+    const feeNum = parseFloat(String(testFee || '0').replace(/[^0-9.]/g, '')) || 0;
+    const isFree = !!selectedMethods['Free'];
+    const isPayLater = !isFree && selectedMethods['Pay Later'];
+    const paidNum = isFree ? feeNum : (isPayLater ? 0 : calculatedTotalCollected);
     const dueNum = isFree ? 0 : Math.max(0, feeNum - paidNum);
-    const payStatus = isFree ? 'Paid' : (dueNum <= 0 ? 'Paid' : paidNum > 0 ? 'Partial' : 'Pending');
+    const payStatus = isFree ? 'Paid' : (isPayLater ? 'Pay Later (Pending)' : dueNum <= 0 ? 'Paid' : paidNum > 0 ? 'Partial' : 'Pay Later (Pending)');
+    const savedPaymentMethod = isFree ? 'Free / Complimentary' : (isPayLater ? 'Pay Later (Post-Pay)' : (paymentSummaryStr || activeModes.join(', ') || 'Cash'));
+
+    const splitBreakdown = {};
+    activeModes.forEach((k) => {
+      splitBreakdown[k] = parseFloat(String(splitAmounts[k] || '0').replace(/[^0-9.]/g, '')) || 0;
+    });
+
+    const now = new Date();
+    const initialHistoryEntry = paidNum > 0 ? [{
+      date: now.toISOString(),
+      dateStr: now.toISOString().split('T')[0],
+      timeStr: now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+      amount: paidNum,
+      method: savedPaymentMethod,
+      breakdown: splitBreakdown,
+      type: 'Initial Lab Order Payment',
+    }] : [];
 
     const assignedBranch = effectiveBranch === 'All' ? selectedBranch : effectiveBranch;
     const matchingBranchObj = branchesList.find((b) => b.name === assignedBranch);
@@ -196,8 +369,12 @@ export function RequestLabTestModal({
       paidAmount: paidNum,
       dueBalance: dueNum,
       paymentStatus: payStatus,
-      paymentMethod,
-      upiTxnId,
+      paymentMethod: savedPaymentMethod,
+      paymentBreakdown: splitBreakdown,
+      paymentHistory: initialHistoryEntry,
+      upiTxnId: selectedMethods.UPI ? upiTxnId : '',
+      upiHandle: selectedMethods.UPI ? selectedUpiHandle : '',
+      splitBreakdown,
       status: status,
       priority,
       clinicalNotes: clinicalNotes.trim() ? clinicalNotes.trim() : 'Laboratory Order',
@@ -243,7 +420,7 @@ export function RequestLabTestModal({
 
   return (
     <div className="modal-overlay" style={{ position: 'fixed', inset: 0, zIndex: 100, background: 'rgba(15, 45, 85, 0.45)', display: 'grid', placeItems: 'center', padding: '12px' }}>
-      <div className="modal" style={{ background: '#fff', borderRadius: '10px', padding: '16px', maxWidth: '460px', width: '100%', boxShadow: '0 15px 35px rgba(16, 45, 85, 0.18)', border: '1px solid #dbe6f5' }}>
+      <div className="modal" style={{ background: '#fff', borderRadius: '10px', padding: '16px', maxWidth: '540px', width: '100%', maxHeight: '92vh', overflowY: 'auto', boxShadow: '0 15px 35px rgba(16, 45, 85, 0.18)', border: '1px solid #dbe6f5' }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid #edf2f8', paddingBottom: '8px', marginBottom: '10px' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
             <FlaskConical size={16} color="#1769d7" />
@@ -360,82 +537,146 @@ export function RequestLabTestModal({
               required
               style={{ padding: '6px 9px', border: '1px solid #b8d5f7', borderRadius: '6px', fontSize: '11px', background: '#fff', fontWeight: '700', color: '#1769d7' }}
             >
-              {masterServices.map((srv) => (
-                <option key={srv.id || srv.name} value={srv.name}>
-                  {isLabAssistant ? `${srv.name} (Rate: ₹ ${srv.rate})` : srv.name}
-                </option>
-              ))}
+              {masterServices.length === 0 ? (
+                <option value="">No lab services available (Add in Admin)</option>
+              ) : (
+                masterServices.map((srv) => (
+                  <option key={srv.id || srv.name} value={srv.name}>
+                    {isLabAssistant ? `${srv.name} (Rate: ₹ ${srv.rate})` : srv.name}
+                  </option>
+                ))
+              )}
             </select>
           </div>
 
-          {/* Test Fee & Upfront Payment Compact Box (Only visible for Lab Assistant) */}
-          {isLabAssistant && (
-            <div style={{ background: '#f8fafc', padding: '8px 10px', borderRadius: '6px', border: '1px solid #e2e8f0', display: 'grid', gap: '8px' }}>
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
-                <div className="field">
-                  <span style={{ fontSize: '10px', fontWeight: '800', color: '#dc2626' }}>Total Fee (₹) *</span>
-                  <input
-                    type="number"
-                    value={testFee}
-                    onChange={(e) => {
-                      setTestFee(e.target.value);
-                      setAmountPaidNow(e.target.value);
-                    }}
-                    required
-                    style={{ padding: '6px 8px', border: '1px solid #fca5a5', borderRadius: '5px', fontSize: '11px', fontWeight: '800', color: '#dc2626', background: '#fef2f2' }}
-                  />
-                </div>
-
-                <div className="field">
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                    <span style={{ fontSize: '10px', fontWeight: '800', color: '#15803d' }}>Paying Now (₹)</span>
-                    <button
-                      type="button"
-                      onClick={() => setAmountPaidNow(testFee)}
-                      style={{ fontSize: '9px', background: '#dcfce7', color: '#15803d', border: '1px solid #86efac', padding: '1px 5px', borderRadius: '3px', cursor: 'pointer', fontWeight: '800' }}
-                    >
-                      ⚡ Full
-                    </button>
-                  </div>
-                  <input
-                    type="number"
-                    value={amountPaidNow}
-                    onChange={(e) => setAmountPaidNow(e.target.value)}
-                    style={{ padding: '6px 8px', border: '1px solid #86efac', borderRadius: '5px', fontSize: '11px', fontWeight: '800', color: '#15803d', background: '#f0fdf4' }}
-                  />
-                </div>
+          {/* Test Fee & Upfront Payment Section (Always visible for Doctor & Lab Assistant) */}
+          <div style={{ background: '#f8fafc', padding: '12px', borderRadius: '8px', border: '1px solid #dde7f1', display: 'grid', gap: '10px', width: '100%', boxSizing: 'border-box' }}>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
+              <div className="field">
+                <span style={{ fontSize: '10px', fontWeight: '800', color: '#dc2626' }}>Total Fee (₹) *</span>
+                <input
+                  type="number"
+                  step="any"
+                  value={testFee}
+                  onChange={(e) => handleFeeChargesChange(e.target.value)}
+                  required
+                  style={{ padding: '6px 8px', border: '1px solid #fca5a5', borderRadius: '5px', fontSize: '11px', fontWeight: '800', color: '#dc2626', background: '#fef2f2', width: '100%', boxSizing: 'border-box' }}
+                />
               </div>
 
-              <div style={{ display: 'grid', gridTemplateColumns: paymentMethod === 'UPI / Online' ? '1fr 1fr' : '1fr', gap: '8px' }}>
-                <div className="field">
-                  <span style={{ fontSize: '10px', fontWeight: '700', color: '#475569' }}>Payment Mode *</span>
-                  <select
-                    value={paymentMethod}
-                    onChange={(e) => setPaymentMethod(e.target.value)}
-                    style={{ padding: '5px 8px', border: '1px solid #cbd5e1', borderRadius: '5px', fontSize: '11px' }}
-                  >
-                    <option value="Cash">Cash</option>
-                    <option value="UPI / Online">UPI / QR Payment</option>
-                    <option value="Credit / Debit Card">Credit / Debit Card</option>
-                    <option value="Free">Free / Complimentary</option>
-                    <option value="Pay Later (Pending)">Pay Later (Post-Pay)</option>
-                  </select>
-                </div>
+              <div className="field">
+                <span style={{ fontSize: '10px', fontWeight: '800', color: '#15803d' }}>Final Net Payable (₹)</span>
+                <input
+                  type="number"
+                  disabled
+                  value={testFee}
+                  style={{ padding: '6px 8px', border: '1px solid #86efac', borderRadius: '5px', fontSize: '11px', fontWeight: '800', color: '#15803d', background: '#f0fdf4', width: '100%', boxSizing: 'border-box' }}
+                />
+              </div>
+            </div>
 
-                {paymentMethod === 'UPI / Online' && (
+            {/* MULTI-SELECT PAYMENT METHOD CHECKBOXES & SPLIT AMOUNTS */}
+            <div className="field" style={{ borderTop: '1px solid #edf2f7', paddingTop: '8px' }}>
+              <span style={{ color: '#0f2d55', fontSize: '10px', fontWeight: '800', display: 'block', marginBottom: '6px' }}>
+                Payment Method *
+              </span>
+
+              {/* CHECKBOXES ROW */}
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: '10px', alignItems: 'center', background: '#ffffff', padding: '8px 10px', borderRadius: '6px', border: '1px solid #dde7f1', marginBottom: '8px' }}>
+                {[
+                  { key: 'Cash', label: 'Cash' },
+                  { key: 'UPI', label: 'UPI' },
+                  { key: 'Card', label: 'Card' },
+                  { key: 'Cheque', label: 'Cheque' },
+                  { key: 'Bank Transfer', label: 'Bank Transfer' },
+                  { key: 'Free', label: 'Free / Complimentary' },
+                  { key: 'Others', label: 'Others / PO' },
+                  { key: 'Pay Later', label: 'Pay Later (Post-Pay)' },
+                ].map((m) => (
+                  <label key={m.key} style={{ display: 'flex', alignItems: 'center', gap: '5px', cursor: 'pointer', fontSize: '11px', fontWeight: '700', color: selectedMethods[m.key] ? '#1769d7' : '#475569' }}>
+                    <input
+                      type="checkbox"
+                      checked={!!selectedMethods[m.key]}
+                      onChange={() => togglePaymentMethod(m.key)}
+                      style={{ width: '14px', height: '14px', accentColor: '#1769d7', cursor: 'pointer' }}
+                    />
+                    <span>{m.label}</span>
+                  </label>
+                ))}
+              </div>
+
+              {/* SPLIT AMOUNT INPUTS FOR CHECKED METHODS */}
+              {!selectedMethods['Pay Later'] && (
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(130px, 1fr))', gap: '8px', background: '#f0fdf4', border: '1px solid #bbf7d0', padding: '8px 10px', borderRadius: '6px', marginBottom: '8px' }}>
+                  {activeModes.map((modeKey) => (
+                    <div key={modeKey} className="field">
+                      <span style={{ color: '#15803d', fontSize: '9px', fontWeight: '800' }}>
+                        {modeKey} Amount (₹) *
+                      </span>
+                      <input
+                        type="number"
+                        step="any"
+                        value={splitAmounts[modeKey] || ''}
+                        onChange={(e) => handleSplitAmountChange(modeKey, e.target.value)}
+                        placeholder={`Enter ${modeKey} amount...`}
+                        required
+                        style={{ padding: '5px 8px', border: '1px solid #86efac', borderRadius: '5px', fontSize: '11px', fontWeight: '800', color: '#15803d', background: '#ffffff', width: '100%', boxSizing: 'border-box' }}
+                      />
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              {/* COLLECTED TOTAL SUMMARY BANNER */}
+              {!selectedMethods['Pay Later'] && (
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '6px', background: '#e0f2fe', border: '1px solid #7dd3fc', padding: '6px 10px', borderRadius: '6px', fontSize: '10px', fontWeight: '800', color: '#0369a1' }}>
+                  <span>Total Collecting Now: <strong>₹ {calculatedTotalCollected.toLocaleString('en-IN')}</strong> {paymentSummaryStr ? `(${paymentSummaryStr})` : ''}</span>
+                  <button
+                    type="button"
+                    onClick={handleCollectFullFee}
+                    style={{ fontSize: '9px', background: '#0284c7', color: '#fff', border: 'none', padding: '3px 8px', borderRadius: '4px', cursor: 'pointer', fontWeight: '800' }}
+                  >
+                    ⚡ Auto-Set Full Fee (₹ {testFee})
+                  </button>
+                </div>
+              )}
+
+              {/* CONDITIONAL UPI HANDLES DROPDOWN */}
+              {selectedMethods.UPI && (
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px', marginTop: '8px' }}>
                   <div className="field">
-                    <span style={{ fontSize: '10px', fontWeight: '700', color: '#0369a1' }}>UPI Ref / Txn ID</span>
+                    <span style={{ color: '#0284c7', fontSize: '10px', fontWeight: '700' }}>Hospital Available UPI Handle *</span>
+                    <select
+                      value={selectedUpiHandle}
+                      onChange={(e) => setSelectedUpiHandle(e.target.value)}
+                      style={{ padding: '6px 8px', border: '1px solid #93c5fd', borderRadius: '5px', background: '#f0f9ff', fontWeight: '700', color: '#0284c7', fontSize: '10px', width: '100%', boxSizing: 'border-box' }}
+                    >
+                      {upiHandles.map((h) => (
+                        <option key={h} value={h}>💳 {h}</option>
+                      ))}
+                    </select>
+                  </div>
+
+                  <div className="field">
+                    <span style={{ color: '#4a5e7a', fontSize: '10px', fontWeight: '700' }}>UPI Transaction Ref ID (Optional)</span>
                     <input
                       value={upiTxnId}
                       onChange={(e) => setUpiTxnId(e.target.value)}
-                      placeholder="e.g. UPI-94029104"
-                      style={{ padding: '5px 8px', border: '1px solid #93c5fd', borderRadius: '5px', fontSize: '11px' }}
+                      placeholder="e.g. 402918239102"
+                      style={{ padding: '6px 8px', border: '1px solid #dde7f1', borderRadius: '5px', fontSize: '10px', width: '100%', boxSizing: 'border-box' }}
                     />
                   </div>
-                )}
-              </div>
+                </div>
+              )}
+
+              {/* CONDITIONAL PAY LATER WARNING BANNER */}
+              {selectedMethods['Pay Later'] && (
+                <div style={{ background: '#fffbeb', border: '1px solid #fde68a', padding: '8px 10px', borderRadius: '6px', fontSize: '10px', color: '#b45309', fontWeight: '700', marginTop: '8px' }}>
+                  ⚠️ Pay Later Selected: Lab investigation ordered without upfront payment collection. Complete fee (₹{testFee}) will be billed for post-investigation settlement.
+                </div>
+              )}
             </div>
-          )}
+          </div>
 
           {/* Status & Priority */}
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>

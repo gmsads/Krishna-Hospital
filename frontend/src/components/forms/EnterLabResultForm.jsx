@@ -110,7 +110,7 @@ export function EnterLabResultForm({
   }, [effectiveBranch, branchesList, initialSelectedTest]);
 
   // Main Test Name (Selected from Admin Catalogue)
-  const initialMainTest = initialSelectedTest?.test || (masterServices[0]?.name || 'Complete blood count');
+  const initialMainTest = initialSelectedTest?.test || (masterServices[0]?.name || '');
   const [testName, setTestName] = useState(initialMainTest);
 
   // Dynamic Multi-Row Sub-Parameter State (e.g. T1, T2, T3, T4, TSH)
@@ -122,12 +122,166 @@ export function EnterLabResultForm({
 
   const [notes, setNotes] = useState(initialSelectedTest?.notes || '');
 
-  // Auto-sync sub-parameter rows when masterServices loads from API if no testRows set yet
+  // Auto-sync sub-parameter rows and test name when masterServices loads from API
   React.useEffect(() => {
     if (!initialSelectedTest && (!testRows || testRows.length === 0 || (testRows.length === 1 && !testRows[0].name)) && masterServices.length > 0) {
-      setTestRows(getInitialRowsForTest(testName, masterServices));
+      const activeTest = testName || masterServices[0]?.name || '';
+      if (!testName && masterServices[0]?.name) {
+        setTestName(masterServices[0].name);
+        setTestFee((parseFloat(masterServices[0].rate) || 0).toString());
+      }
+      setTestRows(getInitialRowsForTest(activeTest, masterServices));
     }
   }, [masterServices, testName]);
+
+  // Lab Fee & Upfront Payment State
+  const initialFee = initialSelectedTest?.amount || (parseFloat(masterServices.find(s => s.name === initialMainTest)?.rate) || 0);
+  const [testFee, setTestFee] = useState(initialFee.toString());
+
+  // MULTI-SELECT PAYMENT METHODS & SPLIT AMOUNT COLLECTION (Exact Match to OP Record)
+  const [selectedMethods, setSelectedMethods] = useState({
+    Cash: true,
+    UPI: false,
+    Card: false,
+    Cheque: false,
+    'Bank Transfer': false,
+    Free: false,
+    Others: false,
+    'Pay Later': false,
+  });
+
+  const [splitAmounts, setSplitAmounts] = useState({
+    Cash: initialFee.toString(),
+    UPI: '0',
+    Card: '0',
+    Cheque: '0',
+    'Bank Transfer': '0',
+    Free: '0',
+    Others: '0',
+  });
+
+  const upiHandles = ['krishnahospital@okicici', 'krishnalab@ybl', 'krishnaglobal@hdfcbank'];
+  const [selectedUpiHandle, setSelectedUpiHandle] = useState('krishnalab@ybl');
+  const [upiTxnId, setUpiTxnId] = useState(initialSelectedTest?.upiTxnId || '');
+
+  // EDITABLE FEE HANDLER
+  const handleFeeChargesChange = (val) => {
+    setTestFee(val);
+    const newGross = parseFloat(String(val || '0').replace(/[^0-9.]/g, '')) || 0;
+    const activeKeys = Object.keys(selectedMethods).filter((k) => selectedMethods[k] && k !== 'Pay Later');
+    if (activeKeys.length === 1) {
+      setSplitAmounts((prev) => ({
+        ...prev,
+        [activeKeys[0]]: newGross.toString(),
+      }));
+    }
+  };
+
+  // MULTI-SELECT PAYMENT TOGGLE (Exact Match to OP Record)
+  const togglePaymentMethod = (modeKey) => {
+    setSelectedMethods((prev) => {
+      if (modeKey === 'Free') {
+        const isCurrentlySelected = prev['Free'];
+        if (!isCurrentlySelected) {
+          setSplitAmounts((prevSplits) => ({
+            ...prevSplits,
+            Free: testFee,
+          }));
+          return {
+            Cash: false,
+            UPI: false,
+            Card: false,
+            Cheque: false,
+            'Bank Transfer': false,
+            Free: true,
+            Others: false,
+            'Pay Later': false,
+          };
+        } else {
+          return {
+            ...prev,
+            Cash: true,
+            Free: false,
+          };
+        }
+      } else if (modeKey === 'Pay Later') {
+        const isCurrentlySelected = prev['Pay Later'];
+        if (!isCurrentlySelected) {
+          return {
+            Cash: false,
+            UPI: false,
+            Card: false,
+            Cheque: false,
+            'Bank Transfer': false,
+            Free: false,
+            Others: false,
+            'Pay Later': true,
+          };
+        } else {
+          return {
+            ...prev,
+            Cash: true,
+            'Pay Later': false,
+          };
+        }
+      } else {
+        const nextState = { ...prev, [modeKey]: !prev[modeKey], 'Pay Later': false, Free: false };
+        const anyChecked = Object.keys(nextState).some((k) => nextState[k]);
+        if (!anyChecked) {
+          nextState.Cash = true;
+        }
+        if (nextState[modeKey] && (!splitAmounts[modeKey] || splitAmounts[modeKey] === '0')) {
+          setSplitAmounts((prevSplits) => ({
+            ...prevSplits,
+            [modeKey]: modeKey === 'Cash' && !prev[modeKey] ? testFee : '0',
+          }));
+        }
+        return nextState;
+      }
+    });
+  };
+
+  const handleSplitAmountChange = (modeKey, val) => {
+    setSplitAmounts((prev) => ({
+      ...prev,
+      [modeKey]: val,
+    }));
+  };
+
+  const handleCollectFullFee = () => {
+    const feeNum = parseFloat(String(testFee || '0').replace(/[^0-9.]/g, '')) || 0;
+    const activeKeys = Object.keys(selectedMethods).filter((k) => selectedMethods[k] && k !== 'Pay Later');
+    if (activeKeys.length === 1) {
+      setSplitAmounts((prev) => ({ ...prev, [activeKeys[0]]: feeNum.toString() }));
+    } else if (activeKeys.length > 1) {
+      const newSplits = { ...splitAmounts };
+      newSplits[activeKeys[0]] = feeNum.toString();
+      activeKeys.slice(1).forEach((k) => {
+        newSplits[k] = '0';
+      });
+      setSplitAmounts(newSplits);
+    }
+  };
+
+  const activeModes = Object.keys(selectedMethods).filter((k) => selectedMethods[k] && k !== 'Pay Later');
+
+  const calculatedTotalCollected = selectedMethods['Pay Later']
+    ? 0
+    : selectedMethods['Free']
+    ? (parseFloat(String(testFee || '0').replace(/[^0-9.]/g, '')) || 0)
+    : activeModes.reduce((sum, key) => {
+        const val = parseFloat(String(splitAmounts[key] || '0').replace(/[^0-9.]/g, '')) || 0;
+        return sum + val;
+      }, 0);
+
+  const paymentSummaryParts = activeModes
+    .map((key) => {
+      const amt = parseFloat(String(splitAmounts[key] || '0').replace(/[^0-9.]/g, '')) || 0;
+      return amt > 0 ? `${key} (₹${amt})` : null;
+    })
+    .filter(Boolean);
+
+  const paymentSummaryStr = paymentSummaryParts.join(' + ');
 
   // Sync state when editing an existing test
   React.useEffect(() => {
@@ -159,17 +313,34 @@ export function EnterLabResultForm({
         const fee = initialSelectedTest.amount || parseFloat(initialSelectedTest.testFee) || 1200;
         setTestFee(fee.toString());
         const paid = typeof initialSelectedTest.paidAmount === 'number' ? initialSelectedTest.paidAmount : (parseFloat(initialSelectedTest.amountPaid) || fee);
-        setAmountPaidNow(paid.toString());
+        
+        const method = initialSelectedTest.paymentMethod || 'Cash';
+        if (method.includes('Free')) {
+          setSelectedMethods({ Cash: false, UPI: false, Card: false, Cheque: false, 'Bank Transfer': false, Free: true, Others: false, 'Pay Later': false });
+          setSplitAmounts((prev) => ({ ...prev, Free: fee.toString() }));
+        } else if (method.includes('Pay Later') || initialSelectedTest.paymentStatus === 'Pay Later (Pending)') {
+          setSelectedMethods({ Cash: false, UPI: false, Card: false, Cheque: false, 'Bank Transfer': false, Free: false, Others: false, 'Pay Later': true });
+        } else {
+          const newMethods = { Cash: false, UPI: false, Card: false, Cheque: false, 'Bank Transfer': false, Free: false, Others: false, 'Pay Later': false };
+          const newSplits = { Cash: '0', UPI: '0', Card: '0', Cheque: '0', 'Bank Transfer': '0', Free: '0', Others: '0' };
+          let matchedAny = false;
+          ['Cash', 'UPI', 'Card', 'Cheque', 'Bank Transfer', 'Others'].forEach((k) => {
+            if (method.toLowerCase().includes(k.toLowerCase())) {
+              newMethods[k] = true;
+              matchedAny = true;
+            }
+          });
+          if (!matchedAny) newMethods.Cash = true;
+          const activeKeys = Object.keys(newMethods).filter((k) => newMethods[k]);
+          newSplits[activeKeys[0] || 'Cash'] = paid.toString();
+          setSelectedMethods(newMethods);
+          setSplitAmounts(newSplits);
+        }
       }
-      if (initialSelectedTest.paymentMethod) setPaymentMethod(initialSelectedTest.paymentMethod);
+      if (initialSelectedTest.upiTxnId) setUpiTxnId(initialSelectedTest.upiTxnId);
+      if (initialSelectedTest.upiHandle) setSelectedUpiHandle(initialSelectedTest.upiHandle);
     }
   }, [initialSelectedTest]);
-
-  // Lab Fee & Upfront Payment State
-  const initialFee = initialSelectedTest?.amount || (parseFloat(masterServices.find(s => s.name === initialMainTest)?.rate) || 1200);
-  const [testFee, setTestFee] = useState(initialFee.toString());
-  const [amountPaidNow, setAmountPaidNow] = useState(initialSelectedTest?.paidAmount ? initialSelectedTest.paidAmount.toString() : initialFee.toString());
-  const [paymentMethod, setPaymentMethod] = useState(initialSelectedTest?.paymentMethod || 'Cash');
 
   // Handle Main Test Selection -> Auto-populate presets & rates
   const handleMainTestChange = (selectedName) => {
@@ -179,7 +350,13 @@ export function EnterLabResultForm({
     if (foundSrv && foundSrv.rate) {
       const rateStr = parseFloat(foundSrv.rate).toString();
       setTestFee(rateStr);
-      setAmountPaidNow(rateStr);
+      const activeKeys = Object.keys(selectedMethods).filter((k) => selectedMethods[k] && k !== 'Pay Later');
+      if (activeKeys.length === 1) {
+        setSplitAmounts((prev) => ({
+          ...prev,
+          [activeKeys[0]]: rateStr,
+        }));
+      }
     }
   };
 
@@ -234,11 +411,34 @@ export function EnterLabResultForm({
       return;
     }
 
-    const feeNum = parseFloat(testFee) || 1200;
-    const isFree = paymentMethod === 'Free' || paymentMethod === 'Free / Complimentary';
-    const paidNum = isFree ? feeNum : (parseFloat(amountPaidNow) || 0);
+    const feeNum = parseFloat(String(testFee || '0').replace(/[^0-9.]/g, '')) || 1200;
+    const isFree = !!selectedMethods['Free'];
+    const isPayLater = !isFree && selectedMethods['Pay Later'];
+    const paidNum = isFree ? feeNum : (isPayLater ? 0 : calculatedTotalCollected);
     const dueNum = isFree ? 0 : Math.max(0, feeNum - paidNum);
-    const payStatus = isFree ? 'Paid' : (dueNum <= 0 ? 'Paid' : paidNum > 0 ? 'Partial' : 'Pay Later (Pending)');
+    const payStatus = isFree ? 'Paid' : (isPayLater ? 'Pay Later (Pending)' : dueNum <= 0 ? 'Paid' : paidNum > 0 ? 'Partial' : 'Pay Later (Pending)');
+    const savedPaymentMethod = isFree ? 'Free / Complimentary' : (isPayLater ? 'Pay Later (Post-Pay)' : (paymentSummaryStr || activeModes.join(', ') || 'Cash'));
+
+    const splitBreakdown = {};
+    activeModes.forEach((k) => {
+      splitBreakdown[k] = parseFloat(String(splitAmounts[k] || '0').replace(/[^0-9.]/g, '')) || 0;
+    });
+
+    const now = new Date();
+    const initialHistoryEntry = paidNum > 0 ? [{
+      date: now.toISOString(),
+      dateStr: now.toISOString().split('T')[0],
+      timeStr: now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+      amount: paidNum,
+      method: savedPaymentMethod,
+      breakdown: splitBreakdown,
+      type: 'Initial Lab Payment',
+    }] : [];
+
+    const existingHistory = Array.isArray(initialSelectedTest?.paymentHistory) && initialSelectedTest.paymentHistory.length > 0
+      ? initialSelectedTest.paymentHistory
+      : [];
+    const finalPaymentHistory = existingHistory.length > 0 ? existingHistory : initialHistoryEntry;
 
     // Format main result summary string for cards
     const summaryResult = testRows
@@ -265,9 +465,15 @@ export function EnterLabResultForm({
       testFee: feeNum.toString(),
       paidAmount: paidNum,
       amountPaid: paidNum.toString(),
+      amountPaidNow: paidNum.toString(),
       dueBalance: dueNum,
       paymentStatus: payStatus,
-      paymentMethod,
+      paymentMethod: savedPaymentMethod,
+      paymentBreakdown: splitBreakdown,
+      paymentHistory: finalPaymentHistory,
+      upiTxnId: selectedMethods.UPI ? upiTxnId : '',
+      upiHandle: selectedMethods.UPI ? selectedUpiHandle : '',
+      splitBreakdown,
       result: summaryResult || (status === 'Result ready' ? 'Pathology Report Available' : status),
       testRows,
       status: status || 'Result ready',
@@ -391,66 +597,145 @@ export function EnterLabResultForm({
               required
               style={{ padding: '12px 14px', border: '1px solid #b8d5f7', borderRadius: '9px', fontSize: '13px', background: '#fff', fontWeight: '700', color: '#1769d7' }}
             >
-              {masterServices.map((srv) => (
-                <option key={srv.id || srv.name} value={srv.name}>
-                  {srv.name} (Master Rate: ₹ {srv.rate})
-                </option>
-              ))}
+              {masterServices.length === 0 ? (
+                <option value="">No lab services available (Add in Admin)</option>
+              ) : (
+                masterServices.map((srv) => (
+                  <option key={srv.id || srv.name} value={srv.name}>
+                    {srv.name} (Master Rate: ₹ {srv.rate})
+                  </option>
+                ))
+              )}
             </select>
           </div>
 
-          {/* Test Fee & Upfront Payment Section */}
-          <div style={{ background: '#f8fafc', padding: '14px', borderRadius: '9px', border: '1px solid #e2e8f0', display: 'grid', gap: '14px', width: '100%', boxSizing: 'border-box' }}>
+          {/* Test Fee & Upfront Multi-Select Payment Section (Exact match to OP Record) */}
+          <div style={{ background: '#f8fafc', padding: '14px', borderRadius: '9px', border: '1px solid #dde7f1', display: 'grid', gap: '12px', width: '100%', boxSizing: 'border-box' }}>
             <div className="form-row" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px', width: '100%', boxSizing: 'border-box' }}>
               <div className="field">
-                <span style={{ fontSize: '12px', fontWeight: '800', color: '#dc2626' }}>Test Fee Total Amount (₹) *</span>
+                <span style={{ fontSize: '11px', fontWeight: '800', color: '#dc2626' }}>Test Fee Total Amount (₹) *</span>
                 <input
                   type="number"
+                  step="any"
                   value={testFee}
-                  onChange={(e) => {
-                    setTestFee(e.target.value);
-                    setAmountPaidNow(e.target.value);
-                  }}
+                  onChange={(e) => handleFeeChargesChange(e.target.value)}
                   required
                   placeholder="Test fee..."
-                  style={{ padding: '10px 12px', border: '1px solid #fca5a5', borderRadius: '7px', fontSize: '14px', fontWeight: '800', color: '#dc2626', background: '#fef2f2', width: '100%', boxSizing: 'border-box' }}
+                  style={{ padding: '9px 12px', border: '1px solid #fca5a5', borderRadius: '7px', fontSize: '13px', fontWeight: '800', color: '#dc2626', background: '#fef2f2', width: '100%', boxSizing: 'border-box' }}
                 />
               </div>
 
               <div className="field">
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                  <span style={{ fontSize: '12px', fontWeight: '800', color: '#15803d' }}>Amount Collecting Now (₹)</span>
-                  <button
-                    type="button"
-                    onClick={() => setAmountPaidNow(testFee)}
-                    style={{ fontSize: '11px', background: '#dcfce7', color: '#15803d', border: '1px solid #86efac', padding: '2px 8px', borderRadius: '4px', cursor: 'pointer', fontWeight: '800' }}
-                  >
-                    ⚡ Pay Full Amount (₹ {testFee})
-                  </button>
-                </div>
+                <span style={{ fontSize: '11px', fontWeight: '800', color: '#15803d' }}>Final Net Payable (₹)</span>
                 <input
                   type="number"
-                  value={amountPaidNow}
-                  onChange={(e) => setAmountPaidNow(e.target.value)}
-                  placeholder="Amount collecting..."
-                  style={{ padding: '10px 12px', border: '1px solid #86efac', borderRadius: '7px', fontSize: '14px', fontWeight: '800', color: '#15803d', background: '#f0fdf4', width: '100%', boxSizing: 'border-box' }}
+                  disabled
+                  value={testFee}
+                  style={{ padding: '9px 12px', border: '1px solid #86efac', borderRadius: '7px', fontSize: '13px', fontWeight: '800', color: '#15803d', background: '#f0fdf4', width: '100%', boxSizing: 'border-box' }}
                 />
               </div>
             </div>
 
-            <div className="field">
-              <span style={{ fontSize: '12px', fontWeight: '700', color: '#475569' }}>Payment Mode *</span>
-              <select
-                value={paymentMethod}
-                onChange={(e) => setPaymentMethod(e.target.value)}
-                style={{ padding: '10px 12px', border: '1px solid #cbd5e1', borderRadius: '7px', fontSize: '13px', width: '100%', boxSizing: 'border-box' }}
-              >
-                <option value="Cash">Cash</option>
-                <option value="UPI / Online">UPI / QR Payment</option>
-                <option value="Credit / Debit Card">Credit / Debit Card</option>
-                <option value="Free">Free / Complimentary</option>
-                <option value="Pay Later (Pending)">Pay Later (Post-Pay)</option>
-              </select>
+            {/* MULTI-SELECT PAYMENT METHOD CHECKBOXES & SPLIT AMOUNTS */}
+            <div className="field" style={{ borderTop: '1px solid #edf2f7', paddingTop: '10px' }}>
+              <span style={{ color: '#0f2d55', fontSize: '11px', fontWeight: '800', display: 'block', marginBottom: '8px' }}>
+                Payment Method *
+              </span>
+
+              {/* CHECKBOXES ROW */}
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: '14px', alignItems: 'center', background: '#ffffff', padding: '10px 14px', borderRadius: '8px', border: '1px solid #dde7f1', marginBottom: '12px' }}>
+                {[
+                  { key: 'Cash', label: 'Cash' },
+                  { key: 'UPI', label: 'UPI' },
+                  { key: 'Card', label: 'Card' },
+                  { key: 'Cheque', label: 'Cheque' },
+                  { key: 'Bank Transfer', label: 'Bank Transfer' },
+                  { key: 'Free', label: 'Free / Complimentary' },
+                  { key: 'Others', label: 'Others / PO' },
+                  { key: 'Pay Later', label: 'Pay Later (Post-Pay)' },
+                ].map((m) => (
+                  <label key={m.key} style={{ display: 'flex', alignItems: 'center', gap: '6px', cursor: 'pointer', fontSize: '12px', fontWeight: '700', color: selectedMethods[m.key] ? '#1769d7' : '#475569' }}>
+                    <input
+                      type="checkbox"
+                      checked={!!selectedMethods[m.key]}
+                      onChange={() => togglePaymentMethod(m.key)}
+                      style={{ width: '16px', height: '16px', accentColor: '#1769d7', cursor: 'pointer' }}
+                    />
+                    <span>{m.label}</span>
+                  </label>
+                ))}
+              </div>
+
+              {/* SPLIT AMOUNT INPUTS FOR CHECKED METHODS */}
+              {!selectedMethods['Pay Later'] && (
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(160px, 1fr))', gap: '10px', background: '#f0fdf4', border: '1px solid #bbf7d0', padding: '12px', borderRadius: '8px', marginBottom: '10px' }}>
+                  {activeModes.map((modeKey) => (
+                    <div key={modeKey} className="field">
+                      <span style={{ color: '#15803d', fontSize: '10px', fontWeight: '800' }}>
+                        {modeKey} Amount (₹) *
+                      </span>
+                      <input
+                        type="number"
+                        step="any"
+                        value={splitAmounts[modeKey] || ''}
+                        onChange={(e) => handleSplitAmountChange(modeKey, e.target.value)}
+                        placeholder={`Enter ${modeKey} amount...`}
+                        required
+                        style={{ padding: '7px 10px', border: '1px solid #86efac', borderRadius: '6px', fontSize: '12px', fontWeight: '800', color: '#15803d', background: '#ffffff', width: '100%', boxSizing: 'border-box' }}
+                      />
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              {/* COLLECTED TOTAL SUMMARY BANNER */}
+              {!selectedMethods['Pay Later'] && (
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '8px', background: '#e0f2fe', border: '1px solid #7dd3fc', padding: '8px 12px', borderRadius: '7px', fontSize: '11px', fontWeight: '800', color: '#0369a1' }}>
+                  <span>Total Collecting Now: <strong>₹ {calculatedTotalCollected.toLocaleString('en-IN')}</strong> {paymentSummaryStr ? `(${paymentSummaryStr})` : ''}</span>
+                  <button
+                    type="button"
+                    onClick={handleCollectFullFee}
+                    style={{ fontSize: '10px', background: '#0284c7', color: '#fff', border: 'none', padding: '4px 10px', borderRadius: '4px', cursor: 'pointer', fontWeight: '800' }}
+                  >
+                    ⚡ Auto-Set Full Fee (₹ {testFee})
+                  </button>
+                </div>
+              )}
+
+              {/* CONDITIONAL UPI HANDLES DROPDOWN */}
+              {selectedMethods.UPI && (
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px', marginTop: '10px' }}>
+                  <div className="field">
+                    <span style={{ color: '#0284c7', fontSize: '10px', fontWeight: '700' }}>Hospital Available UPI Handle *</span>
+                    <select
+                      value={selectedUpiHandle}
+                      onChange={(e) => setSelectedUpiHandle(e.target.value)}
+                      style={{ padding: '8px 6px', border: '1px solid #93c5fd', borderRadius: '6px', background: '#f0f9ff', fontWeight: '700', color: '#0284c7', fontSize: '11px', width: '100%', boxSizing: 'border-box' }}
+                    >
+                      {upiHandles.map((h) => (
+                        <option key={h} value={h}>💳 {h}</option>
+                      ))}
+                    </select>
+                  </div>
+
+                  <div className="field">
+                    <span style={{ color: '#4a5e7a', fontSize: '10px', fontWeight: '700' }}>UPI Transaction Ref ID (Optional)</span>
+                    <input
+                      value={upiTxnId}
+                      onChange={(e) => setUpiTxnId(e.target.value)}
+                      placeholder="e.g. 402918239102"
+                      style={{ padding: '8px 10px', border: '1px solid #dde7f1', borderRadius: '6px', fontSize: '11px', width: '100%', boxSizing: 'border-box' }}
+                    />
+                  </div>
+                </div>
+              )}
+
+              {/* CONDITIONAL PAY LATER WARNING BANNER */}
+              {selectedMethods['Pay Later'] && (
+                <div style={{ background: '#fffbeb', border: '1px solid #fde68a', padding: '10px 12px', borderRadius: '8px', fontSize: '11px', color: '#b45309', fontWeight: '700', marginTop: '10px' }}>
+                  ⚠️ Pay Later Selected: Lab investigation registered without upfront payment collection. Complete fee (₹{testFee}) will be billed for post-investigation settlement.
+                </div>
+              )}
             </div>
           </div>
 

@@ -102,6 +102,38 @@ export function PathologyLabReportPDFModal({ test, branding, onClose, onNotify }
 
   const reportRows = getReportRows();
 
+  // Financial & Payment Calculations
+  const rawGross = typeof test.amount === 'number'
+    ? test.amount
+    : parseFloat(String(test.amount || '1200').replace(/[^0-9.]/g, '')) || 1200;
+  const discountAmt = parseFloat(String(test.discount || 0)) || 0;
+  const totalFee = Math.max(0, rawGross - discountAmt);
+  const paidAmount = typeof test.paidAmount === 'number'
+    ? test.paidAmount
+    : typeof test.paidAmount === 'string' && test.paidAmount !== ''
+    ? parseFloat(test.paidAmount) || 0
+    : typeof test.amountPaid === 'number'
+    ? test.amountPaid
+    : typeof test.amountPaid === 'string' && test.amountPaid !== ''
+    ? parseFloat(test.amountPaid) || 0
+    : (test.paymentStatus === 'Paid' || test.status === 'Result ready' ? totalFee : 0);
+  const dueBalance = Math.max(0, totalFee - paidAmount);
+  const paymentStatus = test.paymentStatus || (dueBalance === 0 ? 'Paid' : paidAmount > 0 ? 'Partial' : 'Unpaid');
+  const paymentMethod = test.paymentMethod || 'Cash';
+
+  const effectivePaymentHistory = (Array.isArray(test.paymentHistory) && test.paymentHistory.length > 0)
+    ? test.paymentHistory
+    : (paidAmount > 0
+        ? [{
+            date: test.requested || new Date().toISOString().split('T')[0],
+            dateStr: test.requested || new Date().toISOString().split('T')[0],
+            timeStr: '',
+            method: paymentMethod,
+            amount: paidAmount,
+            refId: test.upiTxnId || ''
+          }]
+        : []);
+
   return (
     <div className="modal-overlay print-overlay" style={{ position: 'fixed', inset: 0, zIndex: 120, background: 'rgba(15, 45, 85, 0.55)', display: 'grid', placeItems: 'center', padding: '16px', overflowY: 'auto' }}>
       <div className="modal print-modal" style={{ background: '#fff', borderRadius: '12px', padding: '28px', maxWidth: '720px', width: '100%', maxHeight: '92vh', overflowY: 'auto', boxShadow: '0 20px 40px rgba(16, 45, 85, 0.2)', border: '1px solid #cbd5e1', position: 'relative' }}>
@@ -218,6 +250,87 @@ export function PathologyLabReportPDFModal({ test, branding, onClose, onNotify }
                 ))}
               </tbody>
             </table>
+
+            {/* Official Billing & Payment Summary */}
+            <div style={{ border: '1px solid #cbd5e1', borderRadius: '6px', padding: '10px 14px', background: '#f8fafc', marginBottom: '16px', fontSize: '11px' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid #e2e8f0', paddingBottom: '6px', marginBottom: '8px' }}>
+                <span style={{ fontWeight: '800', color: '#0f2d55', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+                  💳 Official Billing &amp; Payment Summary
+                </span>
+                <span style={{
+                  padding: '2px 8px',
+                  borderRadius: '12px',
+                  fontSize: '10px',
+                  fontWeight: '800',
+                  textTransform: 'uppercase',
+                  background: paymentStatus === 'Paid' ? '#dcfce7' : paymentStatus === 'Partial' ? '#fef9c3' : '#fee2e2',
+                  color: paymentStatus === 'Paid' ? '#15803d' : paymentStatus === 'Partial' ? '#854d0e' : '#b91c1c',
+                  border: `1px solid ${paymentStatus === 'Paid' ? '#86efac' : paymentStatus === 'Partial' ? '#fde047' : '#fca5a5'}`
+                }}>
+                  {paymentStatus}
+                </span>
+              </div>
+
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '10px', marginBottom: '8px' }}>
+                <div>
+                  <div style={{ color: '#64748b', fontSize: '10px' }}>Total Test Fee</div>
+                  <div style={{ fontWeight: '800', color: '#0f2d55', fontSize: '12px' }}>₹ {totalFee.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</div>
+                </div>
+                <div>
+                  <div style={{ color: '#64748b', fontSize: '10px' }}>Amount Paid</div>
+                  <div style={{ fontWeight: '800', color: '#15803d', fontSize: '12px' }}>₹ {paidAmount.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</div>
+                </div>
+                <div>
+                  <div style={{ color: '#64748b', fontSize: '10px' }}>Balance Due</div>
+                  <div style={{ fontWeight: '800', color: dueBalance > 0 ? '#dc2626' : '#15803d', fontSize: '12px' }}>₹ {dueBalance.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</div>
+                </div>
+                <div>
+                  <div style={{ color: '#64748b', fontSize: '10px' }}>Payment Mode(s)</div>
+                  <div style={{ fontWeight: '700', color: '#0369a1', fontSize: '11px', display: 'flex', flexWrap: 'wrap', gap: '3px', marginTop: '2px' }}>
+                    {paymentMethod.split('+').map((m, idx) => (
+                      <span key={idx} style={{ background: '#e0f2fe', color: '#0369a1', padding: '1px 5px', borderRadius: '3px', border: '1px solid #bae6fd' }}>
+                        💳 {m.trim()}
+                      </span>
+                    ))}
+                  </div>
+                  {test.upiTxnId && <div style={{ fontSize: '9px', color: '#64748b', marginTop: '2px' }}>Txn: {test.upiTxnId}</div>}
+                </div>
+              </div>
+
+              {/* Payment History & Transaction Log */}
+              {effectivePaymentHistory.length > 0 && (
+                <div style={{ borderTop: '1px dashed #cbd5e1', paddingTop: '6px', marginTop: '4px' }}>
+                  <div style={{ fontSize: '9px', fontWeight: '800', color: '#475569', textTransform: 'uppercase', marginBottom: '4px' }}>
+                    📜 Payment Transaction Log
+                  </div>
+                  <table style={{ width: '100%', fontSize: '10px', borderCollapse: 'collapse', background: '#ffffff', borderRadius: '4px', border: '1px solid #e2e8f0' }}>
+                    <thead>
+                      <tr style={{ background: '#f1f5f9', color: '#475569' }}>
+                        <th style={{ padding: '4px 6px', textAlign: 'left' }}>Date</th>
+                        <th style={{ padding: '4px 6px', textAlign: 'left' }}>Payment Method / Mode</th>
+                        <th style={{ padding: '4px 6px', textAlign: 'right' }}>Amount Paid</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {effectivePaymentHistory.map((h, idx) => (
+                        <tr key={idx} style={{ borderBottom: '1px solid #f1f5f9' }}>
+                          <td style={{ padding: '3px 6px', color: '#475569' }}>
+                            {h.dateStr || (h.date ? new Date(h.date).toLocaleDateString('en-IN') : test.requested || 'Today')} {h.timeStr || ''}
+                          </td>
+                          <td style={{ padding: '3px 6px', color: '#0f2d55', fontWeight: '600' }}>
+                            {h.method || paymentMethod}
+                            {h.refId ? <span style={{ color: '#64748b', fontSize: '9px', marginLeft: '4px' }}>(Ref: {h.refId})</span> : null}
+                          </td>
+                          <td style={{ padding: '3px 6px', textAlign: 'right', color: '#15803d', fontWeight: '700' }}>
+                            ₹ {parseFloat(String(h.amount || 0)).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </div>
 
             {/* Signatures & Dynamic Authorized Signature Image */}
             <div style={{ borderTop: '1px solid #cbd5e1', paddingTop: '16px', display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', fontSize: '11px' }}>

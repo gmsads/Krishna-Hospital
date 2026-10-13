@@ -167,6 +167,12 @@ export function OPRecordsPage({
       splitBreakdown[k] = parseFloat(String(settlementSplitAmounts[k] || '0').replace(/[^0-9.]/g, '')) || 0;
     });
 
+    let combinedMethod = finalMethod;
+    const prevMethod = paymentModalRecord.paymentMethod;
+    if (prevMethod && prevMethod !== finalMethod && prevPaid > 0 && !prevMethod.toLowerCase().includes('pay later')) {
+      combinedMethod = `${prevMethod} + ${finalMethod}`;
+    }
+
     const now = new Date();
     const historyEntry = {
       date: now.toISOString(),
@@ -178,14 +184,29 @@ export function OPRecordsPage({
       type: 'Settlement Payment',
     };
 
+    const existingHistory = Array.isArray(paymentModalRecord.paymentHistory) && paymentModalRecord.paymentHistory.length > 0
+      ? paymentModalRecord.paymentHistory
+      : (prevPaid > 0 ? [{
+          date: paymentModalRecord.date || now.toISOString(),
+          dateStr: (paymentModalRecord.date || now.toISOString()).split('T')[0],
+          timeStr: paymentModalRecord.time || 'Initial',
+          amount: prevPaid,
+          method: paymentModalRecord.paymentMethod || 'Cash',
+          breakdown: paymentModalRecord.splitBreakdown || { [paymentModalRecord.paymentMethod || 'Cash']: prevPaid },
+          type: 'Initial Registration Payment',
+        }] : []);
+
+    const updatedHistory = [...existingHistory, historyEntry];
+
     const updatedRecord = {
       ...paymentModalRecord,
       paidAmount: newTotalPaid,
       dueBalance: newBalance,
       paymentStatus: newStatus,
-      paymentMethod: finalMethod,
+      paymentMethod: combinedMethod,
       paymentBreakdown: splitBreakdown,
-      paymentHistory: [...(paymentModalRecord.paymentHistory || []), historyEntry],
+      splitBreakdown: splitBreakdown,
+      paymentHistory: updatedHistory,
       selectedUpiHandle: selectedSettlementMethods.UPI ? settlementUpiHandle : null,
       upiTxnId: selectedSettlementMethods.UPI ? settlementTxnId : null,
       receiptImage: settlementReceipt || paymentModalRecord.receiptImage || null,

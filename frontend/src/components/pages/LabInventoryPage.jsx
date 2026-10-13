@@ -36,22 +36,9 @@ export function LabInventoryPage({
   const [statusFilter, setStatusFilter] = useState('all');
   const [selectedServiceTest, setSelectedServiceTest] = useState('');
 
-  // Formatted List of Lab Service Categories & Tests for Dropdown
+  // Formatted List of Lab Service Categories & Tests for Dropdown (Only database saved services)
   const labServiceOptions = useMemo(() => {
-    const list = Array.isArray(masterServices) && masterServices.length > 0 ? masterServices : [
-      { name: 'Thyroid Profile (T3, T4, TSH)', category: 'Kits & Reagents' },
-      { name: 'Complete Blood Count (CBC)', category: 'Kits & Reagents' },
-      { name: 'Lipid Profile', category: 'Kits & Reagents' },
-      { name: 'Liver Function Test (LFT)', category: 'Kits & Reagents' },
-      { name: 'Renal Function Test (KFT)', category: 'Kits & Reagents' },
-      { name: 'HbA1c Blood Sugar Test', category: 'Kits & Reagents' },
-      { name: 'Dengue NS1 Antigen Rapid Test', category: 'Kits & Reagents' },
-      { name: 'Widal Typhoid Test', category: 'Strips & Vials' },
-      { name: 'Troponin-I Cardiac Test', category: 'Kits & Reagents' },
-      { name: 'Urine Routine & Microscopy', category: 'Strips & Vials' },
-      { name: 'Vitamin D3 & B12 Panel', category: 'Kits & Reagents' },
-    ];
-    return list;
+    return Array.isArray(masterServices) ? masterServices : [];
   }, [masterServices]);
 
   // Modals state
@@ -96,12 +83,11 @@ export function LabInventoryPage({
       if (res.ok && data.success && Array.isArray(data.data)) {
         setItems(data.data);
       } else {
-        // Fallback default sample if API fails
-        setItems(getSampleFallbackItems());
+        setItems([]);
       }
     } catch (err) {
-      console.warn('Using local fallback for lab inventory:', err.message);
-      setItems(getSampleFallbackItems());
+      console.warn('Error fetching lab inventory:', err.message);
+      setItems([]);
     } finally {
       setLoading(false);
     }
@@ -110,154 +96,6 @@ export function LabInventoryPage({
   useEffect(() => {
     fetchInventory();
   }, [effectiveBranch]);
-
-  // Fallback initial items
-  const getSampleFallbackItems = () => [
-    {
-      _id: 'inv-1',
-      id: 'inv-1',
-      itemType: 'Consumable',
-      itemName: 'Thyroid T1 Kit (FT3 / T3)',
-      category: 'Kits & Reagents',
-      stockQuantity: 8, // < 10 red alert
-      alertThreshold: 10,
-      unit: 'Kits',
-      unitCost: 450,
-      totalAmount: 3600,
-      branch: 'Central Campus',
-      notes: 'Contains 50 test reagents per kit',
-      lastUsedAt: new Date(Date.now() - 3600000).toISOString(),
-      lastUsedBy: 'Lab Assistant',
-    },
-    {
-      _id: 'inv-2',
-      id: 'inv-2',
-      itemType: 'Consumable',
-      itemName: 'Thyroid T2 Kit (FT4 / T4)',
-      category: 'Kits & Reagents',
-      stockQuantity: 5, // < 10 red alert
-      alertThreshold: 10,
-      unit: 'Kits',
-      unitCost: 500,
-      totalAmount: 2500,
-      branch: 'Central Campus',
-      notes: 'Contains 50 test reagents per kit',
-      lastUsedAt: new Date(Date.now() - 7200000).toISOString(),
-      lastUsedBy: 'Lab Assistant',
-    },
-    {
-      _id: 'inv-3',
-      id: 'inv-3',
-      itemType: 'Consumable',
-      itemName: 'TSH Immunoassay Kit',
-      category: 'Kits & Reagents',
-      stockQuantity: 24,
-      alertThreshold: 10,
-      unit: 'Kits',
-      unitCost: 600,
-      totalAmount: 14400,
-      branch: 'Central Campus',
-    },
-    {
-      _id: 'inv-4',
-      id: 'inv-4',
-      itemType: 'Consumable',
-      itemName: 'CBC Automated Hematology Reagent Pack',
-      category: 'Reagents & Solvents',
-      stockQuantity: 15,
-      alertThreshold: 10,
-      unit: 'Packs',
-      unitCost: 1200,
-      totalAmount: 18000,
-      branch: 'Central Campus',
-    },
-    {
-      _id: 'inv-5',
-      id: 'inv-5',
-      itemType: 'Consumable',
-      itemName: 'Blood Glucose Test Strips (50s)',
-      category: 'Strips & Vials',
-      stockQuantity: 6, // < 10 red alert
-      alertThreshold: 10,
-      unit: 'Boxes',
-      unitCost: 350,
-      totalAmount: 2100,
-      branch: 'Central Campus',
-    },
-    {
-      _id: 'inv-6',
-      id: 'inv-6',
-      itemType: 'Consumable',
-      itemName: 'EDTA Vacutainer Blood Collection Tubes',
-      category: 'Strips & Vials',
-      stockQuantity: 120,
-      alertThreshold: 20,
-      unit: 'Vials',
-      unitCost: 15,
-      totalAmount: 1800,
-      branch: 'Central Campus',
-    },
-    {
-      _id: 'mac-1',
-      id: 'mac-1',
-      itemType: 'Machine',
-      itemName: 'Fully Automated Immunoassay Analyzer (Thyroid Specialist)',
-      category: 'Analyzer Machine',
-      modelSerialNo: 'IMMUNO-X500 / SN-99823',
-      manufacturer: 'Roche Diagnostics',
-      unitCost: 250000,
-      totalAmount: 250000,
-      machineStatus: 'Active',
-      lastMaintenanceDate: '2026-08-15',
-      nextMaintenanceDate: '2026-11-15',
-      branch: 'Central Campus',
-    },
-    {
-      _id: 'mac-2',
-      id: 'mac-2',
-      itemType: 'Machine',
-      itemName: '5-Part Hematology Analyzer',
-      category: 'Analyzer Machine',
-      modelSerialNo: 'HEMA-5P / SN-44120',
-      manufacturer: 'Sysmex Corporation',
-      unitCost: 180000,
-      totalAmount: 180000,
-      machineStatus: 'Active',
-      lastMaintenanceDate: '2026-07-01',
-      nextMaintenanceDate: '2026-10-01',
-      branch: 'Central Campus',
-    },
-    {
-      _id: 'mac-3',
-      id: 'mac-3',
-      itemType: 'Machine',
-      itemName: 'High-Speed Refrigerated Micro-Centrifuge',
-      category: 'Centrifuge & Microscope',
-      modelSerialNo: 'CENTRO-200 / SN-11045',
-      manufacturer: 'Eppendorf',
-      unitCost: 45000,
-      totalAmount: 45000,
-      machineStatus: 'Calibration Due',
-      lastMaintenanceDate: '2026-03-10',
-      nextMaintenanceDate: '2026-09-30',
-      branch: 'Central Campus',
-    },
-    {
-      _id: 'mac-4',
-      id: 'mac-4',
-      itemType: 'Machine',
-      itemName: 'Microplate ELISA Reader & Washer',
-      category: 'Analyzer Machine',
-      modelSerialNo: 'ELISA-READ-96 / SN-33902',
-      manufacturer: 'Bio-Rad',
-      unitCost: 120000,
-      totalAmount: 120000,
-      machineStatus: 'Under Maintenance',
-      lastMaintenanceDate: '2026-09-10',
-      nextMaintenanceDate: '2026-10-10',
-      branch: 'Central Campus',
-    },
-  ];
 
   // Scoped lists
   const consumablesList = useMemo(() => {
@@ -777,7 +615,14 @@ export function LabInventoryPage({
             {filteredConsumables.length === 0 ? (
               <div className="py-12 text-center text-slate-400">
                 <Package size={36} className="mx-auto mb-2 opacity-50" />
-                <p className="text-xs font-bold">No kit stocks match your search filter</p>
+                <p className="text-xs font-bold">
+                  {consumablesList.length === 0
+                    ? 'No lab inventory or consumable items saved in database yet'
+                    : 'No kit stocks match your search filter'}
+                </p>
+                {consumablesList.length === 0 && (
+                  <p className="text-[11px] text-slate-400 mt-1">Click "+ Register Lab Consumable" to add your first stock item.</p>
+                )}
               </div>
             ) : (
               <div className="overflow-x-auto">
@@ -901,7 +746,14 @@ export function LabInventoryPage({
             {filteredMachines.length === 0 ? (
               <div className="py-12 text-center text-slate-400">
                 <Cpu size={36} className="mx-auto mb-2 opacity-50" />
-                <p className="text-xs font-bold">No machinery found matching your filter</p>
+                <p className="text-xs font-bold">
+                  {machinesList.length === 0
+                    ? 'No machinery or equipment saved in database yet'
+                    : 'No machinery found matching your filter'}
+                </p>
+                {machinesList.length === 0 && (
+                  <p className="text-[11px] text-slate-400 mt-1">Click "+ Add Machine" to register your first lab machine.</p>
+                )}
               </div>
             ) : (
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
