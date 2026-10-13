@@ -354,7 +354,7 @@ export default function AppShell({ path = '/dashboard', navigate }) {
               amountPaid: paidNum.toString(),
               dueBalance: dueNum,
               paymentStatus: payStatus,
-              isSelfCreated: l.isSelfCreated || (l.labOrderNo || '').startsWith('LAB-') || (l.opNumber || '').startsWith('LAB-') || l.createdBy === 'Lab Assistant',
+              isSelfCreated: l.isSelfCreated !== undefined ? l.isSelfCreated : (!l.doctor || l.doctor.includes('Self') || l.doctor.includes('Walk-In') || l.doctor.includes('Unassigned')),
             };
           });
           setLabTests(mapped);

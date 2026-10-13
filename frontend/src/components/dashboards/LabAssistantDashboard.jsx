@@ -37,7 +37,6 @@ export function LabAssistantDashboard({ profile, onNavigate, onEnterResult, labT
   if (filterState.filterMode === 'yearly') multiplier = 280;
 
   const isDoctorPrescribed = (t) => {
-    if (t.isSelfCreated === true) return false;
     const doc = (t.doctor || t.orderingDoctor || '').trim();
     const lowerDoc = doc.toLowerCase();
     if (!doc || lowerDoc.includes('self') || lowerDoc.includes('unassigned') || lowerDoc.includes('walk-in') || lowerDoc.includes('walkin') || lowerDoc.includes('lab assistant')) {

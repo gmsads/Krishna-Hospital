@@ -68,7 +68,13 @@ export function EnterLabResultForm({
   const [patientName, setPatientName] = useState(initialSelectedTest?.patientName || initialSelectedTest?.patient || '');
   const [phone, setPhone] = useState(initialSelectedTest?.phone || '');
   const [availableDoctors, setAvailableDoctors] = useState([]);
-  const [doctor, setDoctor] = useState(initialSelectedTest?.doctor || initialSelectedTest?.orderingDoctor || 'Self Created / Walk-In');
+  const [doctor, setDoctor] = useState(
+    (initialSelectedTest?.doctor && initialSelectedTest.doctor !== 'Self Created / Walk-In')
+      ? initialSelectedTest.doctor
+      : (initialSelectedTest?.orderingDoctor && initialSelectedTest.orderingDoctor !== 'Self Created / Walk-In')
+      ? initialSelectedTest.orderingDoctor
+      : ''
+  );
   const [status, setStatus] = useState(initialSelectedTest?.status || 'Sample collected');
   const [autoFetchSuccess, setAutoFetchSuccess] = useState(false);
 
@@ -134,9 +140,16 @@ export function EnterLabResultForm({
     }
   }, [masterServices, testName]);
 
-  // Lab Fee & Upfront Payment State
-  const initialFee = initialSelectedTest?.amount || (parseFloat(masterServices.find(s => s.name === initialMainTest)?.rate) || 0);
+  // Lab Fee, Discount & Upfront Payment State
+  const initialFee = initialSelectedTest?.grossFee || initialSelectedTest?.amount || (parseFloat(masterServices.find(s => s.name === initialMainTest)?.rate) || 0);
   const [testFee, setTestFee] = useState(initialFee.toString());
+  const [discount, setDiscount] = useState(
+    initialSelectedTest?.discount != null ? initialSelectedTest.discount.toString() : '0.00'
+  );
+
+  const grossFeeNum = parseFloat(String(testFee || '0').replace(/[^0-9.]/g, '')) || 0;
+  const discountNum = parseFloat(String(discount || '0').replace(/[^0-9.]/g, '')) || 0;
+  const netPayableNum = Math.max(0, grossFeeNum - discountNum);
 
   // MULTI-SELECT PAYMENT METHODS & SPLIT AMOUNT COLLECTION (Exact Match to OP Record)
   const [selectedMethods, setSelectedMethods] = useState({
@@ -164,15 +177,31 @@ export function EnterLabResultForm({
   const [selectedUpiHandle, setSelectedUpiHandle] = useState('krishnalab@ybl');
   const [upiTxnId, setUpiTxnId] = useState(initialSelectedTest?.upiTxnId || '');
 
-  // EDITABLE FEE HANDLER
+  // EDITABLE FEE & DISCOUNT HANDLERS
   const handleFeeChargesChange = (val) => {
     setTestFee(val);
     const newGross = parseFloat(String(val || '0').replace(/[^0-9.]/g, '')) || 0;
+    const currentDisc = parseFloat(String(discount || '0').replace(/[^0-9.]/g, '')) || 0;
+    const newNet = Math.max(0, newGross - currentDisc);
     const activeKeys = Object.keys(selectedMethods).filter((k) => selectedMethods[k] && k !== 'Pay Later');
     if (activeKeys.length === 1) {
       setSplitAmounts((prev) => ({
         ...prev,
-        [activeKeys[0]]: newGross.toString(),
+        [activeKeys[0]]: newNet.toString(),
+      }));
+    }
+  };
+
+  const handleDiscountChange = (val) => {
+    setDiscount(val);
+    const currentGross = parseFloat(String(testFee || '0').replace(/[^0-9.]/g, '')) || 0;
+    const newDisc = parseFloat(String(val || '0').replace(/[^0-9.]/g, '')) || 0;
+    const newNet = Math.max(0, currentGross - newDisc);
+    const activeKeys = Object.keys(selectedMethods).filter((k) => selectedMethods[k] && k !== 'Pay Later');
+    if (activeKeys.length === 1) {
+      setSplitAmounts((prev) => ({
+        ...prev,
+        [activeKeys[0]]: newNet.toString(),
       }));
     }
   };
@@ -185,7 +214,7 @@ export function EnterLabResultForm({
         if (!isCurrentlySelected) {
           setSplitAmounts((prevSplits) => ({
             ...prevSplits,
-            Free: testFee,
+            Free: netPayableNum.toString(),
           }));
           return {
             Cash: false,
@@ -233,7 +262,7 @@ export function EnterLabResultForm({
         if (nextState[modeKey] && (!splitAmounts[modeKey] || splitAmounts[modeKey] === '0')) {
           setSplitAmounts((prevSplits) => ({
             ...prevSplits,
-            [modeKey]: modeKey === 'Cash' && !prev[modeKey] ? testFee : '0',
+            [modeKey]: modeKey === 'Cash' && !prev[modeKey] ? netPayableNum.toString() : '0',
           }));
         }
         return nextState;
@@ -249,13 +278,12 @@ export function EnterLabResultForm({
   };
 
   const handleCollectFullFee = () => {
-    const feeNum = parseFloat(String(testFee || '0').replace(/[^0-9.]/g, '')) || 0;
     const activeKeys = Object.keys(selectedMethods).filter((k) => selectedMethods[k] && k !== 'Pay Later');
     if (activeKeys.length === 1) {
-      setSplitAmounts((prev) => ({ ...prev, [activeKeys[0]]: feeNum.toString() }));
+      setSplitAmounts((prev) => ({ ...prev, [activeKeys[0]]: netPayableNum.toString() }));
     } else if (activeKeys.length > 1) {
       const newSplits = { ...splitAmounts };
-      newSplits[activeKeys[0]] = feeNum.toString();
+      newSplits[activeKeys[0]] = netPayableNum.toString();
       activeKeys.slice(1).forEach((k) => {
         newSplits[k] = '0';
       });
@@ -268,7 +296,7 @@ export function EnterLabResultForm({
   const calculatedTotalCollected = selectedMethods['Pay Later']
     ? 0
     : selectedMethods['Free']
-    ? (parseFloat(String(testFee || '0').replace(/[^0-9.]/g, '')) || 0)
+    ? netPayableNum
     : activeModes.reduce((sum, key) => {
         const val = parseFloat(String(splitAmounts[key] || '0').replace(/[^0-9.]/g, '')) || 0;
         return sum + val;
@@ -294,7 +322,8 @@ export function EnterLabResultForm({
       }
       if (initialSelectedTest.phone) setPhone(initialSelectedTest.phone);
       if (initialSelectedTest.doctor || initialSelectedTest.orderingDoctor) {
-        setDoctor(initialSelectedTest.doctor || initialSelectedTest.orderingDoctor);
+        const d = initialSelectedTest.doctor || initialSelectedTest.orderingDoctor;
+        setDoctor(d === 'Self Created / Walk-In' ? '' : d);
       }
       if (initialSelectedTest.status) {
         setStatus(initialSelectedTest.status);
@@ -309,15 +338,20 @@ export function EnterLabResultForm({
         }
       }
       if (initialSelectedTest.notes) setNotes(initialSelectedTest.notes);
-      if (initialSelectedTest.amount || initialSelectedTest.testFee) {
-        const fee = initialSelectedTest.amount || parseFloat(initialSelectedTest.testFee) || 1200;
+      if (initialSelectedTest.discount != null) {
+        setDiscount(initialSelectedTest.discount.toString());
+      }
+      if (initialSelectedTest.grossFee || initialSelectedTest.amount || initialSelectedTest.testFee) {
+        const fee = initialSelectedTest.grossFee || initialSelectedTest.amount || parseFloat(initialSelectedTest.testFee) || 1200;
         setTestFee(fee.toString());
-        const paid = typeof initialSelectedTest.paidAmount === 'number' ? initialSelectedTest.paidAmount : (parseFloat(initialSelectedTest.amountPaid) || fee);
+        const disc = parseFloat(initialSelectedTest.discount || 0) || 0;
+        const net = Math.max(0, fee - disc);
+        const paid = typeof initialSelectedTest.paidAmount === 'number' ? initialSelectedTest.paidAmount : (parseFloat(initialSelectedTest.amountPaid) || net);
         
         const method = initialSelectedTest.paymentMethod || 'Cash';
         if (method.includes('Free')) {
           setSelectedMethods({ Cash: false, UPI: false, Card: false, Cheque: false, 'Bank Transfer': false, Free: true, Others: false, 'Pay Later': false });
-          setSplitAmounts((prev) => ({ ...prev, Free: fee.toString() }));
+          setSplitAmounts((prev) => ({ ...prev, Free: net.toString() }));
         } else if (method.includes('Pay Later') || initialSelectedTest.paymentStatus === 'Pay Later (Pending)') {
           setSelectedMethods({ Cash: false, UPI: false, Card: false, Cheque: false, 'Bank Transfer': false, Free: false, Others: false, 'Pay Later': true });
         } else {
@@ -350,11 +384,14 @@ export function EnterLabResultForm({
     if (foundSrv && foundSrv.rate) {
       const rateStr = parseFloat(foundSrv.rate).toString();
       setTestFee(rateStr);
+      const gross = parseFloat(rateStr) || 0;
+      const currentDisc = parseFloat(String(discount || '0').replace(/[^0-9.]/g, '')) || 0;
+      const newNet = Math.max(0, gross - currentDisc);
       const activeKeys = Object.keys(selectedMethods).filter((k) => selectedMethods[k] && k !== 'Pay Later');
       if (activeKeys.length === 1) {
         setSplitAmounts((prev) => ({
           ...prev,
-          [activeKeys[0]]: rateStr,
+          [activeKeys[0]]: newNet.toString(),
         }));
       }
     }
@@ -396,7 +433,7 @@ export function EnterLabResultForm({
     const foundOp = opRecords.find((r) => r.id.toLowerCase() === query || (r.opNumber && r.opNumber.toLowerCase() === query));
     if (foundOp) {
       setPatientName(foundOp.patient);
-      if (foundOp.doctor) setDoctor(foundOp.doctor);
+      if (foundOp.doctor && foundOp.doctor !== 'Unassigned') setDoctor(foundOp.doctor);
       if (foundOp.phone) setPhone(foundOp.phone);
       setAutoFetchSuccess(true);
     } else {
@@ -411,7 +448,7 @@ export function EnterLabResultForm({
       return;
     }
 
-    const feeNum = parseFloat(String(testFee || '0').replace(/[^0-9.]/g, '')) || 1200;
+    const feeNum = netPayableNum;
     const isFree = !!selectedMethods['Free'];
     const isPayLater = !isFree && selectedMethods['Pay Later'];
     const paidNum = isFree ? feeNum : (isPayLater ? 0 : calculatedTotalCollected);
@@ -447,8 +484,8 @@ export function EnterLabResultForm({
       .join(', ');
 
     const targetBranch = effectiveBranch === 'All' ? (branchesList[0]?.name || 'Central Campus') : effectiveBranch;
-    const assignedDoctor = initialSelectedTest?.doctor || initialSelectedTest?.orderingDoctor || doctor || 'Self Created / Walk-In';
-    const isSelfCreated = !assignedDoctor || assignedDoctor === 'Self Created / Walk-In' || assignedDoctor === 'Self / Walk-in' || assignedDoctor === 'Unassigned' || assignedDoctor === 'Walk-In';
+    const assignedDoctor = doctor.trim() || 'Self Created / Walk-In';
+    const isSelfCreated = !doctor.trim() || doctor.trim() === 'Self Created / Walk-In';
 
     const payload = {
       id: initialSelectedTest?.id || initialSelectedTest?._id || opNumber.trim(),
@@ -461,6 +498,8 @@ export function EnterLabResultForm({
       orderingDoctor: assignedDoctor,
       test: testName.trim(),
       testName: testName.trim(),
+      grossFee: grossFeeNum,
+      discount: discountNum,
       amount: feeNum,
       testFee: feeNum.toString(),
       paidAmount: paidNum,
@@ -559,8 +598,8 @@ export function EnterLabResultForm({
             </div>
           </div>
 
-          {/* Phone Number & Test Status */}
-          <div className="form-row" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px', width: '100%', boxSizing: 'border-box' }}>
+          {/* Phone Number, Doctor Name (Optional) & Test Status */}
+          <div className="form-row" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '10px', width: '100%', boxSizing: 'border-box' }}>
             <div className="field">
               <span style={{ color: '#4a5e7a', fontSize: '11px', fontWeight: '700' }}>Phone Number *</span>
               <input
@@ -570,6 +609,25 @@ export function EnterLabResultForm({
                 required
                 style={{ padding: '9px 10px', border: '1px solid #dde7f1', borderRadius: '7px', background: '#fff', fontSize: '12px', width: '100%', boxSizing: 'border-box' }}
               />
+            </div>
+
+            <div className="field">
+              <span style={{ color: '#4a5e7a', fontSize: '11px', fontWeight: '700' }}>Doctor Name (Optional)</span>
+              <input
+                type="text"
+                list="lab-enter-doctors-list"
+                value={doctor}
+                onChange={(e) => setDoctor(e.target.value)}
+                placeholder="Enter doctor name (Optional)"
+                style={{ padding: '9px 10px', border: '1px solid #dde7f1', borderRadius: '7px', background: '#fff', fontSize: '12px', width: '100%', boxSizing: 'border-box' }}
+              />
+              <datalist id="lab-enter-doctors-list">
+                {availableDoctors.map((doc) => (
+                  <option key={doc.id || doc._id || doc.name} value={doc.name}>
+                    {doc.department ? `${doc.name} (${doc.department})` : doc.name}
+                  </option>
+                ))}
+              </datalist>
             </div>
 
             <div className="field">
@@ -609,9 +667,9 @@ export function EnterLabResultForm({
             </select>
           </div>
 
-          {/* Test Fee & Upfront Multi-Select Payment Section (Exact match to OP Record) */}
+          {/* Test Fee, Discount & Upfront Multi-Select Payment Section (Exact match to OP Record) */}
           <div style={{ background: '#f8fafc', padding: '14px', borderRadius: '9px', border: '1px solid #dde7f1', display: 'grid', gap: '12px', width: '100%', boxSizing: 'border-box' }}>
-            <div className="form-row" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px', width: '100%', boxSizing: 'border-box' }}>
+            <div className="form-row" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', gap: '10px', width: '100%', boxSizing: 'border-box' }}>
               <div className="field">
                 <span style={{ fontSize: '11px', fontWeight: '800', color: '#dc2626' }}>Test Fee Total Amount (₹) *</span>
                 <input
@@ -626,11 +684,24 @@ export function EnterLabResultForm({
               </div>
 
               <div className="field">
+                <span style={{ fontSize: '11px', fontWeight: '800', color: '#dc2626' }}>Discount Amount (₹)</span>
+                <input
+                  type="number"
+                  step="any"
+                  min="0"
+                  value={discount}
+                  onChange={(e) => handleDiscountChange(e.target.value)}
+                  placeholder="0.00"
+                  style={{ padding: '9px 12px', border: '1px solid #fca5a5', borderRadius: '7px', fontSize: '13px', fontWeight: '800', color: '#dc2626', background: '#fef2f2', width: '100%', boxSizing: 'border-box' }}
+                />
+              </div>
+
+              <div className="field">
                 <span style={{ fontSize: '11px', fontWeight: '800', color: '#15803d' }}>Final Net Payable (₹)</span>
                 <input
                   type="number"
                   disabled
-                  value={testFee}
+                  value={netPayableNum}
                   style={{ padding: '9px 12px', border: '1px solid #86efac', borderRadius: '7px', fontSize: '13px', fontWeight: '800', color: '#15803d', background: '#f0fdf4', width: '100%', boxSizing: 'border-box' }}
                 />
               </div>
@@ -697,7 +768,7 @@ export function EnterLabResultForm({
                     onClick={handleCollectFullFee}
                     style={{ fontSize: '10px', background: '#0284c7', color: '#fff', border: 'none', padding: '4px 10px', borderRadius: '4px', cursor: 'pointer', fontWeight: '800' }}
                   >
-                    ⚡ Auto-Set Full Fee (₹ {testFee})
+                    ⚡ Auto-Set Full Fee (₹ {netPayableNum})
                   </button>
                 </div>
               )}
@@ -733,7 +804,7 @@ export function EnterLabResultForm({
               {/* CONDITIONAL PAY LATER WARNING BANNER */}
               {selectedMethods['Pay Later'] && (
                 <div style={{ background: '#fffbeb', border: '1px solid #fde68a', padding: '10px 12px', borderRadius: '8px', fontSize: '11px', color: '#b45309', fontWeight: '700', marginTop: '10px' }}>
-                  ⚠️ Pay Later Selected: Lab investigation registered without upfront payment collection. Complete fee (₹{testFee}) will be billed for post-investigation settlement.
+                  ⚠️ Pay Later Selected: Lab investigation registered without upfront payment collection. Complete fee (₹{netPayableNum}) will be billed for post-investigation settlement.
                 </div>
               )}
             </div>

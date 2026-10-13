@@ -12,17 +12,19 @@ export function HospitalInvoiceModal({ isOpen, onClose, record, type = 'record',
   const patientName = record.patient || 'Patient Name';
   const ageGender = record.age && record.gender ? `${record.age} / ${record.gender}` : record.age || record.gender || '32 Yrs / Male';
   const patientId = record.patientId || record.id || 'KH-1048';
-  const doctor = record.doctor || 'Dr. Meera Nair';
+  const doctor = record.doctor || (type === 'lab' ? 'Self Created / Walk-In' : 'Dr. Meera Nair');
   const branch = record.branch || 'Central Campus';
   
   // Financial Math
   const isLab = type === 'lab';
   const rawGross = isLab
-    ? (typeof record.amount === 'number' ? record.amount : parseFloat(String(record.amount || '1200').replace(/[^0-9.]/g, '')) || 1200)
+    ? (record.grossFee != null
+        ? parseFloat(record.grossFee)
+        : (record.discount ? (parseFloat(record.amount || 0) + parseFloat(record.discount || 0)) : (typeof record.amount === 'number' ? record.amount : parseFloat(String(record.amount || '1200').replace(/[^0-9.]/g, '')) || 1200)))
     : (parseFloat(String(record.grossCharges || record.charges || record.amount || '300').replace(/[^0-9.]/g, '')) || 300);
 
   const discountAmt = parseFloat(String(record.discount || 0)) || 0;
-  const rawTotal = isLab ? rawGross : Math.max(0, rawGross - discountAmt);
+  const rawTotal = Math.max(0, rawGross - discountAmt);
 
   const rawPaid = isLab
     ? (typeof record.paidAmount === 'number'

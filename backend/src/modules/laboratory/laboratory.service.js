@@ -17,7 +17,9 @@ export const createLabOrder = async (orderData) => {
     labOrderNoToUse = await generateNextLabNo(branchToUse);
   }
 
-    const feeVal = parseFloat(String(orderData.testFee || orderData.amount || '1200').replace(/[^0-9.]/g, '')) || 1200;
+    const grossVal = parseFloat(String(orderData.grossFee || orderData.testFee || orderData.amount || '1200').replace(/[^0-9.]/g, '')) || 1200;
+    const discountVal = parseFloat(String(orderData.discount || '0').replace(/[^0-9.]/g, '')) || 0;
+    const feeVal = Math.max(0, grossVal - discountVal);
     const paidVal = parseFloat(String(orderData.amountPaidNow || orderData.amountPaid || orderData.paidAmount || '0').replace(/[^0-9.]/g, '')) || 0;
     const dueVal = typeof orderData.dueBalance === 'number' ? orderData.dueBalance : Math.max(0, feeVal - paidVal);
     const payStat = orderData.paymentStatus || (dueVal <= 0 ? 'Paid' : paidVal > 0 ? 'Partial' : 'Pending');
@@ -31,6 +33,8 @@ export const createLabOrder = async (orderData) => {
       testName: orderData.testName ? orderData.testName.trim() : (orderData.test || 'Blood Test'),
       category: orderData.category || 'General Pathology',
       priority: orderData.priority || 'Routine',
+      grossFee: grossVal,
+      discount: discountVal,
       testFee: feeVal.toString(),
       amount: feeVal,
       amountPaid: paidVal.toString(),

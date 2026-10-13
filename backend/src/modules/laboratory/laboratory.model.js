@@ -45,6 +45,14 @@ const laboratorySchema = new mongoose.Schema(
       type: String,
       default: '1200',
     },
+    grossFee: {
+      type: Number,
+      default: 1200,
+    },
+    discount: {
+      type: Number,
+      default: 0,
+    },
     amount: {
       type: Number,
       default: 1200,

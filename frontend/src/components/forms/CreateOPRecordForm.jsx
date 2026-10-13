@@ -94,6 +94,8 @@ export function CreateOPRecordForm({
   const [height, setHeight] = useState('170');
   const [bloodGroup, setBloodGroup] = useState('O+');
   const [bp, setBp] = useState('120/80');
+  const [pr, setPr] = useState('72');
+  const [spo2, setSpo2] = useState('98%');
 
   // Doctor, Referral, Charges & Discount
   const [department, setDepartment] = useState('General medicine');
@@ -419,7 +421,9 @@ export function CreateOPRecordForm({
       dob,
       address: address.trim(),
       phone: phone.trim(),
-      vitals: { temp, weight, height, bmi: calcBmi(), bloodGroup, bp },
+      vitals: { temp, weight, height, bmi: calcBmi(), bloodGroup, bp, pr, spo2 },
+      pr,
+      spo2,
       department,
       doctor,
       referralDoctor: referralDoctor.trim(),
@@ -749,6 +753,16 @@ export function CreateOPRecordForm({
             <div className="field">
               <span style={{ fontSize: '10px', color: '#4a5e7a', fontWeight: '700' }}>Blood Pressure (BP)</span>
               <input value={bp} onChange={(e) => setBp(e.target.value)} placeholder="120/80" style={{ padding: '8px 10px', border: '1px solid #dde7f1', borderRadius: '6px', fontSize: '12px' }} />
+            </div>
+
+            <div className="field">
+              <span style={{ fontSize: '10px', color: '#4a5e7a', fontWeight: '700' }}>Pulse Rate (PR)</span>
+              <input value={pr} onChange={(e) => setPr(e.target.value)} placeholder="72 bpm" style={{ padding: '8px 10px', border: '1px solid #dde7f1', borderRadius: '6px', fontSize: '12px' }} />
+            </div>
+
+            <div className="field">
+              <span style={{ fontSize: '10px', color: '#4a5e7a', fontWeight: '700' }}>SpO2 (SPO)</span>
+              <input value={spo2} onChange={(e) => setSpo2(e.target.value)} placeholder="98%" style={{ padding: '8px 10px', border: '1px solid #dde7f1', borderRadius: '6px', fontSize: '12px' }} />
             </div>
           </div>
         </section>

@@ -291,6 +291,9 @@ export function AddStaffForm({ onSave, onCancel, notify, effectiveBranch = 'Cent
                 <option value="Day Shift (08:00 AM - 04:00 PM)">Day Shift (08:00 AM - 04:00 PM)</option>
                 <option value="Evening Shift (02:00 PM - 10:00 PM)">Evening Shift (02:00 PM - 10:00 PM)</option>
                 <option value="Night Shift (10:00 PM - 06:00 AM)">Night Shift (10:00 PM - 06:00 AM)</option>
+                <option value="Day Shift (09:00 AM - 09:00 PM - 12 Hrs)">Day Shift (09:00 AM - 09:00 PM - 12 Hrs)</option>
+                <option value="Night Shift (09:00 PM - 09:00 AM - 12 Hrs)">Night Shift (09:00 PM - 09:00 AM - 12 Hrs)</option>
+                <option value="Rotational Shift (12 Hrs)">Rotational Shift (12 Hrs)</option>
                 <option value="Rotational Shift">Rotational Shift</option>
               </select>
             </div>

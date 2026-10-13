@@ -22,7 +22,7 @@ export function RequestLabTestModal({
   const [patientName, setPatientName] = useState(initialPatient?.name || initialPatient?.patient || '');
   const [phone, setPhone] = useState(initialPatient?.phone || '');
   const [availableDoctors, setAvailableDoctors] = useState(doctorsList);
-  const [orderingDoctor, setOrderingDoctor] = useState(initialPatient?.doctor || doctorName || (doctorsList[0]?.name || ''));
+  const [orderingDoctor, setOrderingDoctor] = useState(initialPatient?.doctor || doctorName || '');
   const [availableLabAssistants, setAvailableLabAssistants] = useState([]);
   const [assignedLabAssistant, setAssignedLabAssistant] = useState('');
   const [testName, setTestName] = useState(masterServices[0]?.name || '');
@@ -66,8 +66,10 @@ export function RequestLabTestModal({
       .then((data) => {
         if (data.success && Array.isArray(data.data) && data.data.length > 0) {
           setAvailableDoctors(data.data);
-          if (!orderingDoctor || orderingDoctor === 'Dr. Meera Nair') {
-            setOrderingDoctor(initialPatient?.doctor || data.data[0].name);
+          if (doctorName) {
+            setOrderingDoctor(doctorName);
+          } else if (initialPatient?.doctor) {
+            setOrderingDoctor(initialPatient.doctor);
           }
         }
       })
@@ -106,9 +108,14 @@ export function RequestLabTestModal({
       .catch((err) => console.warn('Could not fetch lab staff in RequestLabTestModal:', err.message));
   }, [selectedBranch, effectiveBranch]);
   
-  // Lab Fee & Upfront Payment State
+  // Lab Fee, Discount & Upfront Payment State
   const initialRate = parseFloat(masterServices.find(s => s.name === (masterServices[0]?.name || ''))?.rate) || 0;
   const [testFee, setTestFee] = useState(initialRate.toString());
+  const [discount, setDiscount] = useState('0.00');
+
+  const grossFeeNum = parseFloat(String(testFee || '0').replace(/[^0-9.]/g, '')) || 0;
+  const discountNum = parseFloat(String(discount || '0').replace(/[^0-9.]/g, '')) || 0;
+  const netPayableNum = Math.max(0, grossFeeNum - discountNum);
 
   // Auto-sync test name and fee when masterServices load
   React.useEffect(() => {
@@ -148,11 +155,27 @@ export function RequestLabTestModal({
   const handleFeeChargesChange = (val) => {
     setTestFee(val);
     const newGross = parseFloat(String(val || '0').replace(/[^0-9.]/g, '')) || 0;
+    const currentDisc = parseFloat(String(discount || '0').replace(/[^0-9.]/g, '')) || 0;
+    const newNet = Math.max(0, newGross - currentDisc);
     const activeKeys = Object.keys(selectedMethods).filter((k) => selectedMethods[k] && k !== 'Pay Later');
     if (activeKeys.length === 1) {
       setSplitAmounts((prev) => ({
         ...prev,
-        [activeKeys[0]]: newGross.toString(),
+        [activeKeys[0]]: newNet.toString(),
+      }));
+    }
+  };
+
+  const handleDiscountChange = (val) => {
+    setDiscount(val);
+    const currentGross = parseFloat(String(testFee || '0').replace(/[^0-9.]/g, '')) || 0;
+    const newDisc = parseFloat(String(val || '0').replace(/[^0-9.]/g, '')) || 0;
+    const newNet = Math.max(0, currentGross - newDisc);
+    const activeKeys = Object.keys(selectedMethods).filter((k) => selectedMethods[k] && k !== 'Pay Later');
+    if (activeKeys.length === 1) {
+      setSplitAmounts((prev) => ({
+        ...prev,
+        [activeKeys[0]]: newNet.toString(),
       }));
     }
   };
@@ -164,7 +187,7 @@ export function RequestLabTestModal({
         if (!isCurrentlySelected) {
           setSplitAmounts((prevSplits) => ({
             ...prevSplits,
-            Free: testFee,
+            Free: netPayableNum.toString(),
           }));
           return {
             Cash: false,
@@ -212,7 +235,7 @@ export function RequestLabTestModal({
         if (nextState[modeKey] && (!splitAmounts[modeKey] || splitAmounts[modeKey] === '0')) {
           setSplitAmounts((prevSplits) => ({
             ...prevSplits,
-            [modeKey]: modeKey === 'Cash' && !prev[modeKey] ? testFee : '0',
+            [modeKey]: modeKey === 'Cash' && !prev[modeKey] ? netPayableNum.toString() : '0',
           }));
         }
         return nextState;
@@ -228,13 +251,12 @@ export function RequestLabTestModal({
   };
 
   const handleCollectFullFee = () => {
-    const feeNum = parseFloat(String(testFee || '0').replace(/[^0-9.]/g, '')) || 0;
     const activeKeys = Object.keys(selectedMethods).filter((k) => selectedMethods[k] && k !== 'Pay Later');
     if (activeKeys.length === 1) {
-      setSplitAmounts((prev) => ({ ...prev, [activeKeys[0]]: feeNum.toString() }));
+      setSplitAmounts((prev) => ({ ...prev, [activeKeys[0]]: netPayableNum.toString() }));
     } else if (activeKeys.length > 1) {
       const newSplits = { ...splitAmounts };
-      newSplits[activeKeys[0]] = feeNum.toString();
+      newSplits[activeKeys[0]] = netPayableNum.toString();
       activeKeys.slice(1).forEach((k) => {
         newSplits[k] = '0';
       });
@@ -247,7 +269,7 @@ export function RequestLabTestModal({
   const calculatedTotalCollected = selectedMethods['Pay Later']
     ? 0
     : selectedMethods['Free']
-    ? (parseFloat(String(testFee || '0').replace(/[^0-9.]/g, '')) || 0)
+    ? netPayableNum
     : activeModes.reduce((sum, key) => {
         const val = parseFloat(String(splitAmounts[key] || '0').replace(/[^0-9.]/g, '')) || 0;
         return sum + val;
@@ -273,11 +295,14 @@ export function RequestLabTestModal({
     if (foundSrv && foundSrv.rate) {
       const rateStr = parseFloat(foundSrv.rate).toString();
       setTestFee(rateStr);
+      const gross = parseFloat(rateStr) || 0;
+      const currentDisc = parseFloat(String(discount || '0').replace(/[^0-9.]/g, '')) || 0;
+      const newNet = Math.max(0, gross - currentDisc);
       const activeKeys = Object.keys(selectedMethods).filter((k) => selectedMethods[k] && k !== 'Pay Later');
       if (activeKeys.length === 1) {
         setSplitAmounts((prev) => ({
           ...prev,
-          [activeKeys[0]]: rateStr,
+          [activeKeys[0]]: newNet.toString(),
         }));
       }
     }
@@ -317,7 +342,7 @@ export function RequestLabTestModal({
       return;
     }
 
-    const feeNum = parseFloat(String(testFee || '0').replace(/[^0-9.]/g, '')) || 0;
+    const feeNum = netPayableNum;
     const isFree = !!selectedMethods['Free'];
     const isPayLater = !isFree && selectedMethods['Pay Later'];
     const paidNum = isFree ? feeNum : (isPayLater ? 0 : calculatedTotalCollected);
@@ -350,6 +375,9 @@ export function RequestLabTestModal({
       ? foundSrv.subCategories.map((sub, idx) => ({ id: idx + 1, name: sub.name, result: '', normalRange: sub.normalRange || 'Standard Reference' }))
       : [];
 
+    const finalDoctor = orderingDoctor.trim() || 'Self Created / Walk-In';
+    const isSelfCreated = !orderingDoctor.trim() || orderingDoctor.trim() === 'Self Created / Walk-In';
+
     const newOrder = {
       id: labOrderNo,
       labOrderNo,
@@ -358,10 +386,12 @@ export function RequestLabTestModal({
       patient: patientName.trim(),
       patientName: patientName.trim(),
       phone: phone.trim(),
-      doctor: orderingDoctor.trim() || doctorName,
-      orderingDoctor: orderingDoctor.trim() || doctorName,
+      doctor: finalDoctor,
+      orderingDoctor: finalDoctor,
       test: testName.trim(),
       testName: testName.trim(),
+      grossFee: grossFeeNum,
+      discount: discountNum,
       testFee: feeNum.toString(),
       amountPaidNow: paidNum.toString(),
       amountPaid: paidNum.toString(),
@@ -384,7 +414,8 @@ export function RequestLabTestModal({
       testRows: defaultTestRows,
       assignedLabAssistant: assignedLabAssistant.trim() || 'General Lab Staff',
       assignedStaff: assignedLabAssistant.trim() || 'General Lab Staff',
-      createdBy: isLabAssistant ? 'Lab Assistant' : 'Doctor',
+      createdBy: isLabAssistant ? 'Lab Assistant' : (isSelfCreated ? 'Lab Assistant' : 'Doctor'),
+      isSelfCreated,
     };
 
     const token = localStorage.getItem('kh_auth_token');
@@ -467,13 +498,13 @@ export function RequestLabTestModal({
             </div>
 
             <div className="field">
-              <span style={{ fontSize: '10px', fontWeight: '700', color: '#4a5e7a' }}>Ordering Doctor *</span>
+              <span style={{ fontSize: '10px', fontWeight: '700', color: '#4a5e7a' }}>Doctor Name (Optional)</span>
               <select
                 value={orderingDoctor}
                 onChange={(e) => setOrderingDoctor(e.target.value)}
-                required
                 style={{ padding: '6px 9px', border: '1px solid #dde7f1', borderRadius: '6px', fontSize: '11px', background: '#fff', fontWeight: '700' }}
               >
+                <option value="">-- No Doctor / Self Walk-In (Optional) --</option>
                 {availableDoctors.length > 0 ? (
                   availableDoctors.map((doc) => (
                     <option key={doc.id || doc._id || doc.name} value={doc.name}>
@@ -481,7 +512,7 @@ export function RequestLabTestModal({
                     </option>
                   ))
                 ) : (
-                  <option value={orderingDoctor || 'Dr. Unassigned'}>{orderingDoctor || 'Dr. Unassigned'}</option>
+                  orderingDoctor ? <option value={orderingDoctor}>{orderingDoctor}</option> : null
                 )}
               </select>
             </div>
@@ -549,9 +580,9 @@ export function RequestLabTestModal({
             </select>
           </div>
 
-          {/* Test Fee & Upfront Payment Section (Always visible for Doctor & Lab Assistant) */}
+          {/* Test Fee, Discount & Upfront Payment Section */}
           <div style={{ background: '#f8fafc', padding: '12px', borderRadius: '8px', border: '1px solid #dde7f1', display: 'grid', gap: '10px', width: '100%', boxSizing: 'border-box' }}>
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(130px, 1fr))', gap: '8px' }}>
               <div className="field">
                 <span style={{ fontSize: '10px', fontWeight: '800', color: '#dc2626' }}>Total Fee (₹) *</span>
                 <input
@@ -565,11 +596,24 @@ export function RequestLabTestModal({
               </div>
 
               <div className="field">
+                <span style={{ fontSize: '10px', fontWeight: '800', color: '#dc2626' }}>Discount Amount (₹)</span>
+                <input
+                  type="number"
+                  step="any"
+                  min="0"
+                  value={discount}
+                  onChange={(e) => handleDiscountChange(e.target.value)}
+                  placeholder="0.00"
+                  style={{ padding: '6px 8px', border: '1px solid #fca5a5', borderRadius: '5px', fontSize: '11px', fontWeight: '800', color: '#dc2626', background: '#fef2f2', width: '100%', boxSizing: 'border-box' }}
+                />
+              </div>
+
+              <div className="field">
                 <span style={{ fontSize: '10px', fontWeight: '800', color: '#15803d' }}>Final Net Payable (₹)</span>
                 <input
                   type="number"
                   disabled
-                  value={testFee}
+                  value={netPayableNum}
                   style={{ padding: '6px 8px', border: '1px solid #86efac', borderRadius: '5px', fontSize: '11px', fontWeight: '800', color: '#15803d', background: '#f0fdf4', width: '100%', boxSizing: 'border-box' }}
                 />
               </div>
@@ -636,7 +680,7 @@ export function RequestLabTestModal({
                     onClick={handleCollectFullFee}
                     style={{ fontSize: '9px', background: '#0284c7', color: '#fff', border: 'none', padding: '3px 8px', borderRadius: '4px', cursor: 'pointer', fontWeight: '800' }}
                   >
-                    ⚡ Auto-Set Full Fee (₹ {testFee})
+                    ⚡ Auto-Set Full Fee (₹ {netPayableNum})
                   </button>
                 </div>
               )}
@@ -672,7 +716,7 @@ export function RequestLabTestModal({
               {/* CONDITIONAL PAY LATER WARNING BANNER */}
               {selectedMethods['Pay Later'] && (
                 <div style={{ background: '#fffbeb', border: '1px solid #fde68a', padding: '8px 10px', borderRadius: '6px', fontSize: '10px', color: '#b45309', fontWeight: '700', marginTop: '8px' }}>
-                  ⚠️ Pay Later Selected: Lab investigation ordered without upfront payment collection. Complete fee (₹{testFee}) will be billed for post-investigation settlement.
+                  ⚠️ Pay Later Selected: Lab investigation ordered without upfront payment collection. Complete fee (₹{netPayableNum}) will be billed for post-investigation settlement.
                 </div>
               )}
             </div>

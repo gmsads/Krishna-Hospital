@@ -67,6 +67,8 @@ const opRecordSchema = new mongoose.Schema(
     height: { type: String, default: '170' },
     bloodGroup: { type: String, default: 'O+' },
     bp: { type: String, default: '120/80' },
+    pr: { type: String, default: '72' },
+    spo2: { type: String, default: '98%' },
     // Doctor & Department
     department: { type: String, default: 'General Medicine' },
     doctor: { type: String, default: 'Dr. Meera Nair' },

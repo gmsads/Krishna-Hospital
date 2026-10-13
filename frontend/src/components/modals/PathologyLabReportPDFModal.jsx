@@ -103,9 +103,9 @@ export function PathologyLabReportPDFModal({ test, branding, onClose, onNotify }
   const reportRows = getReportRows();
 
   // Financial & Payment Calculations
-  const rawGross = typeof test.amount === 'number'
-    ? test.amount
-    : parseFloat(String(test.amount || '1200').replace(/[^0-9.]/g, '')) || 1200;
+  const rawGross = test.grossFee != null
+    ? parseFloat(test.grossFee)
+    : (test.discount ? (parseFloat(test.amount || 0) + parseFloat(test.discount || 0)) : (typeof test.amount === 'number' ? test.amount : parseFloat(String(test.amount || '1200').replace(/[^0-9.]/g, '')) || 1200));
   const discountAmt = parseFloat(String(test.discount || 0)) || 0;
   const totalFee = Math.max(0, rawGross - discountAmt);
   const paidAmount = typeof test.paidAmount === 'number'

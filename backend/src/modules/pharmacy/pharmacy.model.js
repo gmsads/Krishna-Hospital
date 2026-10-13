@@ -30,12 +30,23 @@ const pharmacySchema = new mongoose.Schema(
     },
     paymentMethod: {
       type: String,
-      enum: ['Cash', 'UPI / Online', 'Credit / Debit Card', 'Bank Transfer'],
       default: 'Cash',
     },
     upiTxnId: {
       type: String,
       default: '',
+    },
+    receiptImage: {
+      type: String,
+      default: '',
+    },
+    paymentHistory: {
+      type: Array,
+      default: [],
+    },
+    splitBreakdown: {
+      type: Object,
+      default: {},
     },
     notes: {
       type: String,
@@ -80,6 +91,14 @@ const pharmacySchema = new mongoose.Schema(
     paidAmount: {
       type: Number,
       default: 0,
+    },
+    paymentDate: {
+      type: String,
+      default: '',
+    },
+    lastPaymentDate: {
+      type: String,
+      default: '',
     },
     dueDate: {
       type: String,

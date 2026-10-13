@@ -233,6 +233,8 @@ export function PatientHistoryPage({
                     <div>BP: <strong>{visit.vitals?.bp || '120/80'}</strong></div>
                     <div>Temp: <strong>{visit.vitals?.temp || '98.6 °F'}</strong></div>
                     <div>Wt: <strong>{visit.vitals?.weight || '68 kg'}</strong> (BMI: {visit.vitals?.bmi || '25.0'})</div>
+                    {(visit.vitals?.pr || visit.pr) && <div>PR: <strong>{visit.vitals?.pr || visit.pr} bpm</strong></div>}
+                    {(visit.vitals?.spo2 || visit.vitals?.spo || visit.spo2) && <div>SpO2: <strong>{visit.vitals?.spo2 || visit.vitals?.spo || visit.spo2}</strong></div>}
                   </td>
 
                   {/* Complaints & Clinical Notes */}

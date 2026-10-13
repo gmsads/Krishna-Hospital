@@ -123,7 +123,6 @@ export function LaboratoryPage({ tests = initialLabTests, isDoctor = false, doct
 
   // Helper to reliably check if a test was prescribed by a Doctor vs created manually by Lab Assistant
   const isDoctorPrescribed = (t) => {
-    if (t.isSelfCreated === true) return false;
     const doc = (t.doctor || t.orderingDoctor || '').trim();
     const lowerDoc = doc.toLowerCase();
     if (!doc || lowerDoc.includes('self') || lowerDoc.includes('unassigned') || lowerDoc.includes('walk-in') || lowerDoc.includes('walkin') || lowerDoc.includes('lab assistant')) {

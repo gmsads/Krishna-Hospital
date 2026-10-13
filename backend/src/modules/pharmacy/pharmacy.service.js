@@ -50,7 +50,7 @@ export const createPharmacySale = async (saleData) => {
   return newSale;
 };
 
-export const settlePharmacyCredit = async (id, paidAmt = null) => {
+export const settlePharmacyCredit = async (id, payload = null) => {
   let sale = null;
   if (mongoose.Types.ObjectId.isValid(id)) {
     sale = await Pharmacy.findById(id);
@@ -61,11 +61,41 @@ export const settlePharmacyCredit = async (id, paidAmt = null) => {
   if (!sale) throw new Error('Pharmacy record not found');
 
   const fullCredit = sale.creditAmount || sale.collectingAmount || 0;
-  const newPaid = paidAmt !== null ? Number(paidAmt) : fullCredit;
+  let newPaid = fullCredit;
+  let paymentMethod = null;
+  let upiTxnId = null;
+  let receiptImage = null;
+  let paymentHistory = null;
+  let splitBreakdown = null;
+  let paymentDate = null;
+
+  if (typeof payload === 'object' && payload !== null) {
+    if (payload.paidAmount !== undefined) newPaid = Number(payload.paidAmount);
+    if (payload.paymentMethod) paymentMethod = payload.paymentMethod;
+    if (payload.paymentDate) paymentDate = payload.paymentDate;
+    if (payload.lastPaymentDate) paymentDate = payload.lastPaymentDate;
+    if (payload.upiTxnId !== undefined) upiTxnId = payload.upiTxnId;
+    if (payload.receiptImage !== undefined) receiptImage = payload.receiptImage;
+    if (payload.paymentHistory !== undefined) paymentHistory = payload.paymentHistory;
+    if (payload.splitBreakdown !== undefined) splitBreakdown = payload.splitBreakdown;
+  } else if (payload !== null) {
+    newPaid = Number(payload);
+  }
+
   const isSettled = newPaid >= fullCredit;
 
   sale.paidAmount = newPaid;
   sale.creditStatus = isSettled ? 'Settled' : 'Partial';
+  if (paymentMethod) sale.paymentMethod = paymentMethod;
+  if (paymentDate) {
+    sale.paymentDate = paymentDate;
+    sale.lastPaymentDate = paymentDate;
+  }
+  if (upiTxnId !== null) sale.upiTxnId = upiTxnId;
+  if (receiptImage !== null) sale.receiptImage = receiptImage;
+  if (paymentHistory) sale.paymentHistory = paymentHistory;
+  if (splitBreakdown) sale.splitBreakdown = splitBreakdown;
+
   return await sale.save();
 };
 
