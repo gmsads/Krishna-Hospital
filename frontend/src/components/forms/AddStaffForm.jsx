@@ -207,6 +207,7 @@ export function AddStaffForm({ onSave, onCancel, notify, effectiveBranch = 'Cent
                 style={{ padding: '12px 14px', border: '1px solid #dde7f1', borderRadius: '9px', fontSize: '13px', background: '#fff' }}
               >
                 <option value="General medicine">General medicine</option>
+                <option value="General Medicine and Surgeon">General Medicine and Surgeon</option>
                 <option value="Internal medicine">Internal medicine</option>
                 <option value="Cardiology">Cardiology</option>
                 <option value="Pediatrics">Pediatrics</option>

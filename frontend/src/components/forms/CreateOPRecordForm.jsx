@@ -778,6 +778,7 @@ export function CreateOPRecordForm({
               <span style={{ color: '#4a5e7a', fontSize: '10px', fontWeight: '700' }}>Department *</span>
               <select value={department} onChange={(e) => setDepartment(e.target.value)} style={{ padding: '8px 6px', border: '1px solid #dde7f1', borderRadius: '6px', background: '#fff', fontSize: '11px', width: '100%', boxSizing: 'border-box' }}>
                 <option>General medicine</option>
+                <option>General Medicine and Surgeon</option>
                 <option>Internal medicine</option>
                 <option>Cardiology</option>
                 <option>Pediatrics</option>

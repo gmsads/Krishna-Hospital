@@ -527,6 +527,7 @@ export function StaffPage({ staff = initialStaff, onAddStaff, onNotify, effectiv
                     style={{ padding: '10px 12px', border: '1px solid #dde7f1', borderRadius: '7px', background: '#fff' }}
                   >
                     <option value="General medicine">General medicine</option>
+                    <option value="General Medicine and Surgeon">General Medicine and Surgeon</option>
                     <option value="Internal medicine">Internal medicine</option>
                     <option value="Cardiology">Cardiology</option>
                     <option value="Pediatrics">Pediatrics</option>
