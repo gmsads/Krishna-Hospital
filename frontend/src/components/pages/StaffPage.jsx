@@ -512,6 +512,7 @@ export function StaffPage({ staff = initialStaff, onAddStaff, onNotify, effectiv
                     <option value="Front Desk Officer" />
                     <option value="Lab Assistant" />
                     <option value="Nurse" />
+                    <option value="Surgeon" />
                     <option value="Maintenance Supervisor" />
                     <option value="Admin" />
                   </datalist>
@@ -534,6 +535,7 @@ export function StaffPage({ staff = initialStaff, onAddStaff, onNotify, effectiv
                     <option value="Diabetes">Diabetes</option>
                     <option value="Gynaecology">Gynaecology</option>
                     <option value="Physiotherapy">Physiotherapy</option>
+                    <option value="Surgeon">Surgeon</option>
                     <option value="Laboratory">Laboratory</option>
                     <option value="Front Desk Operations">Front Desk Operations</option>
                     <option value="Administration">Administration</option>
