@@ -307,6 +307,13 @@ export function DoctorsPage({ doctors = [], onNotify, effectiveBranch = 'All', b
               <option value="Internal Medicine">Internal Medicine</option>
               <option value="Cardiology">Cardiology</option>
               <option value="Pediatrics">Pediatrics</option>
+              <option value="Orthopedics">Orthopedics</option>
+              <option value="Dermatology">Dermatology</option>
+              <option value="Dental">Dental</option>
+              <option value="Neurology">Neurology</option>
+              <option value="Diabetes">Diabetes</option>
+              <option value="Gynaecology">Gynaecology</option>
+              <option value="Physiotherapy">Physiotherapy</option>
             </select>
 
             <select
@@ -667,6 +674,11 @@ export function DoctorsPage({ doctors = [], onNotify, effectiveBranch = 'All', b
                     <option value="Pediatrics">Pediatrics</option>
                     <option value="Orthopedics">Orthopedics</option>
                     <option value="Dermatology">Dermatology</option>
+                    <option value="Dental">Dental</option>
+                    <option value="Neurology">Neurology</option>
+                    <option value="Diabetes">Diabetes</option>
+                    <option value="Gynaecology">Gynaecology</option>
+                    <option value="Physiotherapy">Physiotherapy</option>
                   </select>
                 </div>
 
@@ -938,6 +950,11 @@ export function DoctorsPage({ doctors = [], onNotify, effectiveBranch = 'All', b
                     <option value="Pediatrics">Pediatrics</option>
                     <option value="Orthopedics">Orthopedics</option>
                     <option value="Dermatology">Dermatology</option>
+                    <option value="Dental">Dental</option>
+                    <option value="Neurology">Neurology</option>
+                    <option value="Diabetes">Diabetes</option>
+                    <option value="Gynaecology">Gynaecology</option>
+                    <option value="Physiotherapy">Physiotherapy</option>
                   </select>
                 </div>
 

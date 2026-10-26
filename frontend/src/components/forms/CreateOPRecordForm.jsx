@@ -783,6 +783,11 @@ export function CreateOPRecordForm({
                 <option>Pediatrics</option>
                 <option>Orthopedics</option>
                 <option>Dermatology</option>
+                <option>Dental</option>
+                <option>Neurology</option>
+                <option>Diabetes</option>
+                <option>Gynaecology</option>
+                <option>Physiotherapy</option>
               </select>
             </div>
 
