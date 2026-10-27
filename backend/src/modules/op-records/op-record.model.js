@@ -65,7 +65,7 @@ const opRecordSchema = new mongoose.Schema(
     temp: { type: String, default: '98.6' },
     weight: { type: String, default: '68' },
     height: { type: String, default: '170' },
-    bloodGroup: { type: String, default: 'O+' },
+    bloodGroup: { type: String, default: '' },
     bp: { type: String, default: '120/80' },
     pr: { type: String, default: '72' },
     spo2: { type: String, default: '98%' },

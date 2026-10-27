@@ -92,7 +92,7 @@ export function CreateOPRecordForm({
   const [temp, setTemp] = useState('98.6');
   const [weight, setWeight] = useState('68');
   const [height, setHeight] = useState('170');
-  const [bloodGroup, setBloodGroup] = useState('O+');
+  const [bloodGroup, setBloodGroup] = useState('');
   const [bp, setBp] = useState('120/80');
   const [pr, setPr] = useState('72');
   const [spo2, setSpo2] = useState('98%');
@@ -421,6 +421,7 @@ export function CreateOPRecordForm({
       dob,
       address: address.trim(),
       phone: phone.trim(),
+      bloodGroup,
       vitals: { temp, weight, height, bmi: calcBmi(), bloodGroup, bp, pr, spo2 },
       pr,
       spo2,
@@ -739,6 +740,7 @@ export function CreateOPRecordForm({
             <div className="field">
               <span style={{ fontSize: '10px', color: '#4a5e7a', fontWeight: '700' }}>Blood Group</span>
               <select value={bloodGroup} onChange={(e) => setBloodGroup(e.target.value)} style={{ padding: '8px 6px', border: '1px solid #dde7f1', borderRadius: '6px', background: '#fff', fontSize: '11px' }}>
+                <option value=""></option>
                 <option>O+</option>
                 <option>A+</option>
                 <option>B+</option>

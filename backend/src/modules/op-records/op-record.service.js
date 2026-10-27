@@ -38,7 +38,7 @@ export const createOPRecord = async (recordData) => {
     temp: recordData.temp || recordData.vitals?.temp || '98.6',
     weight: recordData.weight || recordData.vitals?.weight || '68',
     height: recordData.height || recordData.vitals?.height || '170',
-    bloodGroup: recordData.bloodGroup || recordData.vitals?.bloodGroup || 'O+',
+    bloodGroup: recordData.bloodGroup !== undefined ? recordData.bloodGroup : (recordData.vitals?.bloodGroup !== undefined ? recordData.vitals?.bloodGroup : ''),
     bp: recordData.bp || recordData.vitals?.bp || '120/80',
     pr: recordData.pr || recordData.vitals?.pr || '72',
     spo2: recordData.spo2 || recordData.vitals?.spo2 || recordData.vitals?.spo || '98%',

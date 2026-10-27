@@ -83,7 +83,7 @@ export function PatientHistoryPage({
             weight: '68 kg',
             height: '165 cm',
             bmi: '25.0',
-            bloodGroup: patient?.bloodGroup || 'O+',
+            bloodGroup: patient?.bloodGroup || '',
             bp: '120/80 mmHg',
           },
           complaints: r.complaints || r.notes || r.recordType || 'Patient registered for OPD consultation.',
@@ -174,7 +174,7 @@ export function PatientHistoryPage({
             </div>
             <div style={{ background: '#fff', padding: '8px 14px', borderRadius: '8px', border: '1px solid #d3e2f5', textAlign: 'center' }}>
               <span style={{ fontSize: '10px', color: '#687c96', display: 'block', textTransform: 'uppercase', fontWeight: '700' }}>Blood Group</span>
-              <strong style={{ fontSize: '16px', color: '#e11d48' }}>{patient?.bloodGroup || 'O+'}</strong>
+              <strong style={{ fontSize: '16px', color: '#e11d48' }}>{patient?.bloodGroup || '—'}</strong>
             </div>
           </div>
         </div>

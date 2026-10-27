@@ -25,7 +25,7 @@ import { initialStaff } from '../data/initialData';
 
 export const initialDoctors = [];
 
-export function DoctorsPage({ doctors = [], onNotify, effectiveBranch = 'All', branchesList = [] }) {
+export function DoctorsPage({ doctors = [], onNotify, notify, effectiveBranch = 'All', branchesList = [] }) {
   const [doctorList, setDoctorList] = useState(doctors);
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedDept, setSelectedDept] = useState('All');
@@ -249,25 +249,34 @@ export function DoctorsPage({ doctors = [], onNotify, effectiveBranch = 'All', b
 
   const handleDeleteDoctor = async (id, name, dbId) => {
     const token = localStorage.getItem('kh_auth_token');
-    const targetId = dbId || id;
-    const docToDelete = doctorList.find((d) => d.id === id || d._id === targetId);
+    const docObj = (typeof id === 'object' && id !== null)
+      ? id
+      : (doctorList.find((d) => d._id === id || d.id === id || d.docId === id) || {});
 
-    if (targetId && String(targetId).length > 10) {
+    const targetId = dbId || docObj._id || docObj.id || docObj.docId || (typeof id === 'string' ? id : '');
+    const docName = docObj.name || name || 'Doctor';
+
+    if (targetId) {
       try {
-        await fetch(`/api/v1/doctors/${targetId}`, {
+        const res = await fetch(`/api/v1/doctors/${targetId}`, {
           method: 'DELETE',
           headers: {
             ...(token ? { 'Authorization': `Bearer ${token}` } : {}),
           },
         });
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok) {
+          console.warn('Backend doctor delete note:', res.status, data.message);
+        }
       } catch (err) {
         console.warn('Could not delete doctor in backend:', err.message);
       }
     }
 
-    setDoctorList((prev) => prev.filter((d) => d.id !== id && d._id !== targetId));
+    setDoctorList((prev) => prev.filter((d) => d !== docObj && d._id !== targetId && d.id !== targetId && d.docId !== targetId));
     setDeletingDoctorId(null);
-    onNotify && onNotify(`${docToDelete?.name || name || 'Doctor'} removed from directory.`);
+    const sendNotify = onNotify || notify;
+    sendNotify && sendNotify(`${docName} removed from directory.`);
   };
 
   return (
@@ -400,7 +409,7 @@ export function DoctorsPage({ doctors = [], onNotify, effectiveBranch = 'All', b
 
                       <button
                         className="icon-button"
-                        onClick={() => setDeletingDoctorId(doc.id)}
+                        onClick={() => setDeletingDoctorId(doc)}
                         title="Delete Doctor Profile"
                         aria-label="Delete Doctor Profile"
                         style={{ padding: '4px', color: '#dc2626' }}
@@ -1065,7 +1074,7 @@ export function DoctorsPage({ doctors = [], onNotify, effectiveBranch = 'All', b
             </div>
             <h3 style={{ margin: '0 0 6px', fontSize: '17px', color: '#162d4a' }}>Delete Doctor Profile?</h3>
             <p style={{ margin: 0, fontSize: '13px', color: '#687c96', lineHeight: 1.5 }}>
-              Are you sure you want to remove this doctor from the hospital directory? This action cannot be undone.
+              Are you sure you want to delete this data?
             </p>
 
             <div style={{ display: 'flex', gap: '12px', justifyContent: 'center', marginTop: '20px' }}>
@@ -1077,7 +1086,7 @@ export function DoctorsPage({ doctors = [], onNotify, effectiveBranch = 'All', b
                 style={{ background: '#dc2626', borderColor: '#dc2626' }}
                 onClick={() => handleDeleteDoctor(deletingDoctorId)}
               >
-                Delete Doctor
+                OK
               </button>
             </div>
           </div>
