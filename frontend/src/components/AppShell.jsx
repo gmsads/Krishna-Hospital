@@ -291,7 +291,7 @@ export default function AppShell({ path = '/dashboard', navigate }) {
       .then((data) => {
         if (data.success && Array.isArray(data.data)) {
           const mapped = data.data.map(r => {
-            const grossNum = parseFloat(String(r.charges || '300').replace(/[^0-9.]/g, '')) || 300;
+            const grossNum = parseFloat(String(r.charges || '200').replace(/[^0-9.]/g, '')) || 200;
             const discountNum = typeof r.discount === 'number' ? r.discount : (parseFloat(String(r.discount || '0').replace(/[^0-9.]/g, '')) || 0);
             const netNum = typeof r.netAmount === 'number' ? r.netAmount : Math.max(0, grossNum - discountNum);
             const paidNum = typeof r.paidAmount === 'number' ? r.paidAmount : (parseFloat(String(r.amountPaid || r.paidAmount || '0').replace(/[^0-9.]/g, '')) || 0);
@@ -931,7 +931,7 @@ export default function AppShell({ path = '/dashboard', navigate }) {
       ...opRecord, 
       id: opRecord.regNo || opRecord.id,
       patient: opRecord.patientName || opRecord.patient,
-      amount: `₹ ${opRecord.charges || '300'}`,
+      amount: `₹ ${opRecord.charges || '200'}`,
       branch: opRecord.branch || targetBranch,
       branchCode: opRecord.branchCode || branchCodeMap[opRecord.branch] || targetCode,
     };
@@ -1076,6 +1076,28 @@ export default function AppShell({ path = '/dashboard', navigate }) {
     setStaff((current) => [taggedStaff, ...current]);
     handleNavigate('/staff');
     notify('Staff member added successfully');
+  };
+
+  const updateStaffMember = (updatedStaff) => {
+    setStaff((current) =>
+      current.map((s) =>
+        s._id === updatedStaff._id || s.empId === updatedStaff.empId || s.id === updatedStaff.id || s.name === updatedStaff.name
+          ? { ...s, ...updatedStaff }
+          : s
+      )
+    );
+  };
+
+  const deleteStaffMember = (targetId, memberObj) => {
+    setStaff((current) =>
+      current.filter((s) =>
+        s !== memberObj &&
+        s._id !== targetId &&
+        s.empId !== targetId &&
+        s.id !== targetId &&
+        (!memberObj?.name || s.name !== memberObj.name)
+      )
+    );
   };
 
   const handleViewPatientHistory = (patient) => {
@@ -1972,6 +1994,8 @@ export default function AppShell({ path = '/dashboard', navigate }) {
               effectiveBranch={effectiveBranch}
               branchesList={branchesList}
               onAddStaff={() => handleNavigate('/staff/new')} 
+              onUpdateStaff={updateStaffMember}
+              onDeleteStaff={deleteStaffMember}
               onNotify={notify} 
             />
           )}

@@ -336,6 +336,7 @@ export function OPRecordsPage({
                 { key: 'IP', label: '🟣 IP (Inpatient)' },
                 { key: 'Surgery', label: '🔪 Surgery' },
                 { key: 'Emergency', label: '⚡ Emergency' },
+                { key: 'Treatment', label: '🩺 Treatment' },
               ].map((tab) => (
                 <button
                   key={tab.key}

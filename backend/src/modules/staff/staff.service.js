@@ -3,9 +3,18 @@ import { User } from '../auth/auth.model.js';
 import { hashPassword } from '../auth/auth.utils.js';
 
 export const generateNextEmpId = async (branch) => {
-  const query = branch && branch !== 'All' ? { branch: new RegExp(`^${branch.trim()}$`, 'i') } : {};
-  const count = await Staff.countDocuments(query);
-  return `EMP-${String(count + 1).padStart(4, '0')}`;
+  const allStaff = await Staff.find({}, { empId: 1 }).lean();
+  let maxNum = 0;
+  for (const s of allStaff) {
+    if (s.empId) {
+      const match = s.empId.match(/\d+/);
+      if (match) {
+        const num = parseInt(match[0], 10);
+        if (num > maxNum) maxNum = num;
+      }
+    }
+  }
+  return `EMP-${String(maxNum + 1).padStart(4, '0')}`;
 };
 
 export const createStaff = async (staffData) => {
@@ -94,11 +103,16 @@ export const getStaffById = async (id) => {
 
 export const updateStaff = async (id, updateData) => {
   let member = null;
+  const { _id, __v, ...dataToUpdate } = updateData;
   if (id && id.match(/^[0-9a-fA-F]{24}$/)) {
-    member = await Staff.findByIdAndUpdate(id, updateData, { new: true, runValidators: true });
+    member = await Staff.findByIdAndUpdate(id, dataToUpdate, { new: true, runValidators: true });
   }
   if (!member) {
-    member = await Staff.findOneAndUpdate({ $or: [{ empId: id }, { email: (id || '').toLowerCase() }] }, updateData, { new: true, runValidators: true });
+    member = await Staff.findOneAndUpdate(
+      { $or: [{ empId: id }, { email: (id || '').toLowerCase() }, { name: updateData.name }] },
+      dataToUpdate,
+      { new: true, runValidators: true }
+    );
   }
   if (!member) {
     throw new Error('Staff member not found');
@@ -112,7 +126,14 @@ export const deleteStaff = async (id) => {
     member = await Staff.findByIdAndDelete(id);
   }
   if (!member) {
-    member = await Staff.findOneAndDelete({ $or: [{ empId: id }, { email: (id || '').toLowerCase() }] });
+    const escapedName = (id || '').trim().replace(/[-\/\\^$*+?.()|[\]{}]/g, '\\$&');
+    member = await Staff.findOneAndDelete({
+      $or: [
+        { empId: id },
+        { email: (id || '').toLowerCase() },
+        { name: new RegExp(`^${escapedName}$`, 'i') }
+      ]
+    });
   }
   if (!member) {
     throw new Error('Staff member not found');

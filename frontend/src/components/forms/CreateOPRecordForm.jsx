@@ -34,7 +34,7 @@ export function CreateOPRecordForm({
   }, [effectiveBranch, branchesList]);
 
   // Streamlined Form State (16 Required Fields)
-  const [recordType, setRecordType] = useState('OP'); // Options: OP, IP, Surgery, Emergency
+  const [recordType, setRecordType] = useState('OP'); // Options: OP, IP, Surgery, Emergency, Treatment
   const [ipCareDetails, setIpCareDetails] = useState('');
   const [surgeryName, setSurgeryName] = useState('');
   const [opNumber, setOpNumber] = useState('Reg-2026-0001'); // Default Reg Number: Reg-2026-0001
@@ -103,7 +103,7 @@ export function CreateOPRecordForm({
   const [referralDoctor, setReferralDoctor] = useState('');
   const [visitValidity, setVisitValidity] = useState('15'); // Default Visit Validity: 15 Days
   const [refCommPercent, setRefCommPercent] = useState('0');
-  const [charges, setCharges] = useState('300.00');
+  const [charges, setCharges] = useState('200.00');
   const [discount, setDiscount] = useState('0.00');
 
   const grossChargesNum = parseFloat(String(charges || '0').replace(/[^0-9.]/g, '')) || 0;
@@ -123,7 +123,7 @@ export function CreateOPRecordForm({
   });
 
   const [splitAmounts, setSplitAmounts] = useState({
-    Cash: '300.00',
+    Cash: '200.00',
     UPI: '0',
     Card: '0',
     Cheque: '0',
@@ -567,6 +567,7 @@ export function CreateOPRecordForm({
                   <option value="IP">🟣 IP (Inpatient)</option>
                   <option value="Surgery">🔪 Surgery</option>
                   <option value="Emergency">⚡ Emergency</option>
+                  <option value="Treatment">🩺 Treatment</option>
                 </select>
                 {/* CONDITIONAL SPECIFY IP DETAILS FIELD */}
                 {recordType === 'IP' && (

@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { ChevronDown, Edit3, Eye, EyeOff, Plus, Trash2, UserCheck, UserX, X, ShieldCheck, Clock, MessageSquare } from 'lucide-react';
 import { initialStaff } from '../data/initialData';
 
-export function StaffPage({ staff = initialStaff, onAddStaff, onNotify, effectiveBranch = 'All', branchesList = [] }) {
+export function StaffPage({ staff = initialStaff, onAddStaff, onUpdateStaff, onDeleteStaff, onNotify, notify, effectiveBranch = 'All', branchesList = [] }) {
   const [staffList, setStaffList] = useState(staff);
   const [selectedRoleFilter, setSelectedRoleFilter] = useState('All');
   const [searchQuery, setSearchQuery] = useState('');
@@ -74,26 +74,40 @@ export function StaffPage({ staff = initialStaff, onAddStaff, onNotify, effectiv
   };
 
   // Delete Staff Member
-  const handleDeleteStaff = async (id, name, dbId) => {
-    if (window.confirm(`Are you sure you want to remove ${name} from staff records?`)) {
-      const token = localStorage.getItem('kh_auth_token');
-      const targetId = dbId || id;
+  const handleDeleteStaff = async (memberOrId, nameParam, dbId) => {
+    const memberObj = (typeof memberOrId === 'object' && memberOrId !== null)
+      ? memberOrId
+      : (staffList.find((s) => s._id === memberOrId || s.empId === memberOrId || s.id === memberOrId || s.name === memberOrId) || {});
 
-      if (targetId && String(targetId).length > 10) {
+    const targetId = dbId || memberObj._id || memberObj.empId || memberObj.id || (typeof memberOrId === 'string' ? memberOrId : '');
+    const memberName = memberObj.name || nameParam || 'staff member';
+
+    if (window.confirm(`Are you sure you want to remove ${memberName} from staff records?`)) {
+      const token = localStorage.getItem('kh_auth_token');
+
+      if (targetId) {
         try {
-          await fetch(`/api/v1/staff/${targetId}`, {
+          const res = await fetch(`/api/v1/staff/${targetId}`, {
             method: 'DELETE',
             headers: {
               ...(token ? { 'Authorization': `Bearer ${token}` } : {}),
             },
           });
+          const data = await res.json().catch(() => ({}));
+          if (!res.ok) {
+            console.warn('Backend staff delete note:', res.status, data.message);
+          }
         } catch (err) {
           console.warn('Could not delete staff member in backend:', err.message);
         }
       }
 
-      setStaffList((prev) => prev.filter((s) => s.id !== id && s._id !== targetId && s.name !== name));
-      onNotify && onNotify(`${name} removed from staff directory`);
+      setStaffList((prev) =>
+        prev.filter((s) => s !== memberObj && s._id !== targetId && s.empId !== targetId && s.id !== targetId && s.name !== memberName)
+      );
+      onDeleteStaff && onDeleteStaff(targetId, memberObj);
+      const sendNotify = onNotify || notify;
+      sendNotify && sendNotify(`${memberName} removed from staff directory`);
     }
   };
 
@@ -101,28 +115,42 @@ export function StaffPage({ staff = initialStaff, onAddStaff, onNotify, effectiv
   const handleSaveEdit = async (e) => {
     e.preventDefault();
     const token = localStorage.getItem('kh_auth_token');
-    const staffId = editingStaff._id || editingStaff.id;
+    const staffId = editingStaff._id || editingStaff.empId || editingStaff.id;
 
-    if (staffId && String(staffId).length > 10) {
+    let updatedObj = {
+      ...editingStaff,
+      empId: editingStaff.empId || editingStaff.id,
+      id: editingStaff.empId || editingStaff.id,
+    };
+
+    if (staffId) {
       try {
-        await fetch(`/api/v1/staff/${staffId}`, {
+        const res = await fetch(`/api/v1/staff/${staffId}`, {
           method: 'PUT',
           headers: {
             'Content-Type': 'application/json',
             ...(token ? { 'Authorization': `Bearer ${token}` } : {}),
           },
-          body: JSON.stringify(editingStaff),
+          body: JSON.stringify(updatedObj),
         });
+        const data = await res.json().catch(() => ({}));
+        if (res.ok && data.success && data.data) {
+          updatedObj = data.data;
+        } else {
+          console.warn('Backend staff update note:', res.status, data.message);
+        }
       } catch (err) {
         console.warn('Could not update staff member in backend:', err.message);
       }
     }
 
     setStaffList((prev) =>
-      prev.map((s) => (s.id === editingStaff.id || s._id === editingStaff._id || s.name === editingStaff.name ? editingStaff : s))
+      prev.map((s) => (s._id === updatedObj._id || s.empId === updatedObj.empId || s.id === updatedObj.id || s.name === updatedObj.name ? { ...s, ...updatedObj } : s))
     );
+    onUpdateStaff && onUpdateStaff(updatedObj);
     setEditingStaff(null);
-    onNotify && onNotify(`Staff details updated for ${editingStaff.name}`);
+    const sendNotify = onNotify || notify;
+    sendNotify && sendNotify(`Staff details updated for ${updatedObj.name}`);
   };
 
   return (
@@ -302,7 +330,7 @@ export function StaffPage({ staff = initialStaff, onAddStaff, onNotify, effectiv
                 <button
                   className="icon-button"
                   style={{ width: '32px', height: '32px', padding: 0 }}
-                  onClick={() => handleDeleteStaff(member.id || member.name, member.name)}
+                  onClick={() => handleDeleteStaff(member)}
                   title="Delete Staff Member"
                 >
                   <Trash2 size={15} color="#dc2626" />
@@ -403,7 +431,7 @@ export function StaffPage({ staff = initialStaff, onAddStaff, onNotify, effectiv
 
             <div style={{ display: 'grid', gap: '12px', fontSize: '13px' }}>
               <div style={{ background: '#f8fafc', padding: '12px', borderRadius: '8px', border: '1px solid #edf2f7', display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
-                <div><strong>Employee ID:</strong> {selectedStaffForDetails.id || 'EMP-1002'}</div>
+                <div><strong>Employee ID:</strong> {selectedStaffForDetails.empId || selectedStaffForDetails.id || 'EMP-1002'}</div>
                 <div><strong>Role / Title:</strong> {selectedStaffForDetails.role}</div>
                 <div><strong>Department:</strong> {selectedStaffForDetails.department}</div>
                 <div><strong>Monthly Salary:</strong> <strong style={{ color: '#1769d7' }}>{selectedStaffForDetails.salary || '₹ 28,000'}</strong></div>
@@ -450,8 +478,8 @@ export function StaffPage({ staff = initialStaff, onAddStaff, onNotify, effectiv
                 <div className="field">
                   <span style={{ fontSize: '11px', fontWeight: '700', color: '#1769d7' }}>Employee ID *</span>
                   <input
-                    value={editingStaff.id || ''}
-                    onChange={(e) => setEditingStaff({ ...editingStaff, id: e.target.value })}
+                    value={editingStaff.empId || editingStaff.id || ''}
+                    onChange={(e) => setEditingStaff({ ...editingStaff, empId: e.target.value, id: e.target.value })}
                     required
                     style={{ padding: '10px 12px', border: '1px solid #b8d5f7', borderRadius: '7px', background: '#f4f8fe', fontWeight: '700', color: '#1769d7' }}
                   />

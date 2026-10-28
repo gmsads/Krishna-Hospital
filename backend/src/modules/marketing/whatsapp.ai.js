@@ -26,7 +26,7 @@ export async function getHospitalDatabaseContext() {
 KRISHNA HOSPITALS OFFICIAL DATABASE & SERVICE DIRECTORY:
 - Hospital Name: Krishna Hospitals (General & Multi-Specialty Hospital)
 - Main Branches: Guntur Branch, Vijayawada Branch
-- OPD Consultation Fee: ₹300 (Validity: 15 Days for free re-consultation)
+- OPD Consultation Fee: ₹200 (Validity: 15 Days for free re-consultation)
 - OPD Timings: Morning 09:00 AM - 01:00 PM | Evening 04:00 PM - 09:00 PM
 - Emergency & Ambulance Services: Available 24 Hours / 7 Days
 - Pathology Laboratory & Diagnostic Services: Available 24/7 (Blood Tests, HbA1c, Lipid Profile, Thyroid, Urine Analysis)

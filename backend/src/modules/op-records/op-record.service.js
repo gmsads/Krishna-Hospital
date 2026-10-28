@@ -15,7 +15,7 @@ export const createOPRecord = async (recordData) => {
   if (!regNoToUse || regNoToUse.length < 5 || regNoToUse.includes('OPD-')) {
     regNoToUse = await generateNextRegNo(branchToUse);
   }
-  const grossChargesVal = parseFloat(String(recordData.grossCharges || recordData.charges || '300').replace(/[^0-9.]/g, '')) || 300;
+  const grossChargesVal = parseFloat(String(recordData.grossCharges || recordData.charges || '200').replace(/[^0-9.]/g, '')) || 200;
   const discountVal = parseFloat(String(recordData.discount || '0').replace(/[^0-9.]/g, '')) || 0;
   const netVal = Math.max(0, grossChargesVal - discountVal);
   const collectedVal = parseFloat(String(recordData.paidAmount ?? recordData.amountPaid ?? netVal).replace(/[^0-9.]/g, '')) || 0;
