@@ -19,19 +19,19 @@ export function CreateOPRecordForm({
   const timeStr = now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
 
   const initialBranchName = effectiveBranch === 'All'
-    ? (branchesList[0]?.name || 'Main Campus')
+    ? (branchesList[0]?.name || '')
     : effectiveBranch;
 
   const [selectedBranch, setSelectedBranch] = useState(initialBranchName);
 
-  // Sync selectedBranch whenever effectiveBranch changes
+  // Sync selectedBranch whenever effectiveBranch or branchesList changes
   React.useEffect(() => {
     if (effectiveBranch !== 'All') {
       setSelectedBranch(effectiveBranch);
-    } else if (branchesList.length > 0 && !selectedBranch) {
+    } else if (branchesList.length > 0 && (!selectedBranch || selectedBranch === 'Main Campus' || !branchesList.some((b) => b.name === selectedBranch))) {
       setSelectedBranch(branchesList[0].name);
     }
-  }, [effectiveBranch, branchesList]);
+  }, [effectiveBranch, branchesList, selectedBranch]);
 
   // Streamlined Form State (16 Required Fields)
   const [recordType, setRecordType] = useState('OP'); // Options: OP, IP, Surgery, Emergency, Treatment
@@ -46,7 +46,14 @@ export function CreateOPRecordForm({
   const [dob, setDob] = useState('');
   const [address, setAddress] = useState('');
   const [phone, setPhone] = useState('');
-  const [availableDoctors, setAvailableDoctors] = useState(doctorsList);
+  const [availableDoctors, setAvailableDoctors] = useState(doctorsList || []);
+
+  // Sync availableDoctors whenever doctorsList prop changes
+  React.useEffect(() => {
+    if (Array.isArray(doctorsList) && doctorsList.length > 0) {
+      setAvailableDoctors((prev) => (prev.length === 0 ? doctorsList : prev));
+    }
+  }, [doctorsList]);
 
   // Auto-fetch sequential Registration Number starting from Reg-2026-0001 from backend
   React.useEffect(() => {
@@ -62,7 +69,7 @@ export function CreateOPRecordForm({
       })
       .catch((err) => console.warn('Could not fetch next regNo from backend:', err.message));
 
-    // Fetch doctors strictly for selected branch
+    // Fetch doctors for selected branch, falling back to all hospital doctors from DB
     const token = localStorage.getItem('kh_auth_token');
     const docBranchQuery = targetBranch && targetBranch !== 'All' ? `?branch=${encodeURIComponent(targetBranch)}` : '';
 
@@ -73,19 +80,46 @@ export function CreateOPRecordForm({
     })
       .then((res) => res.json())
       .then((data) => {
-        if (data.success && Array.isArray(data.data)) {
+        if (data.success && Array.isArray(data.data) && data.data.length > 0) {
           setAvailableDoctors(data.data);
-          if (data.data.length > 0) {
-            setDoctor(data.data[0].name);
-            if (data.data[0].department) {
-              setDepartment(data.data[0].department);
-            }
-          } else {
-            setDoctor('');
+          setDoctor((curr) => (!curr || curr === 'Dr. Meera Nair' || !data.data.some((d) => d.name === curr) ? data.data[0].name : curr));
+          if (data.data[0].department) {
+            setDepartment((curr) => (!curr || curr === 'General medicine' ? data.data[0].department : curr));
           }
+        } else {
+          // Fallback: Fetch all registered doctors from database if branch-specific query returned 0 doctors
+          fetch('/api/v1/doctors', {
+            headers: {
+              ...(token ? { 'Authorization': `Bearer ${token}` } : {}),
+            },
+          })
+            .then((r2) => r2.json())
+            .then((allData) => {
+              if (allData.success && Array.isArray(allData.data) && allData.data.length > 0) {
+                setAvailableDoctors(allData.data);
+                setDoctor((curr) => (!curr || curr === 'Dr. Meera Nair' || !allData.data.some((d) => d.name === curr) ? allData.data[0].name : curr));
+                if (allData.data[0].department) {
+                  setDepartment((curr) => (!curr || curr === 'General medicine' ? allData.data[0].department : curr));
+                }
+              } else if (Array.isArray(doctorsList) && doctorsList.length > 0) {
+                setAvailableDoctors(doctorsList);
+                setDoctor((curr) => (!curr || curr === 'Dr. Meera Nair' || !doctorsList.some((d) => d.name === curr) ? doctorsList[0].name : curr));
+              }
+            })
+            .catch(() => {
+              if (Array.isArray(doctorsList) && doctorsList.length > 0) {
+                setAvailableDoctors(doctorsList);
+              }
+            });
         }
       })
-      .catch((err) => console.warn('Could not fetch doctors from backend API:', err.message));
+      .catch((err) => {
+        console.warn('Could not fetch doctors from backend API:', err.message);
+        if (Array.isArray(doctorsList) && doctorsList.length > 0) {
+          setAvailableDoctors(doctorsList);
+          setDoctor((curr) => (!curr || curr === 'Dr. Meera Nair' ? doctorsList[0].name : curr));
+        }
+      });
   }, [selectedBranch, effectiveBranch]);
 
   // Clinical Vitals
@@ -99,7 +133,19 @@ export function CreateOPRecordForm({
 
   // Doctor, Referral, Charges & Discount
   const [department, setDepartment] = useState('General medicine');
-  const [doctor, setDoctor] = useState('Dr. Meera Nair');
+  const [doctor, setDoctor] = useState('');
+
+  // Keep doctor in sync with availableDoctors from database
+  React.useEffect(() => {
+    if (availableDoctors.length > 0) {
+      if (!doctor || doctor === 'Dr. Meera Nair' || !availableDoctors.some((d) => d.name === doctor)) {
+        setDoctor(availableDoctors[0].name);
+        if (availableDoctors[0].department) {
+          setDepartment(availableDoctors[0].department);
+        }
+      }
+    }
+  }, [availableDoctors, doctor]);
   const [referralDoctor, setReferralDoctor] = useState('');
   const [visitValidity, setVisitValidity] = useState('15'); // Default Visit Validity: 15 Days
   const [refCommPercent, setRefCommPercent] = useState('0');
@@ -803,7 +849,8 @@ export function CreateOPRecordForm({
                 onChange={(e) => {
                   const selectedName = e.target.value;
                   setDoctor(selectedName);
-                  const docObj = availableDoctors.find((d) => d.name === selectedName);
+                  const allDocs = availableDoctors.length > 0 ? availableDoctors : doctorsList;
+                  const docObj = allDocs.find((d) => d.name === selectedName);
                   if (docObj && docObj.department) {
                     setDepartment(docObj.department);
                   }
@@ -821,15 +868,19 @@ export function CreateOPRecordForm({
                     return db === tb || db.includes(tb) || tb.includes(db);
                   });
 
-                  if (strictBranchDocs.length > 0) {
-                    return strictBranchDocs.map((doc) => (
+                  const docsToDisplay = strictBranchDocs.length > 0 
+                    ? strictBranchDocs 
+                    : (availableDoctors.length > 0 ? availableDoctors : (doctorsList.length > 0 ? doctorsList : []));
+
+                  if (docsToDisplay.length > 0) {
+                    return docsToDisplay.map((doc) => (
                       <option key={doc.id || doc._id || doc.name} value={doc.name}>
                         {doc.name} ({doc.department || 'Specialist'})
                       </option>
                     ));
                   }
 
-                  return <option value="">No doctors registered for {targetBranch || 'this branch'}</option>;
+                  return <option value="">No doctors registered in database</option>;
                 })()}
               </select>
             </div>
