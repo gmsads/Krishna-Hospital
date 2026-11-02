@@ -90,6 +90,19 @@ const laboratorySchema = new mongoose.Schema(
       type: String,
       default: '',
     },
+    notes: {
+      type: String,
+      default: '',
+    },
+    result: {
+      type: String,
+      default: '',
+      trim: true,
+    },
+    testRows: {
+      type: mongoose.Schema.Types.Mixed,
+      default: [],
+    },
     results: {
       type: mongoose.Schema.Types.Mixed,
       default: {},
@@ -106,6 +119,10 @@ const laboratorySchema = new mongoose.Schema(
     createdBy: {
       type: String,
       default: 'Doctor',
+    },
+    assignedFrom: {
+      type: String,
+      default: '',
     },
     branch: {
       type: String,

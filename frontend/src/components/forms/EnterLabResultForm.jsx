@@ -50,13 +50,60 @@ const getInitialRowsForTest = (testName, masterServices = []) => {
   ];
 };
 
+// Helper to reliably restore and prefill existing test rows, sub-parameters and findings
+const resolveExistingRows = (testObj, activeTestName, services) => {
+  const candidateRows = (Array.isArray(testObj?.testRows) && testObj.testRows.length > 0)
+    ? testObj.testRows
+    : (Array.isArray(testObj?.results?.testRows) && testObj.results.testRows.length > 0)
+    ? testObj.results.testRows
+    : null;
+
+  const defaultRows = getInitialRowsForTest(activeTestName, services);
+  const resultStr = testObj?.result || testObj?.results?.summaryResult || testObj?.results?.result || '';
+
+  let parsedMap = {};
+  if (resultStr && typeof resultStr === 'string' && resultStr !== 'Pathology Report Available') {
+    const pairs = resultStr.split(',').map((s) => s.trim()).filter(Boolean);
+    pairs.forEach((p) => {
+      const parts = p.split(':');
+      if (parts.length >= 2) {
+        const k = parts[0].trim().toLowerCase();
+        const v = parts.slice(1).join(':').trim();
+        parsedMap[k] = v;
+      }
+    });
+  }
+
+  if (candidateRows && candidateRows.length > 0) {
+    return candidateRows.map((row) => {
+      if (row.result && String(row.result).trim().length > 0) return row;
+      const rowKey = (row.name || '').trim().toLowerCase();
+      const matchedVal = parsedMap[rowKey] || Object.entries(parsedMap).find(([k]) => rowKey.includes(k) || k.includes(rowKey))?.[1];
+      return matchedVal ? { ...row, result: matchedVal } : row;
+    });
+  }
+
+  if (Object.keys(parsedMap).length > 0) {
+    return defaultRows.map((r) => {
+      const rowKey = (r.name || '').trim().toLowerCase();
+      const matchedVal = parsedMap[rowKey] || Object.entries(parsedMap).find(([k]) => rowKey.includes(k) || k.includes(rowKey))?.[1];
+      return matchedVal ? { ...r, result: matchedVal } : r;
+    });
+  }
+
+  return defaultRows;
+};
+
 export function EnterLabResultForm({
   tests = [],
   opRecords = [],
+  patients = [],
   masterServices = [],
   initialSelectedTest = null,
   effectiveBranch = 'All',
   branchesList = [],
+  userRole = '',
+  userName = '',
   onSave,
   onCancel,
   notify,
@@ -64,7 +111,9 @@ export function EnterLabResultForm({
   const [selectedTestId, setSelectedTestId] = useState(initialSelectedTest?.id || '');
 
   // Patient & Doctor Form State (No hardcoded mock data)
-  const [opNumber, setOpNumber] = useState(initialSelectedTest?.opNumber || initialSelectedTest?.labOrderNo || 'LAB-0001');
+  const initialLabNo = initialSelectedTest?.labOrderNo || (initialSelectedTest?.id?.startsWith('LAB-') ? initialSelectedTest.id : '');
+  const [opNumber, setOpNumber] = useState(initialLabNo || initialSelectedTest?.opNumber || 'LAB-0001');
+  const [patientOpNumber, setPatientOpNumber] = useState(initialSelectedTest?.opNumber || '');
   const [patientName, setPatientName] = useState(initialSelectedTest?.patientName || initialSelectedTest?.patient || '');
   const [phone, setPhone] = useState(initialSelectedTest?.phone || '');
   const [availableDoctors, setAvailableDoctors] = useState([]);
@@ -120,10 +169,8 @@ export function EnterLabResultForm({
   const [testName, setTestName] = useState(initialMainTest);
 
   // Dynamic Multi-Row Sub-Parameter State (e.g. T1, T2, T3, T4, TSH)
-  const [testRows, setTestRows] = useState(
-    initialSelectedTest?.testRows && initialSelectedTest.testRows.length > 0
-      ? initialSelectedTest.testRows
-      : getInitialRowsForTest(initialMainTest, masterServices)
+  const [testRows, setTestRows] = useState(() =>
+    resolveExistingRows(initialSelectedTest, initialMainTest, masterServices)
   );
 
   const [notes, setNotes] = useState(initialSelectedTest?.notes || '');
@@ -314,13 +361,32 @@ export function EnterLabResultForm({
   // Sync state when editing an existing test
   React.useEffect(() => {
     if (initialSelectedTest) {
-      if (initialSelectedTest.opNumber || initialSelectedTest.labOrderNo) {
-        setOpNumber(initialSelectedTest.opNumber || initialSelectedTest.labOrderNo);
+      const resolvedLabNo = initialSelectedTest.labOrderNo || (initialSelectedTest.id?.startsWith('LAB-') ? initialSelectedTest.id : '');
+      if (resolvedLabNo || initialSelectedTest.opNumber) {
+        setOpNumber(resolvedLabNo || initialSelectedTest.opNumber);
+      }
+      if (initialSelectedTest.opNumber) {
+        setPatientOpNumber(initialSelectedTest.opNumber);
       }
       if (initialSelectedTest.patientName || initialSelectedTest.patient) {
         setPatientName(initialSelectedTest.patientName || initialSelectedTest.patient);
       }
-      if (initialSelectedTest.phone) setPhone(initialSelectedTest.phone);
+      
+      let ph = initialSelectedTest.phone || '';
+      if (!ph) {
+        const query = (initialSelectedTest.opNumber || initialSelectedTest.labOrderNo || initialSelectedTest.regNo || initialSelectedTest.id || '').toLowerCase();
+        const nameQuery = (initialSelectedTest.patientName || initialSelectedTest.patient || '').toLowerCase();
+        const found = opRecords.find(
+          (r) => (r.id && r.id.toLowerCase() === query) || (r.regNo && r.regNo.toLowerCase() === query) || (nameQuery && r.patient && r.patient.toLowerCase() === nameQuery)
+        ) || patients.find(
+          (p) => (p.id && p.id.toLowerCase() === query) || (nameQuery && p.name && p.name.toLowerCase() === nameQuery)
+        );
+        if (found && (found.phone || found.mobile || found.contact)) {
+          ph = found.phone || found.mobile || found.contact;
+        }
+      }
+      if (ph) setPhone(ph);
+
       if (initialSelectedTest.doctor || initialSelectedTest.orderingDoctor) {
         const d = initialSelectedTest.doctor || initialSelectedTest.orderingDoctor;
         setDoctor(d === 'Self Created / Walk-In' ? '' : d);
@@ -331,13 +397,11 @@ export function EnterLabResultForm({
       if (initialSelectedTest.test || initialSelectedTest.testName) {
         const tName = initialSelectedTest.test || initialSelectedTest.testName;
         setTestName(tName);
-        if (initialSelectedTest.testRows && initialSelectedTest.testRows.length > 0) {
-          setTestRows(initialSelectedTest.testRows);
-        } else {
-          setTestRows(getInitialRowsForTest(tName, masterServices));
-        }
+        setTestRows(resolveExistingRows(initialSelectedTest, tName, masterServices));
       }
-      if (initialSelectedTest.notes) setNotes(initialSelectedTest.notes);
+      if (initialSelectedTest.notes || initialSelectedTest.clinicalNotes) {
+        setNotes(initialSelectedTest.notes || initialSelectedTest.clinicalNotes);
+      }
       if (initialSelectedTest.discount != null) {
         setDiscount(initialSelectedTest.discount.toString());
       }
@@ -421,7 +485,7 @@ export function EnterLabResultForm({
     );
   };
 
-  // Auto-fill patient info if OP Number changes
+  // Auto-fill patient info if Lab Record Number / OP Number changes
   const handleOpNumberChange = (val) => {
     setOpNumber(val);
     const query = val.trim().toLowerCase();
@@ -430,14 +494,39 @@ export function EnterLabResultForm({
       return;
     }
 
-    const foundOp = opRecords.find((r) => r.id.toLowerCase() === query || (r.opNumber && r.opNumber.toLowerCase() === query));
-    if (foundOp) {
-      setPatientName(foundOp.patient);
-      if (foundOp.doctor && foundOp.doctor !== 'Unassigned') setDoctor(foundOp.doctor);
-      if (foundOp.phone) setPhone(foundOp.phone);
+    const foundOp = opRecords.find((r) => 
+      (r.id && r.id.toLowerCase() === query) || 
+      (r.regNo && r.regNo.toLowerCase() === query) || 
+      (r.opNumber && r.opNumber.toLowerCase() === query) || 
+      (r.patient && r.patient.toLowerCase().includes(query))
+    );
+    const foundPat = patients.find((p) => 
+      (p.id && p.id.toLowerCase() === query) || 
+      (p.name && p.name.toLowerCase().includes(query))
+    );
+    const found = foundOp || foundPat;
+    if (found) {
+      if (found.patient || found.name) setPatientName(found.patient || found.name);
+      if (found.doctor && found.doctor !== 'Unassigned') setDoctor(found.doctor);
+      const ph = found.phone || found.mobile || found.contact || '';
+      if (ph) setPhone(ph);
+      if (found.regNo || found.id || found.opNumber) setPatientOpNumber(found.regNo || found.id || found.opNumber);
       setAutoFetchSuccess(true);
     } else {
-      setAutoFetchSuccess(false);
+      const matchedTest = tests.find((t) => 
+        (t.labOrderNo && t.labOrderNo.toLowerCase() === query) || 
+        (t.id && t.id.toLowerCase() === query) || 
+        (t.opNumber && t.opNumber.toLowerCase() === query)
+      );
+      if (matchedTest) {
+        if (matchedTest.patientName || matchedTest.patient) setPatientName(matchedTest.patientName || matchedTest.patient);
+        if (matchedTest.phone) setPhone(matchedTest.phone);
+        if (matchedTest.doctor && matchedTest.doctor !== 'Self Created / Walk-In') setDoctor(matchedTest.doctor);
+        if (matchedTest.opNumber) setPatientOpNumber(matchedTest.opNumber);
+        setAutoFetchSuccess(true);
+      } else {
+        setAutoFetchSuccess(false);
+      }
     }
   };
 
@@ -479,18 +568,41 @@ export function EnterLabResultForm({
 
     // Format main result summary string for cards
     const summaryResult = testRows
+      .filter((r) => r.name && r.result && String(r.result).trim().length > 0)
       .map((r) => `${r.name}: ${r.result}`)
-      .filter(Boolean)
       .join(', ');
 
+    const existingResult = initialSelectedTest?.result || initialSelectedTest?.results?.summaryResult || '';
+    const resolvedResultValue = summaryResult || existingResult || (status === 'Result ready' ? 'Pathology Report Available' : status);
+
     const targetBranch = effectiveBranch === 'All' ? (branchesList[0]?.name || 'Central Campus') : effectiveBranch;
-    const assignedDoctor = doctor.trim() || 'Self Created / Walk-In';
-    const isSelfCreated = !doctor.trim() || doctor.trim() === 'Self Created / Walk-In';
+    const resolvedLabNo = initialSelectedTest?.labOrderNo || (opNumber.trim().startsWith('LAB-') ? opNumber.trim() : (initialSelectedTest?.id?.startsWith('LAB-') ? initialSelectedTest.id : opNumber.trim()));
+    const resolvedOpNo = patientOpNumber || initialSelectedTest?.opNumber || (!opNumber.trim().startsWith('LAB-') ? opNumber.trim() : '');
+
+    const existingTest = initialSelectedTest || tests.find((t) =>
+      (t._id && (t._id === opNumber.trim() || t._id === initialSelectedTest?._id)) ||
+      (t.labOrderNo && (t.labOrderNo.toLowerCase() === opNumber.trim().toLowerCase() || (resolvedLabNo && t.labOrderNo.toLowerCase() === resolvedLabNo.toLowerCase()))) ||
+      (t.id && (t.id.toLowerCase() === opNumber.trim().toLowerCase() || (resolvedLabNo && t.id.toLowerCase() === resolvedLabNo.toLowerCase())))
+    );
+
+    const existingCreator = existingTest?.createdBy || initialSelectedTest?.createdBy;
+    const existingFrom = existingTest?.assignedFrom || initialSelectedTest?.assignedFrom;
+    const isHospitalCreator = ['Admin', 'Super Admin', 'Front Desk', 'Hospital'].some((r) => (existingCreator || userRole || '').toLowerCase().includes(r.toLowerCase()));
+
+    const finalCreatedBy = existingCreator || (isHospitalCreator ? (userRole || 'Admin') : (doctor.trim() ? 'Doctor' : 'Lab Assistant'));
+    const finalAssignedFrom = existingFrom || (isHospitalCreator ? 'Hospital' : (doctor.trim() ? 'Doctor' : 'Lab'));
+    const isSelfCreated = !isHospitalCreator && (!doctor.trim() || doctor.trim() === 'Self Created / Walk-In');
+
+    let assignedDoctor = doctor.trim();
+    if (!assignedDoctor) {
+      assignedDoctor = isHospitalCreator ? 'Hospital Staff' : 'Self Created / Walk-In';
+    }
 
     const payload = {
-      id: initialSelectedTest?.id || initialSelectedTest?._id || opNumber.trim(),
-      labOrderNo: opNumber.trim(),
-      opNumber: opNumber.trim(),
+      id: existingTest?._id || existingTest?.id || resolvedLabNo || opNumber.trim(),
+      _id: existingTest?._id,
+      labOrderNo: resolvedLabNo || opNumber.trim(),
+      opNumber: resolvedOpNo || resolvedLabNo || opNumber.trim(),
       patient: patientName.trim(),
       patientName: patientName.trim(),
       phone: phone.trim(),
@@ -513,20 +625,32 @@ export function EnterLabResultForm({
       upiTxnId: selectedMethods.UPI ? upiTxnId : '',
       upiHandle: selectedMethods.UPI ? selectedUpiHandle : '',
       splitBreakdown,
-      result: summaryResult || (status === 'Result ready' ? 'Pathology Report Available' : status),
+      result: resolvedResultValue,
       testRows,
+      results: {
+        testRows,
+        summaryResult: resolvedResultValue,
+      },
       status: status || 'Result ready',
+      clinicalNotes: notes.trim(),
       notes: notes.trim(),
-      requested: initialSelectedTest?.requested || 'Today, just now',
-      branch: targetBranch,
-      createdBy: isSelfCreated ? 'Lab Assistant' : (initialSelectedTest?.createdBy || 'Doctor'),
+      requested: existingTest?.requested || initialSelectedTest?.requested || 'Today, just now',
+      branch: existingTest?.branch || targetBranch,
+      createdBy: finalCreatedBy,
+      assignedFrom: finalAssignedFrom,
       isSelfCreated,
     };
 
     const token = localStorage.getItem('kh_auth_token');
+    const isExisting = Boolean(existingTest);
+    const targetUrl = isExisting 
+      ? `/api/v1/laboratory/${encodeURIComponent(existingTest._id || existingTest.labOrderNo || existingTest.id || resolvedLabNo)}` 
+      : '/api/v1/laboratory';
+    const method = isExisting ? 'PUT' : 'POST';
+
     try {
-      const res = await fetch('/api/v1/laboratory', {
-        method: 'POST',
+      const res = await fetch(targetUrl, {
+        method,
         headers: {
           'Content-Type': 'application/json',
           ...(token ? { 'Authorization': `Bearer ${token}` } : {}),
@@ -537,10 +661,18 @@ export function EnterLabResultForm({
       const data = await res.json();
       if (res.ok && data.success && data.data) {
         const savedRecord = {
+          ...payload,
           ...data.data,
           id: data.data.labOrderNo || data.data._id || payload.id,
+          labOrderNo: data.data.labOrderNo || payload.labOrderNo,
+          _id: data.data._id || payload._id,
           patient: data.data.patientName || payload.patient,
           test: data.data.testName || payload.test,
+          result: payload.result,
+          testRows: payload.testRows,
+          results: payload.results,
+          status: payload.status,
+          notes: payload.notes,
           isSelfCreated,
         };
         onSave(savedRecord);
@@ -639,6 +771,7 @@ export function EnterLabResultForm({
                 style={{ padding: '9px 10px', border: '1px solid #dde7f1', borderRadius: '7px', background: '#fff', fontSize: '12px', width: '100%', boxSizing: 'border-box' }}
               >
                 <option value="Result ready">Result ready</option>
+                <option value="Completed">Completed</option>
                 <option value="Processing">Processing</option>
                 <option value="Sample collected">Sample collected</option>
                 <option value="Awaiting sample">Awaiting sample</option>
@@ -810,104 +943,100 @@ export function EnterLabResultForm({
             </div>
           </div>
 
-          {/* DYNAMIC MULTI-ROW SUB-PARAMETER BUILDER (T1, T2, T3, T4, TSH, Hb, etc.) - ONLY VISIBLE WHEN STATUS IS 'Result ready' */}
-          {status === 'Result ready' ? (
-            <div style={{ background: '#f4f8fe', padding: '18px', borderRadius: '10px', border: '1px solid #d4e4f7', display: 'grid', gap: '14px', width: '100%', boxSizing: 'border-box' }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '10px', borderBottom: '1px solid #d3e2f5', paddingBottom: '10px' }}>
-                <div>
-                  <strong style={{ fontSize: '13px', color: '#1769d7' }}>
-                    Sub-Test Parameters & Readings ({testRows.length})
-                  </strong>
-                  <span style={{ fontSize: '11px', color: '#576c85', display: 'block' }}>
-                    Add sub-fields (e.g. T1, T2, T3, T4, TSH) with measured results and normal reference ranges.
-                  </span>
-                </div>
-                <button
-                  type="button"
-                  className="secondary-button"
-                  style={{ background: '#fff', border: '1px solid #1769d7', color: '#1769d7', fontWeight: '700', padding: '6px 14px', fontSize: '12px' }}
-                  onClick={handleAddRow}
+          {/* DYNAMIC MULTI-ROW SUB-PARAMETER BUILDER (T1, T2, T3, T4, TSH, Hb, etc.) - ALWAYS VISIBLE SO FINDINGS ARE NEVER HIDDEN */}
+          <div style={{ background: '#f4f8fe', padding: '18px', borderRadius: '10px', border: '1px solid #d4e4f7', display: 'grid', gap: '14px', width: '100%', boxSizing: 'border-box' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '10px', borderBottom: '1px solid #d3e2f5', paddingBottom: '10px' }}>
+              <div>
+                <strong style={{ fontSize: '13px', color: '#1769d7' }}>
+                  Sub-Test Parameters & Readings ({testRows.length})
+                </strong>
+                <span style={{ fontSize: '11px', color: '#576c85', display: 'block' }}>
+                  {status === 'Result ready' || status === 'Completed'
+                    ? 'Measured diagnostic results and normal reference ranges (Report finalized).'
+                    : `Current Status: "${status}". Measured results and reference ranges are preserved and editable anytime.`}
+                </span>
+              </div>
+              <button
+                type="button"
+                className="secondary-button"
+                style={{ background: '#fff', border: '1px solid #1769d7', color: '#1769d7', fontWeight: '700', padding: '6px 14px', fontSize: '12px' }}
+                onClick={handleAddRow}
+              >
+                <Plus size={15} />Add
+              </button>
+            </div>
+
+            {/* Sub-Parameter Rows List */}
+            <div style={{ display: 'grid', gap: '12px', width: '100%', boxSizing: 'border-box' }}>
+              {testRows.map((row, index) => (
+                <div
+                  key={row.id || index}
+                  className="form-row"
+                  style={{
+                    display: 'grid',
+                    gridTemplateColumns: '1.2fr 1fr 1fr auto',
+                    gap: '10px',
+                    alignItems: 'center',
+                    background: '#fff',
+                    padding: '12px',
+                    borderRadius: '8px',
+                    border: '1px solid #e1eaf4',
+                    width: '100%',
+                    boxSizing: 'border-box',
+                  }}
                 >
-                  <Plus size={15} />Add
-                </button>
-              </div>
-
-              {/* Sub-Parameter Rows List */}
-              <div style={{ display: 'grid', gap: '12px', width: '100%', boxSizing: 'border-box' }}>
-                {testRows.map((row, index) => (
-                  <div
-                    key={row.id || index}
-                    className="form-row"
-                    style={{
-                      display: 'grid',
-                      gridTemplateColumns: '1.2fr 1fr 1fr auto',
-                      gap: '10px',
-                      alignItems: 'center',
-                      background: '#fff',
-                      padding: '12px',
-                      borderRadius: '8px',
-                      border: '1px solid #e1eaf4',
-                      width: '100%',
-                      boxSizing: 'border-box',
-                    }}
-                  >
-                    {/* 1. Sub-Test / Parameter Name */}
-                    <div className="field">
-                      <span style={{ fontSize: '10px', fontWeight: '700', color: '#576c85' }}>Sub-Parameter Name *</span>
-                      <input
-                        value={row.name}
-                        onChange={(e) => handleRowChange(index, 'name', e.target.value)}
-                        placeholder="e.g. T3, T4, TSH, Hb"
-                        required
-                        style={{ padding: '8px 10px', fontSize: '12px', borderRadius: '6px', border: '1px solid #dde7f1' }}
-                      />
-                    </div>
-
-                    {/* 2. Measured Result */}
-                    <div className="field">
-                      <span style={{ fontSize: '10px', fontWeight: '700', color: '#1769d7' }}>Result *</span>
-                      <input
-                        value={row.result}
-                        onChange={(e) => handleRowChange(index, 'result', e.target.value)}
-                        placeholder="e.g. 1.2 ng/mL"
-                        required
-                        style={{ padding: '8px 10px', fontSize: '12px', borderRadius: '6px', border: '1px solid #b8d5f7', fontWeight: '700', color: '#1769d7' }}
-                      />
-                    </div>
-
-                    {/* 3. Normal Range */}
-                    <div className="field">
-                      <span style={{ fontSize: '10px', fontWeight: '700', color: '#576c85' }}>Normal Range *</span>
-                      <input
-                        value={row.normalRange}
-                        onChange={(e) => handleRowChange(index, 'normalRange', e.target.value)}
-                        placeholder="e.g. 0.8 - 2.0 ng/mL"
-                        required
-                        style={{ padding: '8px 10px', fontSize: '12px', borderRadius: '6px', border: '1px solid #dde7f1' }}
-                      />
-                    </div>
-
-                    {/* Remove Row Button */}
-                    <div style={{ display: 'flex', alignItems: 'flex-end', paddingTop: '16px' }}>
-                      <button
-                        type="button"
-                        className="icon-button"
-                        style={{ width: '32px', height: '32px', padding: 0 }}
-                        onClick={() => handleRemoveRow(index)}
-                        title="Remove Sub-Parameter Row"
-                      >
-                        <Trash2 size={15} color="#dc2626" />
-                      </button>
-                    </div>
+                  {/* 1. Sub-Test / Parameter Name */}
+                  <div className="field">
+                    <span style={{ fontSize: '10px', fontWeight: '700', color: '#576c85' }}>Sub-Parameter Name *</span>
+                    <input
+                      value={row.name}
+                      onChange={(e) => handleRowChange(index, 'name', e.target.value)}
+                      placeholder="e.g. T3, T4, TSH, Hb"
+                      required
+                      style={{ padding: '8px 10px', fontSize: '12px', borderRadius: '6px', border: '1px solid #dde7f1' }}
+                    />
                   </div>
-                ))}
-              </div>
+
+                  {/* 2. Measured Result */}
+                  <div className="field">
+                    <span style={{ fontSize: '10px', fontWeight: '700', color: '#1769d7' }}>Result *</span>
+                    <input
+                      value={row.result}
+                      onChange={(e) => handleRowChange(index, 'result', e.target.value)}
+                      placeholder="e.g. 1.2 ng/mL"
+                      required
+                      style={{ padding: '8px 10px', fontSize: '12px', borderRadius: '6px', border: '1px solid #b8d5f7', fontWeight: '700', color: '#1769d7' }}
+                    />
+                  </div>
+
+                  {/* 3. Normal Range */}
+                  <div className="field">
+                    <span style={{ fontSize: '10px', fontWeight: '700', color: '#576c85' }}>Normal Range *</span>
+                    <input
+                      value={row.normalRange}
+                      onChange={(e) => handleRowChange(index, 'normalRange', e.target.value)}
+                      placeholder="e.g. 0.8 - 2.0 ng/mL"
+                      required
+                      style={{ padding: '8px 10px', fontSize: '12px', borderRadius: '6px', border: '1px solid #dde7f1' }}
+                    />
+                  </div>
+
+                  {/* Remove Row Button */}
+                  <div style={{ display: 'flex', alignItems: 'flex-end', paddingTop: '16px' }}>
+                    <button
+                      type="button"
+                      className="icon-button"
+                      style={{ width: '32px', height: '32px', padding: 0 }}
+                      onClick={() => handleRemoveRow(index)}
+                      title="Remove Sub-Parameter Row"
+                    >
+                      <Trash2 size={15} color="#dc2626" />
+                    </button>
+                  </div>
+                </div>
+              ))}
             </div>
-          ) : (
-            <div style={{ background: '#fff8e6', padding: '14px', borderRadius: '10px', border: '1px solid #ffe0b2', color: '#b45309', fontSize: '12px', fontWeight: '600', display: 'flex', alignItems: 'center', gap: '8px' }}>
-              <span>ℹ️ Status is currently <strong>"{status}"</strong>. Parameter result readings can be entered once status is updated to <strong>"Result ready"</strong>.</span>
-            </div>
-          )}
+          </div>
 
           {/* Pathology Remarks & Notes */}
           <div className="field">

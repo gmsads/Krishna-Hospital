@@ -142,7 +142,13 @@ export function PatientHistoryPage({
           <button
             className="primary-button"
             type="button"
-            onClick={() => onRequestLabTest && onRequestLabTest({ name: patientName, opNumber: historyList[0]?.opNumber })}
+            onClick={() => onRequestLabTest && onRequestLabTest({
+              name: patientName,
+              patient: patientName,
+              opNumber: historyList[0]?.opNumber || patient?.id || patient?.regNo,
+              phone: patient?.phone || historyList[0]?.phone || '',
+              doctor: patient?.doctor || historyList[0]?.doctor || '',
+            })}
           >
             <FlaskConical size={16} /> Request Lab Test
           </button>

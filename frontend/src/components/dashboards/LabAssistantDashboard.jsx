@@ -10,6 +10,9 @@ import {
   Filter,
   Printer,
   FileText,
+  Building2,
+  Edit2,
+  Trash2,
 } from 'lucide-react';
 import { StatCard } from '../common/StatCard';
 import { TimeFilterBar } from '../common/TimeFilterBar';
@@ -26,17 +29,54 @@ function QuickAction({ icon, label, color, onClick }) {
   );
 }
 
-export function LabAssistantDashboard({ profile, onNavigate, onEnterResult, labTests = initialLabTests, notify }) {
+export function LabAssistantDashboard({ profile, onNavigate, onEnterResult, onDeleteLabOrder, labTests = initialLabTests, notify }) {
   const firstName = profile.full_name.split(' ')[0];
   const [filterState, setFilterState] = useState({ filterMode: 'all' });
   const [activeSourceTab, setActiveSourceTab] = useState('All'); // 'All', 'Doctor Assigned', 'Self Created'
   const [activePdfModalTest, setActivePdfModalTest] = useState(null);
 
+  const handleDeleteTest = (test) => {
+    if (onDeleteLabOrder) {
+      onDeleteLabOrder(test);
+    } else {
+      const targetId = test._id || test.labOrderNo || test.id;
+      const patientName = test.patient || test.patientName || 'patient';
+      const label = test.labOrderNo || test.id || 'lab order';
+      if (window.confirm(`Are you sure you want to delete lab record ${label} for ${patientName}?`)) {
+        const token = localStorage.getItem('kh_auth_token');
+        if (targetId) {
+          fetch(`/api/v1/laboratory/${encodeURIComponent(targetId)}`, {
+            method: 'DELETE',
+            headers: {
+              ...(token ? { Authorization: `Bearer ${token}` } : {}),
+            },
+          }).catch((err) => console.warn('Backend lab delete warning:', err.message));
+        }
+        notify && notify(`Lab record ${label} deleted`);
+      }
+    }
+  };
+
   let multiplier = 1;
   if (filterState.filterMode === 'monthly') multiplier = 24;
   if (filterState.filterMode === 'yearly') multiplier = 280;
 
+  const isHospitalAssigned = (t) => {
+    const creator = (t.createdBy || '').toLowerCase();
+    const from = (t.assignedFrom || '').toLowerCase();
+    const doc = (t.doctor || t.orderingDoctor || '').toLowerCase();
+    return (
+      creator.includes('admin') ||
+      creator.includes('front desk') ||
+      creator.includes('frontdesk') ||
+      creator.includes('hospital') ||
+      from.includes('hospital') ||
+      doc.includes('hospital')
+    );
+  };
+
   const isDoctorPrescribed = (t) => {
+    if (isHospitalAssigned(t)) return false;
     const doc = (t.doctor || t.orderingDoctor || '').trim();
     const lowerDoc = doc.toLowerCase();
     if (!doc || lowerDoc.includes('self') || lowerDoc.includes('unassigned') || lowerDoc.includes('walk-in') || lowerDoc.includes('walkin') || lowerDoc.includes('lab assistant')) {
@@ -46,17 +86,17 @@ export function LabAssistantDashboard({ profile, onNavigate, onEnterResult, labT
   };
 
   const filteredTests = labTests.filter((t) => {
-    if (activeSourceTab === 'Doctor Assigned') return isDoctorPrescribed(t);
-    if (activeSourceTab === 'Self Created') return !isDoctorPrescribed(t);
+    if (activeSourceTab === 'Doctor Assigned') return isDoctorPrescribed(t) || isHospitalAssigned(t);
+    if (activeSourceTab === 'Self Created') return !isDoctorPrescribed(t) && !isHospitalAssigned(t);
     return true;
   });
 
-  const doctorAssignedCount = labTests.filter((t) => isDoctorPrescribed(t) && t.status !== 'Completed' && t.status !== 'Result ready').length * multiplier;
+  const doctorAssignedCount = labTests.filter((t) => (isDoctorPrescribed(t) || isHospitalAssigned(t)) && t.status !== 'Completed' && t.status !== 'Result ready').length * multiplier;
   const samplesCollectedCount = labTests.filter((t) => t.status === 'Sample Collected' || t.status === 'In Progress').length * multiplier;
   const readyCount = labTests.filter((t) => t.status === 'Completed' || t.status === 'Result ready').length * multiplier;
 
   const stats = [
-    { label: 'Doctor assigned lab requests', value: doctorAssignedCount.toString(), change: 'Doctor Assigned', trend: 'down', detail: 'Awaiting sample / result', icon: <FlaskConical />, tone: 'amber', onClick: () => onNavigate('Laboratory') },
+    { label: 'Hospital & Doctor assigned requests', value: doctorAssignedCount.toString(), change: 'Hospital / Doctor', trend: 'down', detail: 'Awaiting sample / result', icon: <FlaskConical />, tone: 'amber', onClick: () => onNavigate('Laboratory') },
     { label: 'Samples collected', value: samplesCollectedCount.toString(), change: `${samplesCollectedCount}`, trend: 'up', detail: 'Processing in lab', icon: <Activity />, tone: 'teal', onClick: () => onNavigate('Laboratory') },
     { label: 'Results completed', value: readyCount.toString(), change: `${readyCount}`, trend: 'up', detail: 'Ready for review', icon: <ClipboardList />, tone: 'blue', onClick: () => onNavigate('Laboratory') },
   ];
@@ -128,7 +168,7 @@ export function LabAssistantDashboard({ profile, onNavigate, onEnterResult, labT
                   boxShadow: activeSourceTab === 'Doctor Assigned' ? '0 1px 3px rgba(0,0,0,0.1)' : 'none',
                 }}
               >
-                🩺 Doctor Prescribed ({labTests.filter((t) => isDoctorPrescribed(t)).length})
+                🩺 Doctor & Hospital Prescribed ({labTests.filter((t) => isDoctorPrescribed(t) || isHospitalAssigned(t)).length})
               </button>
               <button
                 className="secondary-button"
@@ -144,13 +184,14 @@ export function LabAssistantDashboard({ profile, onNavigate, onEnterResult, labT
                   boxShadow: activeSourceTab === 'Self Created' ? '0 1px 3px rgba(0,0,0,0.1)' : 'none',
                 }}
               >
-                🔬 Self Created ({labTests.filter((t) => !isDoctorPrescribed(t)).length})
+                🔬 Self Created ({labTests.filter((t) => !isDoctorPrescribed(t) && !isHospitalAssigned(t)).length})
               </button>
             </div>
           </div>
 
           <div className="lab-cards" style={{ marginTop: '16px', display: 'grid', gap: '12px' }}>
             {filteredTests.map((test, idx) => {
+              const hasHospitalAssigned = isHospitalAssigned(test);
               const hasDocPrescriber = isDoctorPrescribed(test);
 
               return (
@@ -167,24 +208,53 @@ export function LabAssistantDashboard({ profile, onNavigate, onEnterResult, labT
                   </div>
                   
                   <div className="lab-card-main">
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
                       <strong style={{ fontSize: '14px', color: '#162d4a' }}>{test.test}</strong>
                       
                       {/* Source Tag Badge */}
-                      <span
-                        style={{
-                          fontSize: '10px',
-                          padding: '1px 7px',
-                          borderRadius: '10px',
-                          fontWeight: '800',
-                          background: hasDocPrescriber ? '#f0f6fe' : '#f0fdf4',
-                          color: hasDocPrescriber ? '#1769d7' : '#15803d',
-                          border: '1px solid',
-                          borderColor: hasDocPrescriber ? '#b8d5f7' : '#bbf7d0',
-                        }}
-                      >
-                        {hasDocPrescriber ? '🩺 Doctor Prescribed' : '🔬 Self Created'}
-                      </span>
+                      {hasHospitalAssigned ? (
+                        <span
+                          style={{
+                            fontSize: '10px',
+                            padding: '1px 7px',
+                            borderRadius: '10px',
+                            fontWeight: '800',
+                            background: '#fef3c7',
+                            color: '#b45309',
+                            border: '1px solid #fde68a',
+                          }}
+                        >
+                          🏥 From Hospital
+                        </span>
+                      ) : hasDocPrescriber ? (
+                        <span
+                          style={{
+                            fontSize: '10px',
+                            padding: '1px 7px',
+                            borderRadius: '10px',
+                            fontWeight: '800',
+                            background: '#f0f6fe',
+                            color: '#1769d7',
+                            border: '1px solid #b8d5f7',
+                          }}
+                        >
+                          🩺 Doctor Prescribed
+                        </span>
+                      ) : (
+                        <span
+                          style={{
+                            fontSize: '10px',
+                            padding: '1px 7px',
+                            borderRadius: '10px',
+                            fontWeight: '800',
+                            background: '#f0fdf4',
+                            color: '#15803d',
+                            border: '1px solid #bbf7d0',
+                          }}
+                        >
+                          🔬 Self Created
+                        </span>
+                      )}
 
                       {test.priority === 'Urgent / Stat' && (
                         <span style={{ fontSize: '10px', background: '#fef2f2', color: '#dc2626', border: '1px solid #fecaca', padding: '1px 6px', borderRadius: '10px', fontWeight: '800' }}>
@@ -197,8 +267,31 @@ export function LabAssistantDashboard({ profile, onNavigate, onEnterResult, labT
                       Patient: <strong>{test.patient}</strong> {test.opNumber ? `(${test.opNumber})` : ''}
                     </span>
 
-                    <span style={{ fontSize: '11px', color: hasDocPrescriber ? '#1769d7' : '#15803d', fontWeight: '700', display: 'inline-flex', alignItems: 'center', gap: '4px', marginTop: '3px' }}>
-                      <Stethoscope size={12} /> {hasDocPrescriber ? `Assigned Doctor: ${test.doctor || test.orderingDoctor}` : 'Created by: Self / Walk-in (Lab Assistant)'}
+                    <span
+                      style={{
+                        fontSize: '11px',
+                        color: hasHospitalAssigned ? '#b45309' : hasDocPrescriber ? '#1769d7' : '#15803d',
+                        fontWeight: '700',
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        gap: '4px',
+                        marginTop: '3px',
+                      }}
+                    >
+                      {hasHospitalAssigned ? (
+                        <>
+                          <Building2 size={12} /> Assigned from: Hospital ({test.createdBy || 'Admin / Front Desk'})
+                          {test.doctor && !test.doctor.toLowerCase().includes('self') && !test.doctor.toLowerCase().includes('walk') && !test.doctor.toLowerCase().includes('hospital') ? ` • Dr. ${test.doctor.replace(/^Dr\.\s*/i, '')}` : ''}
+                        </>
+                      ) : hasDocPrescriber ? (
+                        <>
+                          <Stethoscope size={12} /> Assigned Doctor: {test.doctor || test.orderingDoctor}
+                        </>
+                      ) : (
+                        <>
+                          Created by: Self / Walk-in (Lab Assistant)
+                        </>
+                      )}
                     </span>
 
                   {test.notes && (
@@ -221,7 +314,7 @@ export function LabAssistantDashboard({ profile, onNavigate, onEnterResult, labT
                   </b>
                 </div>
 
-                  <div style={{ display: 'flex', gap: '6px' }}>
+                  <div style={{ display: 'flex', gap: '6px', alignItems: 'center' }}>
                     {test.status === 'Result ready' ? (
                       <button
                         className="primary-button"
@@ -232,8 +325,22 @@ export function LabAssistantDashboard({ profile, onNavigate, onEnterResult, labT
                       </button>
                     ) : null}
 
-                    <button className="secondary-button" style={{ padding: '6px 12px', fontSize: '11px', gap: '4px' }} onClick={() => onEnterResult(test)}>
-                      <Plus size={14} /> {test.result ? 'Edit result' : 'Enter result'}
+                    <button
+                      className="secondary-button"
+                      style={{ padding: '6px 12px', fontSize: '11px', gap: '4px', color: '#1769d7', borderColor: '#b8d5f7', background: '#f4f8fe', fontWeight: '700' }}
+                      onClick={() => onEnterResult(test)}
+                      title="Edit this lab test record and clinical findings"
+                    >
+                      <Edit2 size={13} /> {test.result || test.status === 'Result ready' ? 'Edit' : 'Enter Result'}
+                    </button>
+
+                    <button
+                      className="icon-button"
+                      style={{ width: '32px', height: '32px', padding: 0, border: '1px solid #fecaca', background: '#fef2f2', borderRadius: '6px', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' }}
+                      onClick={() => handleDeleteTest(test)}
+                      title="Delete Lab Record"
+                    >
+                      <Trash2 size={14} color="#dc2626" />
                     </button>
                   </div>
                 </div>

@@ -1,13 +1,35 @@
 import React, { useState, useMemo } from 'react';
-import { Activity, ChevronDown, ClipboardList, FlaskConical, Plus, X, CheckCircle2, Stethoscope, Printer, FileText, Download, WalletCards, CreditCard } from 'lucide-react';
+import { Activity, ChevronDown, ClipboardList, FlaskConical, Plus, X, CheckCircle2, Stethoscope, Printer, FileText, Download, WalletCards, CreditCard, Edit2, Trash2 } from 'lucide-react';
 import { initialLabTests } from '../data/initialData';
 import { PathologyLabReportPDFModal } from '../modals/PathologyLabReportPDFModal';
 import { HospitalInvoiceModal } from '../modals/HospitalInvoiceModal';
 
-export function LaboratoryPage({ tests = initialLabTests, isDoctor = false, doctorName = '', branding = null, onEnterResult, onUpdateLabOrder, onNotify }) {
+export function LaboratoryPage({ tests = initialLabTests, isDoctor = false, doctorName = '', branding = null, onEnterResult, onUpdateLabOrder, onDeleteLabOrder, onNotify }) {
   const [activeModalTest, setActiveModalTest] = useState(null);
   const [activeInvoiceRecord, setActiveInvoiceRecord] = useState(null);
   const [activeSourceTab, setActiveSourceTab] = useState('All'); // 'All', 'Doctor Assigned', 'Self Created'
+
+  const handleDeleteTest = (test) => {
+    if (onDeleteLabOrder) {
+      onDeleteLabOrder(test);
+    } else {
+      const targetId = test._id || test.labOrderNo || test.id;
+      const patientName = test.patient || test.patientName || 'patient';
+      const label = test.labOrderNo || test.id || 'lab order';
+      if (window.confirm(`Are you sure you want to delete lab record ${label} for ${patientName}?`)) {
+        const token = localStorage.getItem('kh_auth_token');
+        if (targetId) {
+          fetch(`/api/v1/laboratory/${encodeURIComponent(targetId)}`, {
+            method: 'DELETE',
+            headers: {
+              ...(token ? { Authorization: `Bearer ${token}` } : {}),
+            },
+          }).catch((err) => console.warn('Backend lab delete warning:', err.message));
+        }
+        onNotify && onNotify(`Lab record ${label} deleted`);
+      }
+    }
+  };
 
   // Lab Payment Settlement Modal State (Multi-Select & Split Collections)
   const [paymentModalTest, setPaymentModalTest] = useState(null);
@@ -121,8 +143,23 @@ export function LaboratoryPage({ tests = initialLabTests, isDoctor = false, doct
 
   const settlementSummaryStr = isSettlementFree ? 'Free / Complimentary' : settlementSummaryParts.join(' + ');
 
+  const isHospitalAssigned = (t) => {
+    const creator = (t.createdBy || '').toLowerCase();
+    const from = (t.assignedFrom || '').toLowerCase();
+    const doc = (t.doctor || t.orderingDoctor || '').toLowerCase();
+    return (
+      creator.includes('admin') ||
+      creator.includes('front desk') ||
+      creator.includes('frontdesk') ||
+      creator.includes('hospital') ||
+      from.includes('hospital') ||
+      doc.includes('hospital')
+    );
+  };
+
   // Helper to reliably check if a test was prescribed by a Doctor vs created manually by Lab Assistant
   const isDoctorPrescribed = (t) => {
+    if (isHospitalAssigned(t)) return false;
     const doc = (t.doctor || t.orderingDoctor || '').trim();
     const lowerDoc = doc.toLowerCase();
     if (!doc || lowerDoc.includes('self') || lowerDoc.includes('unassigned') || lowerDoc.includes('walk-in') || lowerDoc.includes('walkin') || lowerDoc.includes('lab assistant')) {
@@ -143,9 +180,9 @@ export function LaboratoryPage({ tests = initialLabTests, isDoctor = false, doct
     }
 
     if (activeSourceTab === 'Hospital Records') {
-      list = list.filter((t) => isDoctorPrescribed(t));
+      list = list.filter((t) => isDoctorPrescribed(t) || isHospitalAssigned(t));
     } else if (activeSourceTab === 'Self Created') {
-      list = list.filter((t) => !isDoctorPrescribed(t));
+      list = list.filter((t) => !isDoctorPrescribed(t) && !isHospitalAssigned(t));
     }
 
     return list;
@@ -259,19 +296,20 @@ export function LaboratoryPage({ tests = initialLabTests, isDoctor = false, doct
                       <strong style={{ fontSize: '14px', color: '#162d4a' }}>{test.test}</strong>
 
                       {/* Source Tag Badge */}
-                      {hasDocPrescriber ? (
+                      {hasDocPrescriber || isHospitalAssigned(test) ? (
                         <span
                           style={{
                             fontSize: '10px',
                             padding: '1px 7px',
                             borderRadius: '10px',
                             fontWeight: '800',
-                            background: '#f0f6fe',
-                            color: '#1769d7',
-                            border: '1px solid #b8d5f7',
+                            background: isHospitalAssigned(test) ? '#fef3c7' : '#f0f6fe',
+                            color: isHospitalAssigned(test) ? '#b45309' : '#1769d7',
+                            border: '1px solid',
+                            borderColor: isHospitalAssigned(test) ? '#fde68a' : '#b8d5f7',
                           }}
                         >
-                          🏥 Hospital Record (Reg: {test.opNumber || 'OPD-240618-086'})
+                          {isHospitalAssigned(test) ? '🏥 From Hospital' : `🏥 Hospital Record (Reg: ${test.opNumber || 'OPD-240618-086'})`}
                         </span>
                       ) : (
                         <span
@@ -390,16 +428,28 @@ export function LaboratoryPage({ tests = initialLabTests, isDoctor = false, doct
                       >
                         <Printer size={13} /> View PDF Report
                       </button>
-                    ) : (
-                      !isDoctor && (
-                        <button
-                          className="secondary-button"
-                          style={{ padding: '6px 12px', fontSize: '11px' }}
-                          onClick={() => onEnterResult(test)}
-                        >
-                          Enter Result
-                        </button>
-                      )
+                    ) : null}
+
+                    {!isDoctor && (
+                      <button
+                        className="secondary-button"
+                        style={{ padding: '6px 12px', fontSize: '11px', gap: '4px', color: '#1769d7', borderColor: '#b8d5f7', background: '#f4f8fe', fontWeight: '700' }}
+                        onClick={() => onEnterResult(test)}
+                        title="Edit lab test findings and details"
+                      >
+                        <Edit2 size={13} /> {test.result || test.status === 'Result ready' ? 'Edit' : 'Enter Result'}
+                      </button>
+                    )}
+
+                    {!isDoctor && (
+                      <button
+                        className="icon-button"
+                        style={{ width: '32px', height: '32px', padding: 0, border: '1px solid #fecaca', background: '#fef2f2', borderRadius: '6px', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' }}
+                        onClick={() => handleDeleteTest(test)}
+                        title="Delete Lab Record"
+                      >
+                        <Trash2 size={14} color="#dc2626" />
+                      </button>
                     )}
                   </div>
                 </div>

@@ -44,9 +44,16 @@ export const createLabOrder = async (orderData) => {
       paymentMethod: orderData.paymentMethod || 'Cash',
       upiTxnId: orderData.upiTxnId || '',
       status: orderData.status || 'Sample Collected',
-      clinicalNotes: orderData.clinicalNotes || '',
-      results: orderData.results || {},
+      clinicalNotes: orderData.clinicalNotes || orderData.notes || '',
+      notes: orderData.notes || orderData.clinicalNotes || '',
+      result: orderData.result || orderData.results?.summaryResult || orderData.results?.result || '',
+      testRows: Array.isArray(orderData.testRows) ? orderData.testRows : (orderData.results?.testRows || []),
+      results: orderData.results || {
+        testRows: Array.isArray(orderData.testRows) ? orderData.testRows : [],
+        summaryResult: orderData.result || '',
+      },
       createdBy: orderData.createdBy || 'Doctor',
+      assignedFrom: orderData.assignedFrom || (['Admin', 'Super Admin', 'Front Desk', 'Hospital'].includes(orderData.createdBy) ? 'Hospital' : orderData.createdBy === 'Lab Assistant' ? 'Lab' : 'Doctor'),
       branch: branchToUse,
       branchCode: branchCodeToUse,
     });
@@ -76,13 +83,29 @@ export const getLabOrderById = async (id) => {
 
 export const updateLabOrder = async (id, updateData) => {
   let order = null;
+  const { _id, __v, ...dataToUpdate } = updateData;
+
+  if (dataToUpdate.notes && !dataToUpdate.clinicalNotes) {
+    dataToUpdate.clinicalNotes = dataToUpdate.notes;
+  }
+  if (dataToUpdate.clinicalNotes && !dataToUpdate.notes) {
+    dataToUpdate.notes = dataToUpdate.clinicalNotes;
+  }
+  if (dataToUpdate.testRows && (!dataToUpdate.results || !dataToUpdate.results.testRows)) {
+    dataToUpdate.results = {
+      ...(dataToUpdate.results || {}),
+      testRows: dataToUpdate.testRows,
+      summaryResult: dataToUpdate.result || '',
+    };
+  }
+
   if (mongoose.Types.ObjectId.isValid(id)) {
-    order = await Laboratory.findByIdAndUpdate(id, updateData, { new: true, runValidators: true });
+    order = await Laboratory.findByIdAndUpdate(id, dataToUpdate, { new: true, runValidators: true });
   }
   if (!order) {
     order = await Laboratory.findOneAndUpdate(
-      { $or: [{ labOrderNo: id }, { testId: id }] },
-      updateData,
+      { $or: [{ labOrderNo: id }, { testId: id }, { opNumber: id }] },
+      dataToUpdate,
       { new: true, runValidators: true }
     );
   }
@@ -94,11 +117,19 @@ export const updateLabOrder = async (id, updateData) => {
 
 export const deleteLabOrder = async (id) => {
   let order = null;
-  if (mongoose.Types.ObjectId.isValid(id)) {
+  if (id && mongoose.Types.ObjectId.isValid(id)) {
     order = await Laboratory.findByIdAndDelete(id);
   }
   if (!order) {
-    order = await Laboratory.findOneAndDelete({ $or: [{ labOrderNo: id }, { testId: id }] });
+    const escaped = (id || '').trim().replace(/[-\/\\^$*+?.()|[\]{}]/g, '\\$&');
+    order = await Laboratory.findOneAndDelete({
+      $or: [
+        { labOrderNo: id },
+        { testId: id },
+        { opNumber: id },
+        { labOrderNo: new RegExp(`^${escaped}$`, 'i') },
+      ],
+    });
   }
   return order;
 };

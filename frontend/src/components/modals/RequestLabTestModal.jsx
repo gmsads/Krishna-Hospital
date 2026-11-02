@@ -11,6 +11,8 @@ export function RequestLabTestModal({
   staffList = [],
   doctorName = '',
   isLabAssistant = false,
+  userRole = '',
+  userName = '',
   onSubmitOrder,
   onClose,
   notify,
@@ -41,6 +43,29 @@ export function RequestLabTestModal({
       setSelectedBranch(branchesList[0].name);
     }
   }, [effectiveBranch, branchesList]);
+
+  // Sync initialPatient details (including phone number from opRecords/patients)
+  React.useEffect(() => {
+    if (initialPatient) {
+      const pId = (initialPatient.opNumber || initialPatient.id || initialPatient.regNo || '').toLowerCase();
+      const pName = (initialPatient.name || initialPatient.patient || '').toLowerCase();
+      const matchedOp = opRecords.find(
+        (r) => (r.id && r.id.toLowerCase() === pId) || (r.regNo && r.regNo.toLowerCase() === pId) || (pName && r.patient && r.patient.toLowerCase() === pName)
+      );
+      const matchedPat = patients.find(
+        (p) => (p.id && p.id.toLowerCase() === pId) || (pName && p.name && p.name.toLowerCase() === pName)
+      );
+      const matched = matchedOp || matchedPat;
+      const ph = initialPatient.phone || matched?.phone || matched?.mobile || matched?.contact || '';
+      if (ph) setPhone(ph);
+      const name = initialPatient.name || initialPatient.patient || matched?.patient || matched?.name || '';
+      if (name) setPatientName(name);
+      const op = initialPatient.opNumber || initialPatient.regNo || initialPatient.id || matched?.regNo || matched?.id || '';
+      if (op) setOpNumber(op);
+      const doc = (initialPatient.doctor && initialPatient.doctor !== 'Unassigned') ? initialPatient.doctor : (matched?.doctor && matched.doctor !== 'Unassigned' ? matched.doctor : '');
+      if (doc && !doctorName) setOrderingDoctor(doc);
+    }
+  }, [initialPatient, opRecords, patients]);
 
   // Fetch branch-scoped next LAB-0001 ID, doctors, and lab assistants from backend
   React.useEffect(() => {
@@ -327,8 +352,9 @@ export function RequestLabTestModal({
     const found = matchedOp || matchedPat;
     if (found) {
       if (found.patient || found.name) setPatientName(found.patient || found.name);
-      if (found.phone) setPhone(found.phone);
-      if (found.doctor && found.doctor !== 'Unassigned') setOrderingDoctor(found.doctor);
+      const ph = found.phone || found.mobile || found.contact || '';
+      if (ph) setPhone(ph);
+      if (found.doctor && found.doctor !== 'Unassigned' && !doctorName) setOrderingDoctor(found.doctor);
       setAutoFetchSuccess(true);
     } else {
       setAutoFetchSuccess(false);
@@ -375,8 +401,15 @@ export function RequestLabTestModal({
       ? foundSrv.subCategories.map((sub, idx) => ({ id: idx + 1, name: sub.name, result: '', normalRange: sub.normalRange || 'Standard Reference' }))
       : [];
 
-    const finalDoctor = orderingDoctor.trim() || 'Self Created / Walk-In';
-    const isSelfCreated = !orderingDoctor.trim() || orderingDoctor.trim() === 'Self Created / Walk-In';
+    const activeRole = userRole || (isLabAssistant ? 'Lab Assistant' : (doctorName ? 'Doctor' : 'Hospital'));
+    const isHospitalStaff = ['Admin', 'Super Admin', 'Front Desk', 'Hospital'].some(r => activeRole.toLowerCase().includes(r.toLowerCase()));
+    
+    let finalCreatedBy = isLabAssistant ? 'Lab Assistant' : (isHospitalStaff ? activeRole : (doctorName ? 'Doctor' : 'Hospital'));
+    let finalDoctor = orderingDoctor.trim();
+    if (!finalDoctor) {
+      finalDoctor = isHospitalStaff ? 'Hospital Staff' : 'Self Created / Walk-In';
+    }
+    const isSelfCreated = !isHospitalStaff && (!finalDoctor || finalDoctor === 'Self Created / Walk-In');
 
     const newOrder = {
       id: labOrderNo,
@@ -414,7 +447,8 @@ export function RequestLabTestModal({
       testRows: defaultTestRows,
       assignedLabAssistant: assignedLabAssistant.trim() || 'General Lab Staff',
       assignedStaff: assignedLabAssistant.trim() || 'General Lab Staff',
-      createdBy: isLabAssistant ? 'Lab Assistant' : (isSelfCreated ? 'Lab Assistant' : 'Doctor'),
+      createdBy: finalCreatedBy,
+      assignedFrom: isHospitalStaff ? 'Hospital' : (isLabAssistant ? 'Lab' : 'Doctor'),
       isSelfCreated,
     };
 

@@ -594,7 +594,14 @@ export function OPRecordsPage({
                       <button
                         className="secondary-button"
                         style={{ padding: '5px 10px', fontSize: '11px', gap: '4px', background: '#f4f8fe', borderColor: '#b8d5f7', color: '#1769d7', fontWeight: '700' }}
-                        onClick={() => onRequestLabTest && onRequestLabTest({ name: record.patient, opNumber: record.id })}
+                        onClick={() => onRequestLabTest && onRequestLabTest({
+                          name: record.patient || record.patientName,
+                          patient: record.patient || record.patientName,
+                          opNumber: record.regNo || record.id,
+                          regNo: record.regNo || record.id,
+                          phone: record.phone || '',
+                          doctor: record.doctor || '',
+                        })}
                         title="Order Lab Test for Patient"
                       >
                         <FlaskConical size={13} /> Order Lab

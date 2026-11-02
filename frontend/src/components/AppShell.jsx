@@ -337,6 +337,13 @@ export default function AppShell({ path = '/dashboard', navigate }) {
             const dueNum = typeof l.dueBalance === 'number' ? l.dueBalance : Math.max(0, feeNum - paidNum);
             const payStatus = l.paymentStatus || (dueNum <= 0 ? 'Paid' : paidNum > 0 ? 'Partial' : 'Pending');
 
+            const resolvedRows = (Array.isArray(l.testRows) && l.testRows.length > 0)
+              ? l.testRows
+              : (Array.isArray(l.results?.testRows) && l.results.testRows.length > 0)
+              ? l.results.testRows
+              : [];
+            const resolvedResult = l.result || l.results?.summaryResult || l.results?.result || '';
+
             return {
               ...l,
               id: l.labOrderNo || l.id || l._id,
@@ -345,8 +352,13 @@ export default function AppShell({ path = '/dashboard', navigate }) {
               testName: l.testName || l.test,
               patient: l.patientName || l.patient,
               patientName: l.patientName || l.patient,
+              phone: l.phone || '',
               doctor: l.doctor || l.orderingDoctor || 'Self Created / Walk-In',
               notes: l.clinicalNotes || l.notes || '',
+              clinicalNotes: l.clinicalNotes || l.notes || '',
+              result: resolvedResult,
+              testRows: resolvedRows,
+              results: l.results || { testRows: resolvedRows, summaryResult: resolvedResult },
               requested: l.sampleCollectedAt || l.requested || 'Today, just now',
               amount: feeNum,
               testFee: feeNum.toString(),
@@ -731,7 +743,30 @@ export default function AppShell({ path = '/dashboard', navigate }) {
   };
 
   const handleOpenRequestLab = (patient = null) => {
-    setPatientForLabOrder(patient);
+    let fullPatient = patient;
+    if (patient) {
+      const pId = (patient.opNumber || patient.regNo || patient.id || '').toLowerCase();
+      const pName = (patient.name || patient.patient || '').toLowerCase();
+      const foundInOp = opRecords.find(
+        (r) => (r.id && r.id.toLowerCase() === pId) || (r.regNo && r.regNo.toLowerCase() === pId) || (pName && r.patient && r.patient.toLowerCase() === pName)
+      );
+      const foundInPat = patients.find(
+        (p) => (p.id && p.id.toLowerCase() === pId) || (pName && p.name && p.name.toLowerCase() === pName)
+      );
+      const matched = foundInOp || foundInPat;
+      if (matched) {
+        fullPatient = {
+          ...matched,
+          ...patient,
+          phone: patient.phone || matched.phone || matched.mobile || matched.contact || '',
+          doctor: patient.doctor || matched.doctor || '',
+          patient: patient.name || patient.patient || matched.patient || matched.name,
+          name: patient.name || patient.patient || matched.patient || matched.name,
+          opNumber: patient.opNumber || patient.regNo || matched.regNo || matched.id,
+        };
+      }
+    }
+    setPatientForLabOrder(fullPatient);
     setIsRequestLabModalOpen(true);
   };
 
@@ -997,11 +1032,40 @@ export default function AppShell({ path = '/dashboard', navigate }) {
   const saveLabResult = (resultData) => {
     const targetBranch = effectiveBranch === 'All' ? 'Central Campus' : effectiveBranch;
     setLabTests((current) => {
-      const exists = current.some((t) => t.id === resultData.id);
-      if (exists) {
-        return current.map((t) => (t.id === resultData.id ? { ...t, ...resultData } : t));
-      }
-      return [{ ...resultData, branch: resultData.branch || targetBranch }, ...current];
+      const targetOrderNo = resultData.labOrderNo || resultData.id;
+
+      const existingMatch = current.find(
+        (t) =>
+          (resultData._id && t._id && t._id === resultData._id) ||
+          (targetOrderNo && (t.labOrderNo === targetOrderNo || t.id === targetOrderNo)) ||
+          (resultData.id && (t.id === resultData.id || t.labOrderNo === resultData.id || t._id === resultData.id))
+      );
+
+      const mergedRecord = {
+        ...(existingMatch || {}),
+        ...resultData,
+        id: resultData.labOrderNo || resultData.id || existingMatch?.labOrderNo || existingMatch?.id,
+        labOrderNo: resultData.labOrderNo || existingMatch?.labOrderNo || resultData.id,
+        _id: resultData._id || existingMatch?._id,
+        branch: resultData.branch || existingMatch?.branch || targetBranch,
+        result: resultData.result !== undefined ? resultData.result : existingMatch?.result || '',
+        testRows: (Array.isArray(resultData.testRows) && resultData.testRows.length > 0)
+          ? resultData.testRows
+          : (existingMatch?.testRows || []),
+        results: resultData.results || existingMatch?.results || {
+          testRows: resultData.testRows || existingMatch?.testRows || [],
+          summaryResult: resultData.result || existingMatch?.result || '',
+        },
+      };
+
+      const filtered = current.filter((t) => {
+        if (mergedRecord._id && t._id && t._id === mergedRecord._id) return false;
+        if (mergedRecord.labOrderNo && (t.labOrderNo === mergedRecord.labOrderNo || t.id === mergedRecord.labOrderNo)) return false;
+        if (mergedRecord.id && (t.id === mergedRecord.id || t.labOrderNo === mergedRecord.id)) return false;
+        return true;
+      });
+
+      return [mergedRecord, ...filtered];
     });
 
     // Auto-Deduct inventory kit stock for used test kits (e.g. Thyroid T1, T2, etc.)
@@ -1052,14 +1116,66 @@ export default function AppShell({ path = '/dashboard', navigate }) {
     }
 
     setSelectedTestForResult(null);
-    handleNavigate('/laboratory');
+    if (profile?.role === 'Lab Assistant') {
+      handleNavigate('/dashboard');
+    } else {
+      handleNavigate('/laboratory');
+    }
     notify('Lab result saved & inventory kit stock updated!');
   };
 
   const updateLabOrder = (updatedOrder) => {
-    setLabTests((prev) =>
-      prev.map((t) => (t.id === updatedOrder.id || t.labOrderNo === updatedOrder.labOrderNo || t._id === updatedOrder._id ? { ...t, ...updatedOrder } : t))
-    );
+    setLabTests((prev) => {
+      const targetId = updatedOrder._id || updatedOrder.id;
+      const targetOrderNo = updatedOrder.labOrderNo || updatedOrder.id;
+      return prev.map((t) =>
+        (t._id && targetId && t._id === targetId) ||
+        (t.id && targetId && t.id === targetId) ||
+        (t.labOrderNo && targetOrderNo && t.labOrderNo === targetOrderNo)
+          ? {
+              ...t,
+              ...updatedOrder,
+              result: updatedOrder.result !== undefined ? updatedOrder.result : t.result,
+              testRows: updatedOrder.testRows !== undefined ? updatedOrder.testRows : t.testRows,
+              results: updatedOrder.results !== undefined ? updatedOrder.results : t.results,
+            }
+          : t
+      );
+    });
+  };
+
+  const deleteLabOrder = async (testOrId) => {
+    const targetObj = typeof testOrId === 'object' && testOrId !== null
+      ? testOrId
+      : (labTests.find((t) => t.id === testOrId || t.labOrderNo === testOrId || t._id === testOrId) || {});
+    const targetId = targetObj._id || targetObj.labOrderNo || targetObj.id || (typeof testOrId === 'string' ? testOrId : '');
+    const patientName = targetObj.patient || targetObj.patientName || 'patient';
+    const testLabel = targetObj.labOrderNo || targetObj.id || 'lab test';
+
+    if (window.confirm(`Are you sure you want to delete lab record ${testLabel} for ${patientName}?`)) {
+      const token = localStorage.getItem('kh_auth_token');
+      if (targetId) {
+        try {
+          const res = await fetch(`/api/v1/laboratory/${encodeURIComponent(targetId)}`, {
+            method: 'DELETE',
+            headers: {
+              ...(token ? { Authorization: `Bearer ${token}` } : {}),
+            },
+          });
+          const data = await res.json().catch(() => ({}));
+          if (!res.ok) {
+            console.warn('Backend lab delete warning:', res.status, data.message);
+          }
+        } catch (err) {
+          console.warn('Could not delete lab test in backend:', err.message);
+        }
+      }
+
+      setLabTests((prev) =>
+        prev.filter((t) => t !== targetObj && t._id !== targetId && t.labOrderNo !== targetId && t.id !== targetId)
+      );
+      notify(`Lab record ${testLabel} deleted successfully`);
+    }
   };
 
   const handleSavePharmacySale = (newSale) => {
@@ -1774,6 +1890,8 @@ export default function AppShell({ path = '/dashboard', navigate }) {
               onAddOPRecord={() => handleNavigate('/op-records/new')} 
               onAddStaff={() => handleNavigate('/staff/new')}
               onEnterResult={handleOpenEnterResult} 
+              onDeleteLabOrder={deleteLabOrder}
+              onUpdateLabOrder={updateLabOrder}
               onViewPatientHistory={handleViewPatientHistory}
               onRequestLabTest={handleOpenRequestLab}
               opRecords={scopedOpRecords} 
@@ -1859,6 +1977,7 @@ export default function AppShell({ path = '/dashboard', navigate }) {
               branding={currentBranding}
               onEnterResult={handleOpenEnterResult} 
               onUpdateLabOrder={updateLabOrder}
+              onDeleteLabOrder={deleteLabOrder}
               onNotify={notify} 
             />
           )}
@@ -1866,14 +1985,22 @@ export default function AppShell({ path = '/dashboard', navigate }) {
           {path === '/laboratory/enter-result' && (
             <EnterLabResultForm 
               tests={scopedLabTests} 
+              opRecords={scopedOpRecords}
+              patients={scopedPatients}
               masterServices={masterServices}
               initialSelectedTest={selectedTestForResult} 
               effectiveBranch={effectiveBranch}
               branchesList={branchesList}
+              userRole={profile?.role}
+              userName={profile?.full_name}
               onSave={saveLabResult} 
               onCancel={() => {
                 setSelectedTestForResult(null);
-                handleNavigate('/laboratory');
+                if (profile?.role === 'Lab Assistant') {
+                  handleNavigate('/dashboard');
+                } else {
+                  handleNavigate('/laboratory');
+                }
               }} 
               notify={notify} 
             />
@@ -2032,6 +2159,8 @@ export default function AppShell({ path = '/dashboard', navigate }) {
           staffList={scopedStaff}
           doctorName={profile?.role === 'Doctor' ? profile.full_name : ''}
           isLabAssistant={profile?.role === 'Lab Assistant'}
+          userRole={profile?.role}
+          userName={profile?.full_name}
           effectiveBranch={effectiveBranch}
           branchesList={branchesList}
           onSubmitOrder={handleSaveLabOrder}
