@@ -47,7 +47,58 @@ export const registerUser = async (userData) => {
 
 export const loginUser = async (email, password) => {
   const userEmail = email.toLowerCase().trim();
-  const user = await User.findOne({ email: userEmail }).select('+password');
+  let user = await User.findOne({ email: userEmail }).select('+password');
+
+  if (!user) {
+    // Check if staff member exists with this email or empId, and link/sync with User account
+    try {
+      const { Staff } = await import('../staff/staff.model.js');
+      const staffMember = await Staff.findOne({
+        $or: [
+          { email: userEmail },
+          { empId: new RegExp(`^${userEmail}$`, 'i') },
+        ],
+      });
+
+      if (staffMember) {
+        user = await User.findOne({
+          $or: [
+            { full_name: staffMember.name },
+            { phone: staffMember.phone },
+          ],
+        }).select('+password');
+
+        if (user) {
+          user.email = (staffMember.email || userEmail).toLowerCase().trim();
+          await user.save();
+        } else {
+          const isMatch = staffMember.password === password;
+          if (isMatch) {
+            const hashedPassword = await hashPassword(password);
+            let mappedRole = 'Front Desk';
+            const rLower = (staffMember.role || '').toLowerCase();
+            if (rLower.includes('doctor')) mappedRole = 'Doctor';
+            else if (rLower.includes('lab') || rLower.includes('pathology') || rLower.includes('technician')) mappedRole = 'Lab Assistant';
+            else if (rLower.includes('pharm')) mappedRole = 'Pharmacist';
+            else if (rLower.includes('admin')) mappedRole = 'Admin';
+
+            user = await User.create({
+              email: (staffMember.email || userEmail).toLowerCase().trim(),
+              password: hashedPassword,
+              full_name: staffMember.name,
+              role: mappedRole,
+              department: staffMember.department || 'Operations',
+              phone: staffMember.phone || '',
+              branch: staffMember.branch || '',
+              branchCode: staffMember.branchCode || '',
+            });
+          }
+        }
+      }
+    } catch (e) {
+      console.warn('Staff login sync check note:', e.message);
+    }
+  }
 
   if (!user) {
     throw new Error('Invalid login credentials');

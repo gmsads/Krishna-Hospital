@@ -102,21 +102,103 @@ export const getStaffById = async (id) => {
 };
 
 export const updateStaff = async (id, updateData) => {
-  let member = null;
   const { _id, __v, ...dataToUpdate } = updateData;
+
+  // 1. Locate current staff member before update
+  let currentStaff = null;
   if (id && id.match(/^[0-9a-fA-F]{24}$/)) {
-    member = await Staff.findByIdAndUpdate(id, dataToUpdate, { new: true, runValidators: true });
+    currentStaff = await Staff.findById(id);
   }
-  if (!member) {
+  if (!currentStaff) {
+    currentStaff = await Staff.findOne({
+      $or: [
+        { empId: id },
+        { email: (id || '').toLowerCase() },
+        { name: updateData.name },
+      ],
+    });
+  }
+
+  const oldEmail = currentStaff?.email ? currentStaff.email.trim().toLowerCase() : '';
+  const oldName = currentStaff?.name ? currentStaff.name.trim() : '';
+
+  if (dataToUpdate.email) {
+    dataToUpdate.email = dataToUpdate.email.trim().toLowerCase();
+  }
+  if (dataToUpdate.status) {
+    if (dataToUpdate.status.toLowerCase().includes('leave')) {
+      dataToUpdate.status = 'On Leave';
+    }
+  }
+
+  let member = null;
+  if (currentStaff) {
+    member = await Staff.findByIdAndUpdate(currentStaff._id, dataToUpdate, { new: true, runValidators: true });
+  } else if (id && id.match(/^[0-9a-fA-F]{24}$/)) {
+    member = await Staff.findByIdAndUpdate(id, dataToUpdate, { new: true, runValidators: true });
+  } else {
     member = await Staff.findOneAndUpdate(
       { $or: [{ empId: id }, { email: (id || '').toLowerCase() }, { name: updateData.name }] },
       dataToUpdate,
       { new: true, runValidators: true }
     );
   }
+
   if (!member) {
     throw new Error('Staff member not found');
   }
+
+  // 2. Synchronize User login account in MongoDB
+  const newEmail = member.email ? member.email.trim().toLowerCase() : '';
+  const newPassword = dataToUpdate.password ? dataToUpdate.password.trim() : member.password;
+
+  let mappedRole = 'Front Desk';
+  const roleStr = (member.role || '').toLowerCase();
+  if (roleStr.includes('doctor')) mappedRole = 'Doctor';
+  else if (roleStr.includes('lab') || roleStr.includes('pathology') || roleStr.includes('technician')) mappedRole = 'Lab Assistant';
+  else if (roleStr.includes('pharm')) mappedRole = 'Pharmacist';
+  else if (roleStr.includes('admin') || roleStr.includes('super')) mappedRole = 'Admin';
+  else if (roleStr.includes('front desk') || roleStr.includes('reception') || roleStr.includes('officer')) mappedRole = 'Front Desk';
+
+  // Find User account by newEmail, oldEmail, oldName, or member.name
+  const searchCriteria = [];
+  if (newEmail) searchCriteria.push({ email: newEmail });
+  if (oldEmail && oldEmail !== newEmail) searchCriteria.push({ email: oldEmail });
+  if (oldName) searchCriteria.push({ full_name: oldName });
+  if (member.name && member.name !== oldName) searchCriteria.push({ full_name: member.name.trim() });
+
+  let existingUser = null;
+  if (searchCriteria.length > 0) {
+    existingUser = await User.findOne({ $or: searchCriteria });
+  }
+
+  if (existingUser) {
+    if (newEmail) existingUser.email = newEmail;
+    if (member.name) existingUser.full_name = member.name.trim();
+    if (mappedRole) existingUser.role = mappedRole;
+    if (member.department) existingUser.department = member.department;
+    if (member.phone) existingUser.phone = member.phone.trim();
+    if (member.branch) existingUser.branch = member.branch;
+    if (member.branchCode) existingUser.branchCode = member.branchCode;
+    if (dataToUpdate.password && dataToUpdate.password.trim()) {
+      existingUser.password = await hashPassword(dataToUpdate.password.trim());
+    }
+    await existingUser.save();
+  } else if (newEmail) {
+    // If no user account existed, create one with the new email
+    const hashedPassword = await hashPassword(newPassword || 'Staff@123');
+    await User.create({
+      email: newEmail,
+      password: hashedPassword,
+      full_name: member.name.trim(),
+      role: mappedRole,
+      department: member.department || 'Operations',
+      phone: member.phone ? member.phone.trim() : '',
+      branch: member.branch || '',
+      branchCode: member.branchCode || '',
+    });
+  }
+
   return member;
 };
 
@@ -137,6 +219,13 @@ export const deleteStaff = async (id) => {
   }
   if (!member) {
     throw new Error('Staff member not found');
+  }
+
+  if (member.email) {
+    await User.deleteMany({ email: member.email.toLowerCase() });
+  }
+  if (member.name) {
+    await User.deleteMany({ full_name: member.name.trim() });
   }
   return member;
 };

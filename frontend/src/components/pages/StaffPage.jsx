@@ -117,15 +117,18 @@ export function StaffPage({ staff = initialStaff, onAddStaff, onUpdateStaff, onD
     const token = localStorage.getItem('kh_auth_token');
     const staffId = editingStaff._id || editingStaff.empId || editingStaff.id;
 
+    const trimmedEmail = (editingStaff.email || '').trim().toLowerCase();
+
     let updatedObj = {
       ...editingStaff,
+      email: trimmedEmail,
       empId: editingStaff.empId || editingStaff.id,
       id: editingStaff.empId || editingStaff.id,
     };
 
     if (staffId) {
       try {
-        const res = await fetch(`/api/v1/staff/${staffId}`, {
+        const res = await fetch(`/api/v1/staff/${encodeURIComponent(staffId)}`, {
           method: 'PUT',
           headers: {
             'Content-Type': 'application/json',
@@ -135,7 +138,7 @@ export function StaffPage({ staff = initialStaff, onAddStaff, onUpdateStaff, onD
         });
         const data = await res.json().catch(() => ({}));
         if (res.ok && data.success && data.data) {
-          updatedObj = data.data;
+          updatedObj = { ...updatedObj, ...data.data };
         } else {
           console.warn('Backend staff update note:', res.status, data.message);
         }
@@ -145,12 +148,19 @@ export function StaffPage({ staff = initialStaff, onAddStaff, onUpdateStaff, onD
     }
 
     setStaffList((prev) =>
-      prev.map((s) => (s._id === updatedObj._id || s.empId === updatedObj.empId || s.id === updatedObj.id || s.name === updatedObj.name ? { ...s, ...updatedObj } : s))
+      prev.map((s) =>
+        (s._id && updatedObj._id && s._id === updatedObj._id) ||
+        (s.empId && updatedObj.empId && s.empId === updatedObj.empId) ||
+        (s.id && updatedObj.id && s.id === updatedObj.id) ||
+        s.name === updatedObj.name
+          ? { ...s, ...updatedObj }
+          : s
+      )
     );
     onUpdateStaff && onUpdateStaff(updatedObj);
     setEditingStaff(null);
     const sendNotify = onNotify || notify;
-    sendNotify && sendNotify(`Staff details updated for ${updatedObj.name}`);
+    sendNotify && sendNotify(`Staff details & login credentials updated for ${updatedObj.name}`);
   };
 
   return (
@@ -251,7 +261,7 @@ export function StaffPage({ staff = initialStaff, onAddStaff, onUpdateStaff, onD
                 <strong style={{ color: '#1769d7', textDecoration: 'underline', textDecorationColor: 'transparent', transition: 'text-decoration-color 0.2s' }}>
                   {member.name}
                 </strong>
-                <span>{member.department} {member.phone ? `· ${member.phone}` : ''} <strong style={{ color: '#1769d7' }}>· {member.salary || '₹ 28,000'}</strong></span>
+                <span>{member.department} {member.email ? `· ✉️ ${member.email}` : ''} {member.phone ? `· ${member.phone}` : ''} <strong style={{ color: '#1769d7' }}>· {member.salary || '₹ 28,000'}</strong></span>
 
                 {/* Reason Alert Callout Badge */}
                 {member.status && member.status !== 'Active' && member.leaveReason && (
