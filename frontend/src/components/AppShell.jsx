@@ -823,14 +823,31 @@ export default function AppShell({ path = '/dashboard', navigate }) {
     // 1. OP Records (Scoped to Front Desk, Doctor, or general OPD pages)
     let matchingOps = [];
     if (!isLabView && !isAdminView && !isPharmacistView) {
-      matchingOps = opRecords.filter((r) => {
+      const qDigits = q.replace(/\D/g, '');
+      const filtered = opRecords.filter((r) => {
         if (isDoctorView && profile?.full_name) {
           const docFirstName = profile.full_name.split(' ')[0].toLowerCase();
           const matchesDoc = r.doctor && (r.doctor === profile.full_name || r.doctor.toLowerCase().includes(docFirstName));
           if (!matchesDoc) return false;
         }
-        return r.patient.toLowerCase().includes(q) || r.id.toLowerCase().includes(q) || (r.phone && r.phone.includes(q)) || (r.doctor && r.doctor.toLowerCase().includes(q));
-      }).slice(0, 4);
+        const patientName = (r.patient || r.patientName || '').toLowerCase();
+        const recId = (r.id || r.regNo || '').toLowerCase();
+        const recPhone = (r.phone || '').replace(/\D/g, '');
+        const matchesPhone = qDigits.length >= 4 && recPhone.includes(qDigits);
+        return patientName.includes(q) || recId.includes(q) || (r.phone && r.phone.includes(q)) || matchesPhone || (r.doctor && r.doctor.toLowerCase().includes(q));
+      });
+
+      // Deduplicate by distinct patient name so family members sharing a phone number all show up individually
+      const seenPatients = new Set();
+      const distinctOps = [];
+      for (const op of filtered) {
+        const pKey = (op.patient || op.patientName || op.id || '').trim().toLowerCase();
+        if (!seenPatients.has(pKey)) {
+          seenPatients.add(pKey);
+          distinctOps.push(op);
+        }
+      }
+      matchingOps = distinctOps.slice(0, 6);
     }
 
     // 2. Lab Tests (Scoped to Lab Assistant, Laboratory page, or Doctor view)
@@ -1703,7 +1720,19 @@ export default function AppShell({ path = '/dashboard', navigate }) {
                               key={r.id}
                               type="button"
                               onClick={() => {
-                                handleViewPatientHistory({ name: r.patient, id: r.patientId || 'KH-1048' });
+                                handleViewPatientHistory({
+                                  name: r.patient,
+                                  patient: r.patient,
+                                  id: r.patientId || r.id || r.regNo || 'KH-1048',
+                                  regNo: r.regNo || r.id || '',
+                                  phone: r.phone || '',
+                                  gender: r.gender || '',
+                                  age: r.age || '',
+                                  address: r.address || '',
+                                  bloodGroup: r.bloodGroup || r.vitals?.bloodGroup || '',
+                                  lastVisit: `${r.date || 'Today'}, ${r.time || ''}`,
+                                  doctor: r.doctor || '',
+                                });
                               }}
                               style={{
                                 display: 'flex',
@@ -1722,7 +1751,9 @@ export default function AppShell({ path = '/dashboard', navigate }) {
                                 <ClipboardList size={15} color="#1769d7" />
                                 <div>
                                   <strong style={{ fontSize: '12px', color: '#162d4a', display: 'block' }}>{r.patient}</strong>
-                                  <span style={{ fontSize: '10px', color: '#687c96' }}>{r.id} · Doctor: {r.doctor}</span>
+                                  <span style={{ fontSize: '10px', color: '#687c96' }}>
+                                    {r.id || r.regNo} · Doctor: {r.doctor}{r.phone ? ` · 📞 ${r.phone}` : ''}
+                                  </span>
                                 </div>
                               </div>
                               <span style={{ fontSize: '10px', color: '#1769d7', display: 'flex', alignItems: 'center', gap: '3px', fontWeight: '700' }}>
