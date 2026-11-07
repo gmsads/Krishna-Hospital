@@ -15,6 +15,7 @@ import { PanelHeader } from '../common/PanelHeader';
 import { PatientTable } from '../common/PatientTable';
 import { initialOPRecords, initialLabTests } from '../data/initialData';
 import { PathologyLabReportPDFModal } from '../modals/PathologyLabReportPDFModal';
+import { getNormalizedDateParts } from '../../lib/dateUtils';
 
 function QuickAction({ icon, label, color, onClick }) {
   return (
@@ -62,18 +63,51 @@ export function DoctorDashboard({
     });
   }, [labTests, userDocNorm]);
 
-  let multiplier = 1;
-  if (filterState.filterMode === 'monthly') multiplier = 24;
-  if (filterState.filterMode === 'yearly') multiplier = 280;
+  const filteredAssignedRecords = useMemo(() => {
+    if (!filterState || filterState.filterMode === 'all') return assignedRecords;
+    return assignedRecords.filter((r) => {
+      const { year, month, fullDate } = getNormalizedDateParts(r);
+      if (filterState.filterMode === 'date') return Boolean(fullDate && fullDate === filterState.selectedDate);
+      if (filterState.filterMode === 'today') {
+        const todayStr = new Date().toISOString().split('T')[0];
+        return Boolean(fullDate && fullDate === todayStr);
+      }
+      if (filterState.filterMode === 'monthly') return Boolean(month && month === filterState.selectedMonth);
+      if (filterState.filterMode === 'yearly') return Boolean(year && year === filterState.selectedYear);
+      return true;
+    });
+  }, [assignedRecords, filterState]);
 
-  const totalAssignedPatients = assignedRecords.length * multiplier;
-  const rawOpsCount = assignedRecords.filter(r => !(r.recordType || '').startsWith('IP') && !(r.recordType || '').startsWith('Emergency')).length * multiplier;
-  const rawIpsCount = assignedRecords.filter(r => (r.recordType || '').startsWith('IP')).length * multiplier;
-  const rawEmergencyCount = assignedRecords.filter(r => (r.recordType || '').startsWith('Emergency')).length * multiplier;
+  const filteredAssignedLabTests = useMemo(() => {
+    if (!filterState || filterState.filterMode === 'all') return assignedLabTests;
+    return assignedLabTests.filter((t) => {
+      const { year, month, fullDate } = getNormalizedDateParts(t);
+      if (filterState.filterMode === 'date') return Boolean(fullDate && fullDate === filterState.selectedDate);
+      if (filterState.filterMode === 'today') {
+        const todayStr = new Date().toISOString().split('T')[0];
+        return Boolean(fullDate && fullDate === todayStr);
+      }
+      if (filterState.filterMode === 'monthly') return Boolean(month && month === filterState.selectedMonth);
+      if (filterState.filterMode === 'yearly') return Boolean(year && year === filterState.selectedYear);
+      return true;
+    });
+  }, [assignedLabTests, filterState]);
+
+  const rawOpsCount = filteredAssignedRecords.filter(r => !(r.recordType || '').startsWith('IP') && !(r.recordType || '').startsWith('Emergency')).length;
+  const rawIpsCount = filteredAssignedRecords.filter(r => (r.recordType || '').startsWith('IP')).length;
+  const rawEmergencyCount = filteredAssignedRecords.filter(r => (r.recordType || '').startsWith('Emergency')).length;
 
   const opsCount = rawOpsCount;
   const ipsCount = rawIpsCount;
   const emergencyCount = rawEmergencyCount;
+
+  const getDetailText = () => {
+    if (filterState.filterMode === 'today') return `Today: ${new Date().toISOString().split('T')[0]}`;
+    if (filterState.filterMode === 'date') return `Date: ${filterState.selectedDate}`;
+    if (filterState.filterMode === 'monthly') return `Month: ${filterState.selectedMonth}`;
+    if (filterState.filterMode === 'yearly') return `Year: ${filterState.selectedYear}`;
+    return 'Assigned consultations';
+  };
 
   const stats = [
     {
@@ -81,7 +115,7 @@ export function DoctorDashboard({
       value: opsCount.toString(),
       change: 'Outpatients',
       trend: 'up',
-      detail: 'OPD consultations',
+      detail: getDetailText(),
       icon: <ClipboardList />,
       tone: 'blue',
       onClick: () => onNavigate('OP Records', 'OP'),
@@ -91,7 +125,7 @@ export function DoctorDashboard({
       value: ipsCount.toString(),
       change: 'Inpatients',
       trend: 'up',
-      detail: 'Admissions & care',
+      detail: getDetailText(),
       icon: <Bed />,
       tone: 'teal',
       onClick: () => onNavigate('OP Records', 'IP'),
@@ -101,7 +135,7 @@ export function DoctorDashboard({
       value: emergencyCount.toString(),
       change: 'Urgent Care',
       trend: 'up',
-      detail: 'Emergency consultations',
+      detail: getDetailText(),
       icon: <Zap />,
       tone: 'red',
       onClick: () => onNavigate('OP Records', 'Emergency'),
@@ -145,7 +179,7 @@ export function DoctorDashboard({
             onAction={() => onNavigate('Laboratory')}
           />
           <div className="lab-cards" style={{ marginTop: '16px' }}>
-            {assignedLabTests.slice(0, 3).map((test) => (
+            {filteredAssignedLabTests.slice(0, 3).map((test) => (
               <div className="lab-card" key={test.id || test.test}>
                 <div className="lab-card-icon">
                   <FlaskConical size={18} />

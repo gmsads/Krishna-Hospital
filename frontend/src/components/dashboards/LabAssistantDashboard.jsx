@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import {
   Activity,
   ClipboardList,
@@ -19,6 +19,7 @@ import { TimeFilterBar } from '../common/TimeFilterBar';
 import { PanelHeader } from '../common/PanelHeader';
 import { initialLabTests } from '../data/initialData';
 import { PathologyLabReportPDFModal } from '../modals/PathologyLabReportPDFModal';
+import { getNormalizedDateParts } from '../../lib/dateUtils';
 
 function QuickAction({ icon, label, color, onClick }) {
   return (
@@ -57,10 +58,6 @@ export function LabAssistantDashboard({ profile, onNavigate, onEnterResult, onDe
     }
   };
 
-  let multiplier = 1;
-  if (filterState.filterMode === 'monthly') multiplier = 24;
-  if (filterState.filterMode === 'yearly') multiplier = 280;
-
   const isHospitalAssigned = (t) => {
     const creator = (t.createdBy || '').toLowerCase();
     const from = (t.assignedFrom || '').toLowerCase();
@@ -85,20 +82,41 @@ export function LabAssistantDashboard({ profile, onNavigate, onEnterResult, onDe
     return true;
   };
 
-  const filteredTests = labTests.filter((t) => {
-    if (activeSourceTab === 'Doctor Assigned') return isDoctorPrescribed(t) || isHospitalAssigned(t);
-    if (activeSourceTab === 'Self Created') return !isDoctorPrescribed(t) && !isHospitalAssigned(t);
-    return true;
-  });
+  const filteredTests = useMemo(() => {
+    return labTests.filter((t) => {
+      if (activeSourceTab === 'Doctor Assigned' && !isDoctorPrescribed(t) && !isHospitalAssigned(t)) return false;
+      if (activeSourceTab === 'Self Created' && (isDoctorPrescribed(t) || isHospitalAssigned(t))) return false;
 
-  const doctorAssignedCount = labTests.filter((t) => (isDoctorPrescribed(t) || isHospitalAssigned(t)) && t.status !== 'Completed' && t.status !== 'Result ready').length * multiplier;
-  const samplesCollectedCount = labTests.filter((t) => t.status === 'Sample Collected' || t.status === 'In Progress').length * multiplier;
-  const readyCount = labTests.filter((t) => t.status === 'Completed' || t.status === 'Result ready').length * multiplier;
+      if (filterState && filterState.filterMode && filterState.filterMode !== 'all') {
+        const { year, month, fullDate } = getNormalizedDateParts(t);
+        if (filterState.filterMode === 'date') return Boolean(fullDate && fullDate === filterState.selectedDate);
+        if (filterState.filterMode === 'today') {
+          const todayStr = new Date().toISOString().split('T')[0];
+          return Boolean(fullDate && fullDate === todayStr);
+        }
+        if (filterState.filterMode === 'monthly') return Boolean(month && month === filterState.selectedMonth);
+        if (filterState.filterMode === 'yearly') return Boolean(year && year === filterState.selectedYear);
+      }
+      return true;
+    });
+  }, [labTests, activeSourceTab, filterState]);
+
+  const doctorAssignedCount = filteredTests.filter((t) => (isDoctorPrescribed(t) || isHospitalAssigned(t)) && t.status !== 'Completed' && t.status !== 'Result ready').length;
+  const samplesCollectedCount = filteredTests.filter((t) => t.status === 'Sample Collected' || t.status === 'In Progress').length;
+  const readyCount = filteredTests.filter((t) => t.status === 'Completed' || t.status === 'Result ready').length;
+
+  const getDetailText = (fallback) => {
+    if (filterState.filterMode === 'today') return `Today: ${new Date().toISOString().split('T')[0]}`;
+    if (filterState.filterMode === 'date') return `Date: ${filterState.selectedDate}`;
+    if (filterState.filterMode === 'monthly') return `Month: ${filterState.selectedMonth}`;
+    if (filterState.filterMode === 'yearly') return `Year: ${filterState.selectedYear}`;
+    return fallback;
+  };
 
   const stats = [
-    { label: 'Hospital & Doctor assigned requests', value: doctorAssignedCount.toString(), change: 'Hospital / Doctor', trend: 'down', detail: 'Awaiting sample / result', icon: <FlaskConical />, tone: 'amber', onClick: () => onNavigate('Laboratory') },
-    { label: 'Samples collected', value: samplesCollectedCount.toString(), change: `${samplesCollectedCount}`, trend: 'up', detail: 'Processing in lab', icon: <Activity />, tone: 'teal', onClick: () => onNavigate('Laboratory') },
-    { label: 'Results completed', value: readyCount.toString(), change: `${readyCount}`, trend: 'up', detail: 'Ready for review', icon: <ClipboardList />, tone: 'blue', onClick: () => onNavigate('Laboratory') },
+    { label: 'Hospital & Doctor assigned requests', value: doctorAssignedCount.toString(), change: 'Hospital / Doctor', trend: 'down', detail: getDetailText('Awaiting sample / result'), icon: <FlaskConical />, tone: 'amber', onClick: () => onNavigate('Laboratory') },
+    { label: 'Samples collected', value: samplesCollectedCount.toString(), change: `${samplesCollectedCount}`, trend: 'up', detail: getDetailText('Processing in lab'), icon: <Activity />, tone: 'teal', onClick: () => onNavigate('Laboratory') },
+    { label: 'Results completed', value: readyCount.toString(), change: `${readyCount}`, trend: 'up', detail: getDetailText('Ready for review'), icon: <ClipboardList />, tone: 'blue', onClick: () => onNavigate('Laboratory') },
   ];
 
   return (
@@ -329,7 +347,7 @@ export function LabAssistantDashboard({ profile, onNavigate, onEnterResult, onDe
                       className="secondary-button"
                       style={{ padding: '6px 12px', fontSize: '11px', gap: '4px', color: '#1769d7', borderColor: '#b8d5f7', background: '#f4f8fe', fontWeight: '700' }}
                       onClick={() => onEnterResult(test)}
-                      title="Edit this lab test record and clinical findings"
+                      title="Edit lab test record, add more tests, and clinical findings"
                     >
                       <Edit2 size={13} /> {test.result || test.status === 'Result ready' ? 'Edit' : 'Enter Result'}
                     </button>

@@ -1,9 +1,11 @@
 import React, { useState, useMemo } from 'react';
-import { Calendar, ChevronDown, ClipboardList, History, Plus, UserCheck, UserPlus, WalletCards, Filter, FlaskConical, X, Upload, CheckCircle2, CreditCard, Printer, FileText, Trash2 } from 'lucide-react';
+import { Calendar, ChevronDown, ClipboardList, History, Plus, UserCheck, UserPlus, WalletCards, Filter, FlaskConical, X, Upload, CheckCircle2, CreditCard, Printer, FileText, Trash2, Edit2 } from 'lucide-react';
 import { StatCard } from '../common/StatCard';
 import { initialOPRecords } from '../data/initialData';
 import { HospitalInvoiceModal } from '../modals/HospitalInvoiceModal';
+import { EditOPRecordModal } from '../modals/EditOPRecordModal';
 import { uploadImageToCloudinary } from '../../lib/uploadHelper';
+import { getNormalizedDateParts, formatDisplayDate } from '../../lib/dateUtils';
 
 export function OPRecordsPage({
   records = initialOPRecords,
@@ -19,6 +21,7 @@ export function OPRecordsPage({
   onNotify,
 }) {
   const [activeInvoiceRecord, setActiveInvoiceRecord] = useState(null);
+  const [editingRecord, setEditingRecord] = useState(null);
   const now = new Date();
   const todayStr = now.toISOString().split('T')[0];
   const currentMonthStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
@@ -31,6 +34,7 @@ export function OPRecordsPage({
   const [selectedYear, setSelectedYear] = useState(currentYearStr);
   const [paymentFilter, setPaymentFilter] = useState('all');
   const [recordTypeFilter, setRecordTypeFilter] = useState(initialRecordTypeFilter);
+  const [patientTypeFilter, setPatientTypeFilter] = useState('all'); // 'all', 'new', 'returning'
 
   // COLLECT PAYMENT SETTLEMENT MODAL STATE
   const [paymentModalRecord, setPaymentModalRecord] = useState(null);
@@ -227,21 +231,60 @@ export function OPRecordsPage({
     }
   };
 
-  // Dynamic Filtering Logic
-  const filteredRecords = useMemo(() => {
-    return records.filter((r) => {
-      const recDate = r.date || todayStr;
-      let dateMatch = true;
-      if (filterMode === 'date') dateMatch = recDate === selectedDate;
-      if (filterMode === 'monthly') dateMatch = recDate.startsWith(selectedMonth);
-      if (filterMode === 'yearly') dateMatch = recDate.startsWith(selectedYear);
+  // Map all records per patient chronologically to determine Fresh OP vs Returning Visits accurately
+  const patientAllVisitsMap = useMemo(() => {
+    const map = new Map();
+    const sorted = [...(records || [])].sort((a, b) => {
+      const da = new Date(a.date || a.regDate || a.createdAt || 0).getTime();
+      const db = new Date(b.date || b.regDate || b.createdAt || 0).getTime();
+      return da - db;
+    });
 
-      const total = r.netAmount !== undefined ? r.netAmount : (parseFloat((r.amount || '300').replace(/[^0-9.]/g, '')) || 300);
-      const paid = parseFloat(r.paidAmount || (r.paymentStatus === 'Paid' ? total : 0)) || 0;
-      const isDue = (total - paid) > 0 || r.paymentStatus === 'Pay Later (Pending)' || r.paymentMethod === 'Pay Later (Post-Pay)';
+    sorted.forEach((r) => {
+      const nameKey = (r.patient || r.patientName || '').toLowerCase().trim();
+      if (!nameKey) return;
+      if (!map.has(nameKey)) {
+        map.set(nameKey, []);
+      }
+      map.get(nameKey).push(r);
+    });
+    return map;
+  }, [records]);
+
+  const getPatientVisitInfo = (r) => {
+    const nameKey = (r.patient || r.patientName || '').toLowerCase().trim();
+    const allVisits = patientAllVisitsMap.get(nameKey) || [];
+    const visitIndex = allVisits.findIndex(
+      (v) => (v._id && r._id && v._id === r._id) || (v.id && r.id && v.id === r.id) || (v.regNo && r.regNo && v.regNo === r.regNo)
+    );
+    const visitNumber = visitIndex >= 0 ? visitIndex + 1 : 1;
+    const isNew = visitNumber === 1;
+    const isReturning = visitNumber > 1;
+    return { visitNumber, isNew, isReturning };
+  };
+
+  // Base records matching Date, Payment status, and Record type
+  const basePeriodRecords = useMemo(() => {
+    return records.filter((r) => {
+      const { year, month, fullDate } = getNormalizedDateParts(r);
+      let dateMatch = true;
+      if (filterMode === 'date') {
+        dateMatch = Boolean(fullDate && fullDate === selectedDate);
+      } else if (filterMode === 'today') {
+        dateMatch = Boolean(fullDate && fullDate === todayStr);
+      } else if (filterMode === 'monthly') {
+        dateMatch = Boolean(month && month === selectedMonth);
+      } else if (filterMode === 'yearly') {
+        dateMatch = Boolean(year && year === selectedYear);
+      }
+
+      const isCancelled = r.paymentStatus === 'Cancelled' || r.isCancelled || r.status === 'Cancelled';
+      const total = isCancelled ? 0 : (r.netAmount !== undefined ? r.netAmount : (parseFloat((r.amount || '300').replace(/[^0-9.]/g, '')) || 300));
+      const paid = isCancelled ? 0 : (parseFloat(r.paidAmount || (r.paymentStatus === 'Paid' ? total : 0)) || 0);
+      const isDue = !isCancelled && ((total - paid) > 0 || r.paymentStatus === 'Pay Later (Pending)' || r.paymentMethod === 'Pay Later (Post-Pay)');
       
       let paymentMatch = true;
-      if (paymentFilter === 'paid') paymentMatch = !isDue;
+      if (paymentFilter === 'paid') paymentMatch = !isDue && !isCancelled;
       if (paymentFilter === 'due') paymentMatch = isDue;
 
       let typeMatch = true;
@@ -253,14 +296,35 @@ export function OPRecordsPage({
     });
   }, [records, filterMode, selectedDate, selectedMonth, selectedYear, paymentFilter, recordTypeFilter, todayStr]);
 
+  // Real accurate database counts for Fresh OPs vs Returning Visits
+  const newRegistrationsCount = useMemo(() => {
+    return basePeriodRecords.filter((r) => getPatientVisitInfo(r).isNew).length;
+  }, [basePeriodRecords, patientAllVisitsMap]);
+
+  const returningVisitsCount = useMemo(() => {
+    return basePeriodRecords.filter((r) => getPatientVisitInfo(r).isReturning).length;
+  }, [basePeriodRecords, patientAllVisitsMap]);
+
+  // Final records filtered by patientTypeFilter ('all', 'new', 'returning')
+  const filteredRecords = useMemo(() => {
+    if (patientTypeFilter === 'new') {
+      return basePeriodRecords.filter((r) => getPatientVisitInfo(r).isNew);
+    }
+    if (patientTypeFilter === 'returning') {
+      return basePeriodRecords.filter((r) => getPatientVisitInfo(r).isReturning);
+    }
+    return basePeriodRecords;
+  }, [basePeriodRecords, patientTypeFilter, patientAllVisitsMap]);
+
   const totalOPsAttended = filteredRecords.length;
   const pendingDueCount = useMemo(() => {
-    return records.filter((r) => {
+    return basePeriodRecords.filter((r) => {
+      if (r.paymentStatus === 'Cancelled' || r.isCancelled || r.status === 'Cancelled') return false;
       const total = parseFloat((r.amount || '300').replace(/[^0-9.]/g, '')) || 300;
       const paid = parseFloat(r.paidAmount || (r.paymentStatus === 'Paid' ? total : 0)) || 0;
       return (total - paid) > 0 || r.paymentStatus === 'Pay Later (Pending)' || r.paymentMethod === 'Pay Later (Post-Pay)';
     }).length;
-  }, [records]);
+  }, [basePeriodRecords]);
 
   return (
     <>
@@ -281,30 +345,33 @@ export function OPRecordsPage({
       <div className="stat-grid" style={{ gridTemplateColumns: isDoctor ? 'repeat(3, 1fr)' : 'repeat(4, 1fr)' }}>
         <StatCard
           label="Total Attended Records"
-          value={totalOPsAttended.toString()}
-          change="8.4%"
+          value={basePeriodRecords.length.toString()}
+          change="All Records"
           trend="up"
-          detail={filterMode === 'all' ? 'All time patient records' : filterMode === 'date' ? `Date: ${selectedDate}` : filterMode === 'monthly' ? `Month: ${selectedMonth}` : `Year: ${selectedYear}`}
+          detail={patientTypeFilter === 'all' ? (filterMode === 'all' ? 'All time patient records' : filterMode === 'today' ? `Today: ${todayStr}` : filterMode === 'date' ? `Date: ${selectedDate}` : filterMode === 'monthly' ? `Month: ${selectedMonth}` : `Year: ${selectedYear}`) : 'Showing filtered view · Click to show all'}
           icon={<ClipboardList />}
-          tone="blue"
+          tone={patientTypeFilter === 'all' ? 'blue' : 'slate'}
+          onClick={() => setPatientTypeFilter('all')}
         />
         <StatCard
           label="New Registrations"
-          value={Math.ceil(totalOPsAttended * 0.3).toString()}
-          change="30%"
+          value={newRegistrationsCount.toString()}
+          change={basePeriodRecords.length > 0 ? `${Math.round((newRegistrationsCount / basePeriodRecords.length) * 100)}%` : '0%'}
           trend="up"
-          detail="First-time registrations"
+          detail={patientTypeFilter === 'new' ? 'Active: Showing Fresh OPs' : 'Click to show all fresh OPs'}
           icon={<UserPlus />}
-          tone="sky"
+          tone={patientTypeFilter === 'new' ? 'sky' : 'slate'}
+          onClick={() => setPatientTypeFilter(patientTypeFilter === 'new' ? 'all' : 'new')}
         />
         <StatCard
           label="Returning Visits"
-          value={Math.floor(totalOPsAttended * 0.7).toString()}
-          change="70%"
+          value={returningVisitsCount.toString()}
+          change={basePeriodRecords.length > 0 ? `${Math.round((returningVisitsCount / basePeriodRecords.length) * 100)}%` : '0%'}
           trend="up"
-          detail="Multi-visit patients"
+          detail={patientTypeFilter === 'returning' ? 'Active: Showing patients coming back' : 'Click to show who are coming back'}
           icon={<UserCheck />}
-          tone="teal"
+          tone={patientTypeFilter === 'returning' ? 'teal' : 'slate'}
+          onClick={() => setPatientTypeFilter(patientTypeFilter === 'returning' ? 'all' : 'returning')}
         />
         {!isDoctor && (
           <StatCard
@@ -385,14 +452,25 @@ export function OPRecordsPage({
               </button>
             </div>
 
-            <div style={{ display: 'flex', background: '#fff', padding: '3px', borderRadius: '8px', border: '1px solid #cce0f5' }}>
+            <div style={{ display: 'flex', background: '#fff', padding: '3px', borderRadius: '8px', border: '1px solid #cce0f5', flexWrap: 'wrap' }}>
               <button
                 type="button"
                 className={`secondary-button ${filterMode === 'all' ? 'active' : ''}`}
                 style={{ padding: '6px 12px', fontSize: '11px', border: '0', background: filterMode === 'all' ? '#1769d7' : 'transparent', color: filterMode === 'all' ? '#fff' : '#4a5e7a' }}
                 onClick={() => setFilterMode('all')}
               >
-                All Time / Today
+                All Time
+              </button>
+              <button
+                type="button"
+                className={`secondary-button ${filterMode === 'today' ? 'active' : ''}`}
+                style={{ padding: '6px 12px', fontSize: '11px', border: '0', background: filterMode === 'today' ? '#1769d7' : 'transparent', color: filterMode === 'today' ? '#fff' : '#4a5e7a' }}
+                onClick={() => {
+                  setFilterMode('today');
+                  setSelectedDate(todayStr);
+                }}
+              >
+                Today
               </button>
               <button
                 type="button"
@@ -459,10 +537,28 @@ export function OPRecordsPage({
       <section className="panel full-panel">
         <div className="list-toolbar">
           <div>
-            <h2>Patient Registrations & Consultations ({totalOPsAttended})</h2>
+            <h2>
+              Patient Registrations & Consultations ({totalOPsAttended})
+              {patientTypeFilter === 'new' && (
+                <span style={{ marginLeft: '10px', fontSize: '11px', color: '#0284c7', background: '#e0f2fe', border: '1px solid #bae6fd', padding: '3px 8px', borderRadius: '10px', fontWeight: '800' }}>
+                  🌱 Fresh OPs Only
+                </span>
+              )}
+              {patientTypeFilter === 'returning' && (
+                <span style={{ marginLeft: '10px', fontSize: '11px', color: '#0d9488', background: '#ccfbf1', border: '1px solid #99f6e4', padding: '3px 8px', borderRadius: '10px', fontWeight: '800' }}>
+                  🔄 Returning Patients Only
+                </span>
+              )}
+            </h2>
             <p>
-              {filterMode === 'all'
+              {patientTypeFilter === 'new'
+                ? "Showing all fresh OPs (first-time registered patients)"
+                : patientTypeFilter === 'returning'
+                ? "Showing patients who are coming back for follow-up consultations"
+                : filterMode === 'all'
                 ? "All time consultation and admission records"
+                : filterMode === 'today'
+                ? `Showing records for today (${todayStr})`
                 : filterMode === 'date'
                 ? `Showing records for date: ${selectedDate}`
                 : filterMode === 'monthly'
@@ -488,11 +584,13 @@ export function OPRecordsPage({
             </thead>
             <tbody>
               {filteredRecords.map((record, idx) => {
-                const total = record.netAmount !== undefined ? record.netAmount : (parseFloat((record.amount || '300').replace(/[^0-9.]/g, '')) || 300);
-                const paid = parseFloat(record.paidAmount || (record.paymentStatus === 'Paid' ? total : 0)) || 0;
-                const due = Math.max(0, total - paid);
-                const hasDue = due > 0 || record.paymentStatus === 'Pay Later (Pending)' || record.paymentMethod === 'Pay Later (Post-Pay)';
+                const isCancelledRecord = record.paymentStatus === 'Cancelled' || record.isCancelled || record.status === 'Cancelled';
+                const total = isCancelledRecord ? 0 : (record.netAmount !== undefined ? record.netAmount : (parseFloat((record.amount || '300').replace(/[^0-9.]/g, '')) || 300));
+                const paid = isCancelledRecord ? 0 : (parseFloat(record.paidAmount || (record.paymentStatus === 'Paid' ? total : 0)) || 0);
+                const due = isCancelledRecord ? 0 : Math.max(0, total - paid);
+                const hasDue = !isCancelledRecord && (due > 0 || record.paymentStatus === 'Pay Later (Pending)' || record.paymentMethod === 'Pay Later (Post-Pay)');
                 const recType = (record.recordType || 'OP').trim();
+                const visitInfo = getPatientVisitInfo(record);
 
                 const badgeStyle = recType.startsWith('Emergency')
                   ? { bg: '#fff1f2', border: '#fda4af', color: '#e11d48', label: recType.includes('(') ? `⚡ ${recType}` : '⚡ Emergency' }
@@ -512,7 +610,9 @@ export function OPRecordsPage({
                         {badgeStyle.label}
                       </span>
                     </td>
-                    <td><strong>{record.patient}</strong></td>
+                    <td>
+                      <strong>{record.patient}</strong>
+                    </td>
                     <td>{record.doctor}</td>
                     <td>
                       <span style={{ fontSize: '11px', fontWeight: '700', color: '#0284c7', background: '#f0f9ff', border: '1px solid #bae6fd', padding: '2px 8px', borderRadius: '12px' }}>
@@ -520,7 +620,11 @@ export function OPRecordsPage({
                       </span>
                     </td>
                     <td>
-                      {due <= 0 && record.paymentStatus === 'Paid' ? (
+                      {isCancelledRecord ? (
+                        <span style={{ fontSize: '11px', fontWeight: '800', color: '#b91c1c', background: '#fef2f2', border: '1px solid #fca5a5', padding: '3px 9px', borderRadius: '12px' }}>
+                          ❌ Cancelled
+                        </span>
+                      ) : due <= 0 && record.paymentStatus === 'Paid' ? (
                         <span style={{ fontSize: '11px', fontWeight: '800', color: '#15803d', background: '#f0fdf4', border: '1px solid #bbf7d0', padding: '3px 9px', borderRadius: '12px' }}>
                           ✓ Paid ({record.paymentMethod || 'Cash'})
                         </span>
@@ -534,10 +638,15 @@ export function OPRecordsPage({
                         </span>
                       )}
                     </td>
-                    <td>{record.date || 'Today'}, {record.time}</td>
+                    <td>{formatDisplayDate(record, 'Today')}, {record.time || record.regTime || ''}</td>
                     {!isDoctor && (
                       <td>
-                        {due <= 0 ? (
+                        {isCancelledRecord ? (
+                          <>
+                            <strong style={{ fontSize: '13px', color: '#64748b', display: 'block' }}>₹ 0.00</strong>
+                            <span style={{ fontSize: '10px', color: '#94a3b8', fontWeight: '600' }}>Cancelled (Void)</span>
+                          </>
+                        ) : due <= 0 ? (
                           <>
                             <strong style={{ fontSize: '13px', color: '#15803d', display: 'block' }}>₹ 0.00</strong>
                             <span style={{ fontSize: '10px', color: '#166534', fontWeight: '600' }}>Cleared (Fee ₹{total})</span>
@@ -551,7 +660,11 @@ export function OPRecordsPage({
                       </td>
                     )}
                     <td style={{ textAlign: 'right', display: 'flex', gap: '6px', justifyContent: 'flex-end', alignItems: 'center' }}>
-                      {hasDue ? (
+                      {isCancelledRecord ? (
+                        <span style={{ fontSize: '11px', fontWeight: '700', color: '#ef4444', background: '#fef2f2', border: '1px solid #fecaca', padding: '4px 8px', borderRadius: '6px' }}>
+                          Cancelled OP
+                        </span>
+                      ) : hasDue ? (
                         <button
                           type="button"
                           className="primary-button"
@@ -630,6 +743,24 @@ export function OPRecordsPage({
                         title="View complete patient multi-visit history"
                       >
                         <History size={14} color="#1769d7" /> View History
+                      </button>
+                      <button
+                        type="button"
+                        className="secondary-button"
+                        style={{
+                          padding: '5px 10px',
+                          fontSize: '11px',
+                          gap: '4px',
+                          background: '#eff6ff',
+                          borderColor: '#bfdbfe',
+                          color: '#1d4ed8',
+                          fontWeight: '700',
+                          borderRadius: '6px',
+                        }}
+                        onClick={() => setEditingRecord(record)}
+                        title="Edit OP Record Details"
+                      >
+                        <Edit2 size={13} color="#1d4ed8" /> Edit
                       </button>
                       <button
                         className="icon-button"
@@ -905,6 +1036,19 @@ export function OPRecordsPage({
         type="record"
         branding={branding}
       />
+
+      {/* Edit OP Registration Record Modal */}
+      {editingRecord && (
+        <EditOPRecordModal
+          record={editingRecord}
+          onClose={() => setEditingRecord(null)}
+          onSave={(updated) => {
+            if (onUpdateOPRecord) onUpdateOPRecord(updated);
+            setEditingRecord(null);
+          }}
+          onNotify={onNotify}
+        />
+      )}
     </>
   );
 }

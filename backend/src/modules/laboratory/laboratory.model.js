@@ -103,6 +103,10 @@ const laboratorySchema = new mongoose.Schema(
       type: mongoose.Schema.Types.Mixed,
       default: [],
     },
+    testsList: {
+      type: mongoose.Schema.Types.Mixed,
+      default: [],
+    },
     results: {
       type: mongoose.Schema.Types.Mixed,
       default: {},

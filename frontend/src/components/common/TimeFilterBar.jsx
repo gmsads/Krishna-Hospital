@@ -48,7 +48,18 @@ export function TimeFilterBar({ onChange, title = 'Filter Dashboard Analytics' }
               style={{ padding: '6px 12px', fontSize: '11px', border: '0', background: filterMode === 'all' ? '#1769d7' : 'transparent', color: filterMode === 'all' ? '#fff' : '#4a5e7a' }}
               onClick={() => handleModeChange('all')}
             >
-              All Time / Today
+              All Time
+            </button>
+            <button
+              type="button"
+              className="secondary-button"
+              style={{ padding: '6px 12px', fontSize: '11px', border: '0', background: filterMode === 'today' ? '#1769d7' : 'transparent', color: filterMode === 'today' ? '#fff' : '#4a5e7a' }}
+              onClick={() => {
+                setFilterMode('today');
+                onChange && onChange({ filterMode: 'today', selectedDate: todayStr, selectedMonth, selectedYear });
+              }}
+            >
+              Today
             </button>
             <button
               type="button"

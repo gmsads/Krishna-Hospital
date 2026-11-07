@@ -21,6 +21,7 @@ import { TimeFilterBar } from '../common/TimeFilterBar';
 import { PanelHeader } from '../common/PanelHeader';
 import { PatientTable } from '../common/PatientTable';
 import { initialOPRecords, initialLabTests, initialStaff, initialDoctors, initialExpenses } from '../data/initialData';
+import { getNormalizedDateParts } from '../../lib/dateUtils';
 
 function QuickAction({ icon, label, color, onClick }) {
   return (
@@ -55,47 +56,48 @@ export function AdminDashboard({
 
   const [filterState, setFilterState] = useState({ filterMode: 'all' });
 
-  // REAL-TIME BRANCH-WISE / TIME-WISE ANALYTICS COMPUTATION FROM MONGODB DATABASE
-  const analyticsData = useMemo(() => {
-    const isBranchMatch = (itemBranch, itemBranchCode, bName) => {
-      if (!itemBranch && !itemBranchCode) return true;
-      const ib = (itemBranch || '').trim().toLowerCase();
-      const target = (bName || '').trim().toLowerCase();
-      return ib === target || ib.includes(target) || target.includes(ib);
-    };
+  const isBranchMatch = (itemBranch, itemBranchCode, bName) => {
+    if (!itemBranch && !itemBranchCode) return true;
+    const ib = (itemBranch || '').trim().toLowerCase();
+    const target = (bName || '').trim().toLowerCase();
+    return ib === target || ib.includes(target) || target.includes(ib);
+  };
 
-    const getItemDate = (item) => {
-      if (!item) return null;
-      const raw = item.createdAt || item.date || item.expenseDate || item.registrationDate || item.sampleCollectedAt || item.timestamp;
-      if (!raw) return null;
-      const d = new Date(raw);
-      return isNaN(d.getTime()) ? null : d;
-    };
-
-    let scopedOPs = opRecords;
-    let scopedLabs = labTests;
-    let scopedExps = expensesList;
+  // REAL-TIME SCOPED DATA FILTERED STRICTLY BY BRANCH & DATE/MONTH/YEAR PERIOD
+  const { scopedOPs, scopedLabs, scopedExps } = useMemo(() => {
+    let sOPs = opRecords;
+    let sLabs = labTests;
+    let sExps = expensesList;
 
     if (effectiveBranch && effectiveBranch !== 'All') {
-      scopedOPs = opRecords.filter((r) => isBranchMatch(r.branch, r.branchCode, effectiveBranch));
-      scopedLabs = labTests.filter((l) => isBranchMatch(l.branch, l.branchCode, effectiveBranch));
-      scopedExps = expensesList.filter((e) => isBranchMatch(e.branch, e.branchCode, effectiveBranch));
+      sOPs = opRecords.filter((r) => isBranchMatch(r.branch, r.branchCode, effectiveBranch));
+      sLabs = labTests.filter((l) => isBranchMatch(l.branch, l.branchCode, effectiveBranch));
+      sExps = expensesList.filter((e) => isBranchMatch(e.branch, e.branchCode, effectiveBranch));
     }
 
-    if (filterState.filterMode === 'date' && filterState.selectedDate) {
-      const targetDate = filterState.selectedDate;
-      const matchesDate = (item) => {
-        const d = getItemDate(item);
-        if (!d) return false;
-        const yearStr = d.getFullYear();
-        const monthStr = String(d.getMonth() + 1).padStart(2, '0');
-        const dayStr = String(d.getDate()).padStart(2, '0');
-        return `${yearStr}-${monthStr}-${dayStr}` === targetDate;
+    if (filterState && filterState.filterMode && filterState.filterMode !== 'all') {
+      const mode = filterState.filterMode;
+      const todayStr = new Date().toISOString().split('T')[0];
+
+      const matches = (item) => {
+        const { year, month, fullDate } = getNormalizedDateParts(item);
+        if (mode === 'date') return Boolean(fullDate && fullDate === filterState.selectedDate);
+        if (mode === 'today') return Boolean(fullDate && fullDate === todayStr);
+        if (mode === 'monthly') return Boolean(month && month === filterState.selectedMonth);
+        if (mode === 'yearly') return Boolean(year && year === filterState.selectedYear);
+        return true;
       };
-      scopedOPs = scopedOPs.filter(matchesDate);
-      scopedLabs = scopedLabs.filter(matchesDate);
-      scopedExps = scopedExps.filter(matchesDate);
+
+      sOPs = sOPs.filter(matches);
+      sLabs = sLabs.filter(matches);
+      sExps = sExps.filter(matches);
     }
+
+    return { scopedOPs: sOPs, scopedLabs: sLabs, scopedExps: sExps };
+  }, [opRecords, labTests, expensesList, effectiveBranch, filterState]);
+
+  // REAL-TIME BRANCH-WISE / TIME-WISE ANALYTICS COMPUTATION FROM MONGODB DATABASE
+  const analyticsData = useMemo(() => {
 
     // 1. MONTHLY FILTER MODE -> WEEK-WISE BREAKDOWN
     if (filterState.filterMode === 'monthly') {
@@ -118,6 +120,7 @@ export function AdminDashboard({
         });
 
         const opRev = wRecords.reduce((acc, r) => {
+          if (r.paymentStatus === 'Cancelled' || r.status === 'Cancelled' || r.isCancelled) return acc;
           const total = parseFloat(String(r.charges || r.amount || '300').replace(/[^0-9.]/g, '')) || 300;
           const paid = parseFloat(String(r.amountPaid || r.paidAmount || r.amountCollectingNow || (r.paymentStatus === 'Paid' ? total : 0)).replace(/[^0-9.]/g, '')) || total;
           return acc + paid;
@@ -186,6 +189,7 @@ export function AdminDashboard({
         });
 
         const opRev = mRecords.reduce((acc, r) => {
+          if (r.paymentStatus === 'Cancelled' || r.status === 'Cancelled' || r.isCancelled) return acc;
           const total = parseFloat(String(r.charges || r.amount || '300').replace(/[^0-9.]/g, '')) || 300;
           const paid = parseFloat(String(r.amountPaid || r.paidAmount || r.amountCollectingNow || (r.paymentStatus === 'Paid' ? total : 0)).replace(/[^0-9.]/g, '')) || total;
           return acc + paid;
@@ -261,14 +265,15 @@ export function AdminDashboard({
     }
 
     const items = branchNames.map((bName) => {
-      const bRecords = opRecords.filter((r) => isBranchMatch(r.branch, r.branchCode, bName));
+      const bRecords = scopedOPs.filter((r) => isBranchMatch(r.branch, r.branchCode, bName));
       const opRev = bRecords.reduce((acc, r) => {
+        if (r.paymentStatus === 'Cancelled' || r.status === 'Cancelled' || r.isCancelled) return acc;
         const total = parseFloat(String(r.charges || r.amount || '300').replace(/[^0-9.]/g, '')) || 300;
         const paid = parseFloat(String(r.amountPaid || r.paidAmount || r.amountCollectingNow || (r.paymentStatus === 'Paid' ? total : 0)).replace(/[^0-9.]/g, '')) || total;
         return acc + paid;
       }, 0);
 
-      const bLabOrders = labTests.filter((l) => isBranchMatch(l.branch, l.branchCode, bName));
+      const bLabOrders = scopedLabs.filter((l) => isBranchMatch(l.branch, l.branchCode, bName));
       const labRev = bLabOrders.reduce((acc, l) => {
         const total = parseFloat(String(l.amount || l.testFee || '0').replace(/[^0-9.]/g, '')) || 0;
         const paid = parseFloat(String(l.paidAmount || l.amountPaid || l.amountPaidNow || (l.paymentStatus === 'Paid' ? total : 0)).replace(/[^0-9.]/g, '')) || total;
@@ -277,7 +282,7 @@ export function AdminDashboard({
 
       const rev = opRev + labRev;
 
-      const bExpensesList = expensesList.filter((e) => isBranchMatch(e.branch, e.branchCode, bName));
+      const bExpensesList = scopedExps.filter((e) => isBranchMatch(e.branch, e.branchCode, bName));
       const exp = bExpensesList.reduce((acc, e) => {
         const amtStr = String(e.amount ?? 0);
         const amt = parseFloat(amtStr.replace(/[^0-9.]/g, '')) || 0;
@@ -308,33 +313,40 @@ export function AdminDashboard({
     const globalNetProfit = globalTotalRevenue - globalTotalExpenses;
     const maxVal = items.length > 0 ? Math.max(...items.map((b) => Math.max(b.revenue, b.expenses)), 1000) : 1000;
 
+    const chartTitle = filterState.filterMode === 'date'
+      ? `Financial Performance — Date: ${filterState.selectedDate}`
+      : filterState.filterMode === 'today'
+      ? `Financial Performance — Today (${new Date().toISOString().split('T')[0]})`
+      : `Financial Performance (${effectiveBranch === 'All' ? 'All Campuses' : effectiveBranch})`;
+
     return {
       mode: 'branch',
-      chartTitle: `Financial Performance (${effectiveBranch === 'All' ? 'All Campuses' : effectiveBranch})`,
+      chartTitle,
       items,
       globalTotalRevenue,
       globalTotalExpenses,
       globalNetProfit,
       maxVal,
     };
-  }, [opRecords, expensesList, labTests, staff, doctorsList, branchesList, effectiveBranch, filterState]);
+  }, [scopedOPs, scopedLabs, scopedExps, staff, doctorsList, branchesList, effectiveBranch, filterState]);
 
-  // STRICT REAL-TIME CALCULATIONS FROM DATABASE
-  const rawOpsCount = opRecords.filter(r => !(r.recordType || '').startsWith('IP') && !(r.recordType || '').startsWith('Emergency')).length;
-  const rawIpsCount = opRecords.filter(r => (r.recordType || '').startsWith('IP')).length;
-  const rawEmergencyCount = opRecords.filter(r => (r.recordType || '').startsWith('Emergency')).length;
+  // STRICT REAL-TIME CALCULATIONS FROM DATABASE FILTERED FOR CURRENT PERIOD
+  const rawOpsCount = scopedOPs.filter(r => !(r.recordType || '').startsWith('IP') && !(r.recordType || '').startsWith('Emergency')).length;
+  const rawIpsCount = scopedOPs.filter(r => (r.recordType || '').startsWith('IP')).length;
+  const rawEmergencyCount = scopedOPs.filter(r => (r.recordType || '').startsWith('Emergency')).length;
 
   const opsCount = rawOpsCount;
   const ipsCount = rawIpsCount;
   const emergencyCount = rawEmergencyCount;
 
-  const opRecordsRevenue = opRecords.reduce((acc, r) => {
+  const opRecordsRevenue = scopedOPs.reduce((acc, r) => {
+    if (r.paymentStatus === 'Cancelled' || r.status === 'Cancelled' || r.isCancelled) return acc;
     const total = parseFloat(String(r.charges || r.amount || '300').replace(/[^0-9.]/g, '')) || 300;
     const paid = parseFloat(String(r.amountPaid || r.paidAmount || r.amountCollectingNow || (r.paymentStatus === 'Paid' ? total : 0)).replace(/[^0-9.]/g, '')) || total;
     return acc + paid;
   }, 0);
 
-  const labTestsRevenue = labTests.reduce((acc, l) => {
+  const labTestsRevenue = scopedLabs.reduce((acc, l) => {
     const total = parseFloat(String(l.amount || l.testFee || '0').replace(/[^0-9.]/g, '')) || 0;
     const paid = parseFloat(String(l.paidAmount || l.amountPaid || l.amountPaidNow || (l.paymentStatus === 'Paid' ? total : 0)).replace(/[^0-9.]/g, '')) || total;
     return acc + paid;
@@ -342,13 +354,14 @@ export function AdminDashboard({
 
   const totalCalculatedRevenue = opRecordsRevenue + labTestsRevenue;
 
-  const totalBranchExpenses = expensesList.reduce((acc, e) => {
+  const totalBranchExpenses = scopedExps.reduce((acc, e) => {
     const amtStr = String(e.amount ?? 0);
     const amt = parseFloat(amtStr.replace(/[^0-9.]/g, '')) || 0;
     return acc + amt;
   }, 0);
 
   const getDetailText = () => {
+    if (filterState.filterMode === 'today') return `Today: ${new Date().toISOString().split('T')[0]}`;
     if (filterState.filterMode === 'date') return `Date: ${filterState.selectedDate}`;
     if (filterState.filterMode === 'monthly') return `Month: ${filterState.selectedMonth}`;
     if (filterState.filterMode === 'yearly') return `Year: ${filterState.selectedYear}`;

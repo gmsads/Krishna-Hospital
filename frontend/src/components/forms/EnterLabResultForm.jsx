@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Save, Plus, Trash2 } from 'lucide-react';
+import { Save, Plus, Trash2, X, FlaskConical } from 'lucide-react';
 import { initialLabTests, initialOPRecords, initialMasterLabServices } from '../data/initialData';
 
 // Preset generator helper for sub-parameter rows (Loads custom sub-categories defined in Master Services first)
@@ -165,8 +165,30 @@ export function EnterLabResultForm({
   }, [effectiveBranch, branchesList, initialSelectedTest]);
 
   // Main Test Name (Selected from Admin Catalogue)
-  const initialMainTest = initialSelectedTest?.test || (masterServices[0]?.name || '');
+  const initialMainTest = (() => {
+    if (initialSelectedTest?.test) {
+      const parts = initialSelectedTest.test.split(' + ');
+      return parts[0].trim();
+    }
+    return masterServices[0]?.name || '';
+  })();
   const [testName, setTestName] = useState(initialMainTest);
+
+  // Additional ordered tests in this lab order (e.g. CBC + Blood Sugar + Lipid Profile)
+  const [additionalTests, setAdditionalTests] = useState(() => {
+    if (Array.isArray(initialSelectedTest?.testsList) && initialSelectedTest.testsList.length > 1) {
+      return initialSelectedTest.testsList.slice(1);
+    }
+    if (initialSelectedTest?.test && initialSelectedTest.test.includes(' + ')) {
+      const parts = initialSelectedTest.test.split(' + ').map((s) => s.trim());
+      return parts.slice(1).map((name) => {
+        const srv = masterServices.find((s) => s.name === name);
+        return { name, fee: parseFloat(srv?.rate) || 0 };
+      });
+    }
+    return [];
+  });
+  const [selectedExtraTest, setSelectedExtraTest] = useState('');
 
   // Dynamic Multi-Row Sub-Parameter State (e.g. T1, T2, T3, T4, TSH)
   const [testRows, setTestRows] = useState(() =>
@@ -395,9 +417,24 @@ export function EnterLabResultForm({
         setStatus(initialSelectedTest.status);
       }
       if (initialSelectedTest.test || initialSelectedTest.testName) {
-        const tName = initialSelectedTest.test || initialSelectedTest.testName;
-        setTestName(tName);
-        setTestRows(resolveExistingRows(initialSelectedTest, tName, masterServices));
+        const rawTName = initialSelectedTest.test || initialSelectedTest.testName;
+        if (rawTName.includes(' + ')) {
+          const parts = rawTName.split(' + ').map((s) => s.trim());
+          setTestName(parts[0]);
+          setAdditionalTests(
+            parts.slice(1).map((name) => {
+              const srv = masterServices.find((s) => s.name === name);
+              return { name, fee: parseFloat(srv?.rate) || 0 };
+            })
+          );
+        } else if (Array.isArray(initialSelectedTest.testsList) && initialSelectedTest.testsList.length > 1) {
+          setTestName(initialSelectedTest.testsList[0].name || rawTName);
+          setAdditionalTests(initialSelectedTest.testsList.slice(1));
+        } else {
+          setTestName(rawTName);
+          setAdditionalTests([]);
+        }
+        setTestRows(resolveExistingRows(initialSelectedTest, rawTName, masterServices));
       }
       if (initialSelectedTest.notes || initialSelectedTest.clinicalNotes) {
         setNotes(initialSelectedTest.notes || initialSelectedTest.clinicalNotes);
@@ -443,22 +480,96 @@ export function EnterLabResultForm({
   // Handle Main Test Selection -> Auto-populate presets & rates
   const handleMainTestChange = (selectedName) => {
     setTestName(selectedName);
-    setTestRows(getInitialRowsForTest(selectedName, masterServices));
+    const mainRows = getInitialRowsForTest(selectedName, masterServices);
+    const extraRows = testRows.filter((r) => r.testSource && r.testSource !== testName);
+    setTestRows([...mainRows, ...extraRows]);
+
     const foundSrv = masterServices.find(s => s.name === selectedName);
-    if (foundSrv && foundSrv.rate) {
-      const rateStr = parseFloat(foundSrv.rate).toString();
-      setTestFee(rateStr);
-      const gross = parseFloat(rateStr) || 0;
-      const currentDisc = parseFloat(String(discount || '0').replace(/[^0-9.]/g, '')) || 0;
-      const newNet = Math.max(0, gross - currentDisc);
-      const activeKeys = Object.keys(selectedMethods).filter((k) => selectedMethods[k] && k !== 'Pay Later');
-      if (activeKeys.length === 1) {
-        setSplitAmounts((prev) => ({
-          ...prev,
-          [activeKeys[0]]: newNet.toString(),
-        }));
-      }
+    const baseRate = foundSrv && foundSrv.rate ? (parseFloat(foundSrv.rate) || 0) : 0;
+    const extraTotalFee = additionalTests.reduce((sum, t) => sum + (parseFloat(t.fee) || 0), 0);
+    const totalGross = baseRate + extraTotalFee;
+    setTestFee(totalGross.toString());
+
+    const currentDisc = parseFloat(String(discount || '0').replace(/[^0-9.]/g, '')) || 0;
+    const newNet = Math.max(0, totalGross - currentDisc);
+    const activeKeys = Object.keys(selectedMethods).filter((k) => selectedMethods[k] && k !== 'Pay Later');
+    if (activeKeys.length === 1) {
+      setSplitAmounts((prev) => ({
+        ...prev,
+        [activeKeys[0]]: newNet.toString(),
+      }));
     }
+  };
+
+  // Add Another Test / Service to the Order (e.g. CBC + Sugar + Lipid)
+  const handleAddExtraTest = () => {
+    if (!selectedExtraTest) return;
+    if (selectedExtraTest === testName || additionalTests.some((t) => t.name === selectedExtraTest)) {
+      notify && notify(`${selectedExtraTest} is already added to this lab order.`);
+      return;
+    }
+
+    const srv = masterServices.find((s) => s.name === selectedExtraTest);
+    const addedFee = parseFloat(srv?.rate) || 0;
+    const newTestObj = {
+      name: selectedExtraTest,
+      fee: addedFee,
+    };
+
+    setAdditionalTests((prev) => [...prev, newTestObj]);
+
+    // Append new sub-parameter rows for this additional test
+    const newRows = getInitialRowsForTest(selectedExtraTest, masterServices).map((row, idx) => ({
+      ...row,
+      id: Date.now() + idx + Math.random(),
+      testSource: selectedExtraTest,
+    }));
+
+    setTestRows((prev) => [...prev, ...newRows]);
+
+    // Update test fee by adding the new test rate
+    const currentGross = parseFloat(String(testFee || '0').replace(/[^0-9.]/g, '')) || 0;
+    const newGross = currentGross + addedFee;
+    setTestFee(newGross.toString());
+
+    // Update split amount if single payment mode
+    const currentDisc = parseFloat(String(discount || '0').replace(/[^0-9.]/g, '')) || 0;
+    const newNet = Math.max(0, newGross - currentDisc);
+    const activeKeys = Object.keys(selectedMethods).filter((k) => selectedMethods[k] && k !== 'Pay Later');
+    if (activeKeys.length === 1) {
+      setSplitAmounts((prev) => ({
+        ...prev,
+        [activeKeys[0]]: newNet.toString(),
+      }));
+    }
+
+    setSelectedExtraTest('');
+    notify && notify(`✓ Added ${selectedExtraTest} (₹${addedFee}) to this lab record!`);
+  };
+
+  // Remove an added Extra Test from the Order
+  const handleRemoveExtraTest = (testNameToRemove) => {
+    const target = additionalTests.find((t) => t.name === testNameToRemove);
+    const feeToDeduct = target?.fee || 0;
+
+    setAdditionalTests((prev) => prev.filter((t) => t.name !== testNameToRemove));
+    setTestRows((prev) => prev.filter((r) => r.testSource !== testNameToRemove));
+
+    const currentGross = parseFloat(String(testFee || '0').replace(/[^0-9.]/g, '')) || 0;
+    const newGross = Math.max(0, currentGross - feeToDeduct);
+    setTestFee(newGross.toString());
+
+    const currentDisc = parseFloat(String(discount || '0').replace(/[^0-9.]/g, '')) || 0;
+    const newNet = Math.max(0, newGross - currentDisc);
+    const activeKeys = Object.keys(selectedMethods).filter((k) => selectedMethods[k] && k !== 'Pay Later');
+    if (activeKeys.length === 1) {
+      setSplitAmounts((prev) => ({
+        ...prev,
+        [activeKeys[0]]: newNet.toString(),
+      }));
+    }
+
+    notify && notify(`Removed ${testNameToRemove} from order.`);
   };
 
   // Add a new Sub-Parameter Row (+ Button)
@@ -573,7 +684,17 @@ export function EnterLabResultForm({
       .join(', ');
 
     const existingResult = initialSelectedTest?.result || initialSelectedTest?.results?.summaryResult || '';
-    const resolvedResultValue = summaryResult || existingResult || (status === 'Result ready' ? 'Pathology Report Available' : status);
+    const isSampleStage = status === 'Sample collected' || status === 'Processing' || status === 'Awaiting sample';
+    const fallbackStatusLabel = isSampleStage ? (status || 'Sample collected') : 'Pathology Report Available';
+    const resolvedResultValue = summaryResult || existingResult || fallbackStatusLabel;
+
+    // All tests in this order
+    const primaryRate = parseFloat(masterServices.find(s => s.name === testName.trim())?.rate) || grossFeeNum;
+    const allTestsList = [
+      { name: testName.trim(), fee: primaryRate },
+      ...additionalTests,
+    ];
+    const combinedTestName = allTestsList.map((t) => t.name).join(' + ');
 
     const targetBranch = effectiveBranch === 'All' ? (branchesList[0]?.name || 'Central Campus') : effectiveBranch;
     const resolvedLabNo = initialSelectedTest?.labOrderNo || (opNumber.trim().startsWith('LAB-') ? opNumber.trim() : (initialSelectedTest?.id?.startsWith('LAB-') ? initialSelectedTest.id : opNumber.trim()));
@@ -608,8 +729,9 @@ export function EnterLabResultForm({
       phone: phone.trim(),
       doctor: assignedDoctor,
       orderingDoctor: assignedDoctor,
-      test: testName.trim(),
-      testName: testName.trim(),
+      test: combinedTestName,
+      testName: combinedTestName,
+      testsList: allTestsList,
       grossFee: grossFeeNum,
       discount: discountNum,
       amount: feeNum,
@@ -631,7 +753,7 @@ export function EnterLabResultForm({
         testRows,
         summaryResult: resolvedResultValue,
       },
-      status: status || 'Result ready',
+      status: status || 'Sample collected',
       clinicalNotes: notes.trim(),
       notes: notes.trim(),
       requested: existingTest?.requested || initialSelectedTest?.requested || 'Today, just now',
@@ -781,7 +903,7 @@ export function EnterLabResultForm({
 
           {/* Main Lab Test Selection (From Admin Master Catalogue) */}
           <div className="field">
-            <span style={{ color: '#1769d7', fontSize: '12px', fontWeight: '700' }}>Main Lab Test Name (Admin Master Catalogue) *</span>
+            <span style={{ color: '#1769d7', fontSize: '12px', fontWeight: '700' }}>Primary Lab Test Name (Admin Master Catalogue) *</span>
             <select
               value={testName}
               onChange={(e) => handleMainTestChange(e.target.value)}
@@ -798,6 +920,120 @@ export function EnterLabResultForm({
                 ))
               )}
             </select>
+          </div>
+
+          {/* Active Ordered Tests & Add Extra Test Section */}
+          <div style={{ background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: '8px', padding: '10px 12px', display: 'grid', gap: '8px', width: '100%', boxSizing: 'border-box' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '6px' }}>
+              <span style={{ fontSize: '11px', fontWeight: '800', color: '#1e293b', display: 'flex', alignItems: 'center', gap: '5px' }}>
+                <FlaskConical size={14} color="#2563eb" /> Ordered Tests ({1 + additionalTests.length})
+              </span>
+            </div>
+
+            {/* Test Badges */}
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px', alignItems: 'center' }}>
+              <span
+                style={{
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: '4px',
+                  background: '#eff6ff',
+                  border: '1px solid #bfdbfe',
+                  color: '#1d4ed8',
+                  padding: '3px 9px',
+                  borderRadius: '12px',
+                  fontSize: '11px',
+                  fontWeight: '700',
+                }}
+              >
+                🔬 {testName}
+              </span>
+
+              {additionalTests.map((ext) => (
+                <span
+                  key={ext.name}
+                  style={{
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: '4px',
+                    background: '#f0fdf4',
+                    border: '1px solid #bbf7d0',
+                    color: '#15803d',
+                    padding: '3px 9px',
+                    borderRadius: '12px',
+                    fontSize: '11px',
+                    fontWeight: '700',
+                  }}
+                >
+                  + {ext.name} (₹{ext.fee})
+                  <button
+                    type="button"
+                    onClick={() => handleRemoveExtraTest(ext.name)}
+                    style={{
+                      background: 'transparent',
+                      border: 'none',
+                      borderRadius: '50%',
+                      width: '16px',
+                      height: '16px',
+                      display: 'grid',
+                      placeItems: 'center',
+                      cursor: 'pointer',
+                      padding: 0,
+                      color: '#dc2626',
+                    }}
+                    title={`Remove ${ext.name}`}
+                  >
+                    <X size={11} />
+                  </button>
+                </span>
+              ))}
+            </div>
+
+            {/* Add Extra Test Dropdown & Small Button */}
+            <div style={{ display: 'flex', gap: '6px', alignItems: 'center', flexWrap: 'wrap' }}>
+              <select
+                value={selectedExtraTest}
+                onChange={(e) => setSelectedExtraTest(e.target.value)}
+                style={{
+                  flex: '1 1 200px',
+                  padding: '6px 10px',
+                  fontSize: '11px',
+                  borderRadius: '6px',
+                  border: '1px solid #cbd5e1',
+                  background: '#ffffff',
+                  fontWeight: '600',
+                  color: '#334155',
+                }}
+              >
+                <option value="">Select test to add...</option>
+                {masterServices
+                  .filter((s) => s.name !== testName && !additionalTests.some((t) => t.name === s.name))
+                  .map((s) => (
+                    <option key={s.id || s.name} value={s.name}>
+                      + {s.name} (₹{s.rate})
+                    </option>
+                  ))}
+              </select>
+              <button
+                type="button"
+                className="secondary-button"
+                onClick={handleAddExtraTest}
+                disabled={!selectedExtraTest}
+                style={{
+                  padding: '5px 12px',
+                  fontSize: '11px',
+                  fontWeight: '700',
+                  gap: '4px',
+                  background: selectedExtraTest ? '#2563eb' : '#f1f5f9',
+                  borderColor: selectedExtraTest ? '#1d4ed8' : '#cbd5e1',
+                  color: selectedExtraTest ? '#ffffff' : '#94a3b8',
+                  borderRadius: '6px',
+                  cursor: selectedExtraTest ? 'pointer' : 'not-allowed',
+                }}
+              >
+                <Plus size={13} /> Add
+              </button>
+            </div>
           </div>
 
           {/* Test Fee, Discount & Upfront Multi-Select Payment Section (Exact match to OP Record) */}
@@ -945,24 +1181,17 @@ export function EnterLabResultForm({
 
           {/* DYNAMIC MULTI-ROW SUB-PARAMETER BUILDER (T1, T2, T3, T4, TSH, Hb, etc.) - ALWAYS VISIBLE SO FINDINGS ARE NEVER HIDDEN */}
           <div style={{ background: '#f4f8fe', padding: '18px', borderRadius: '10px', border: '1px solid #d4e4f7', display: 'grid', gap: '14px', width: '100%', boxSizing: 'border-box' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '10px', borderBottom: '1px solid #d3e2f5', paddingBottom: '10px' }}>
-              <div>
-                <strong style={{ fontSize: '13px', color: '#1769d7' }}>
-                  Sub-Test Parameters & Readings ({testRows.length})
-                </strong>
-                <span style={{ fontSize: '11px', color: '#576c85', display: 'block' }}>
-                  {status === 'Result ready' || status === 'Completed'
-                    ? 'Measured diagnostic results and normal reference ranges (Report finalized).'
-                    : `Current Status: "${status}". Measured results and reference ranges are preserved and editable anytime.`}
-                </span>
-              </div>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '8px', borderBottom: '1px solid #d3e2f5', paddingBottom: '8px' }}>
+              <strong style={{ fontSize: '12px', color: '#1769d7' }}>
+                Sub-Test Parameters ({testRows.length})
+              </strong>
               <button
                 type="button"
                 className="secondary-button"
-                style={{ background: '#fff', border: '1px solid #1769d7', color: '#1769d7', fontWeight: '700', padding: '6px 14px', fontSize: '12px' }}
+                style={{ background: '#fff', border: '1px solid #1769d7', color: '#1769d7', fontWeight: '700', padding: '4px 10px', fontSize: '11px', borderRadius: '6px' }}
                 onClick={handleAddRow}
               >
-                <Plus size={15} />Add
+                <Plus size={13} /> Add Row
               </button>
             </div>
 
@@ -987,9 +1216,16 @@ export function EnterLabResultForm({
                 >
                   {/* 1. Sub-Test / Parameter Name */}
                   <div className="field">
-                    <span style={{ fontSize: '10px', fontWeight: '700', color: '#576c85' }}>Sub-Parameter Name *</span>
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '2px' }}>
+                      <span style={{ fontSize: '10px', fontWeight: '700', color: '#576c85' }}>Sub-Parameter Name *</span>
+                      {row.testSource && (
+                        <span style={{ fontSize: '9px', fontWeight: '800', background: '#eff6ff', color: '#1d4ed8', border: '1px solid #bfdbfe', padding: '1px 5px', borderRadius: '4px' }}>
+                          {row.testSource}
+                        </span>
+                      )}
+                    </div>
                     <input
-                      value={row.name}
+                      value={row.name || ''}
                       onChange={(e) => handleRowChange(index, 'name', e.target.value)}
                       placeholder="e.g. T3, T4, TSH, Hb"
                       required
@@ -999,24 +1235,25 @@ export function EnterLabResultForm({
 
                   {/* 2. Measured Result */}
                   <div className="field">
-                    <span style={{ fontSize: '10px', fontWeight: '700', color: '#1769d7' }}>Result *</span>
+                    <span style={{ fontSize: '10px', fontWeight: '700', color: '#1769d7' }}>
+                      Result {status === 'Result ready' || status === 'Completed' ? '*' : '(Optional)'}
+                    </span>
                     <input
-                      value={row.result}
+                      value={row.result || ''}
                       onChange={(e) => handleRowChange(index, 'result', e.target.value)}
-                      placeholder="e.g. 1.2 ng/mL"
-                      required
+                      placeholder={status === 'Result ready' || status === 'Completed' ? 'e.g. 1.2' : 'Optional'}
+                      required={status === 'Result ready' || status === 'Completed'}
                       style={{ padding: '8px 10px', fontSize: '12px', borderRadius: '6px', border: '1px solid #b8d5f7', fontWeight: '700', color: '#1769d7' }}
                     />
                   </div>
 
                   {/* 3. Normal Range */}
                   <div className="field">
-                    <span style={{ fontSize: '10px', fontWeight: '700', color: '#576c85' }}>Normal Range *</span>
+                    <span style={{ fontSize: '10px', fontWeight: '700', color: '#576c85' }}>Reference Range</span>
                     <input
-                      value={row.normalRange}
+                      value={row.normalRange || ''}
                       onChange={(e) => handleRowChange(index, 'normalRange', e.target.value)}
-                      placeholder="e.g. 0.8 - 2.0 ng/mL"
-                      required
+                      placeholder="e.g. 0.8 - 2.0"
                       style={{ padding: '8px 10px', fontSize: '12px', borderRadius: '6px', border: '1px solid #dde7f1' }}
                     />
                   </div>

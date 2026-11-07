@@ -298,6 +298,21 @@ export default function AppShell({ path = '/dashboard', navigate }) {
             const dueNum = Math.max(0, netNum - paidNum);
             const status = r.paymentStatus || (dueNum <= 0 ? 'Paid' : paidNum > 0 ? 'Partial' : 'Pending');
 
+            const resolvedDate = r.regDate || r.date || (r.createdAt ? new Date(r.createdAt).toISOString().split('T')[0] : '');
+            const resolvedTime = r.regTime || r.time || (r.createdAt ? new Date(r.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '');
+
+            const vitalsObj = r.vitals && typeof r.vitals === 'object' && Object.keys(r.vitals).length > 0
+              ? r.vitals
+              : {
+                  bp: r.bp || '120/80',
+                  pr: r.pr || '72',
+                  temp: r.temp || '98.6',
+                  weight: r.weight || '68',
+                  height: r.height || '170',
+                  spo2: r.spo2 || '98%',
+                  bloodGroup: r.bloodGroup || '',
+                };
+
             return {
               ...r,
               id: r.regNo || r.id || r._id,
@@ -306,6 +321,15 @@ export default function AppShell({ path = '/dashboard', navigate }) {
               patientName: r.patientName || r.patient,
               doctor: r.doctor || 'Dr. Unassigned',
               branch: r.branch || '',
+              vitals: vitalsObj,
+              bp: r.bp || vitalsObj.bp,
+              pr: r.pr || vitalsObj.pr,
+              temp: r.temp || vitalsObj.temp,
+              weight: r.weight || vitalsObj.weight,
+              height: r.height || vitalsObj.height,
+              spo2: r.spo2 || vitalsObj.spo2,
+              bloodGroup: r.bloodGroup || vitalsObj.bloodGroup,
+              notes: r.notes || r.clinicalNotes || '',
               charges: grossNum.toString(),
               grossCharges: grossNum,
               discount: discountNum,
@@ -316,6 +340,10 @@ export default function AppShell({ path = '/dashboard', navigate }) {
               paymentStatus: status,
               amount: `₹ ${netNum}`,
               surgeryName: r.surgeryName || '',
+              date: resolvedDate,
+              regDate: resolvedDate,
+              time: resolvedTime,
+              regTime: resolvedTime,
             };
           });
           setOpRecords(mapped);
@@ -979,6 +1007,8 @@ export default function AppShell({ path = '/dashboard', navigate }) {
   const addOPRecord = (opRecord) => {
     const targetBranch = effectiveBranch === 'All' ? 'Central Campus' : effectiveBranch;
     const targetCode = branchCodeMap[targetBranch] || 'HQ-CENTRAL';
+    const recDate = opRecord.regDate || opRecord.date || new Date().toISOString().split('T')[0];
+    const recTime = opRecord.regTime || opRecord.time || new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
     const taggedOP = { 
       ...opRecord, 
       id: opRecord.regNo || opRecord.id,
@@ -986,6 +1016,10 @@ export default function AppShell({ path = '/dashboard', navigate }) {
       amount: `₹ ${opRecord.charges || '200'}`,
       branch: opRecord.branch || targetBranch,
       branchCode: opRecord.branchCode || branchCodeMap[opRecord.branch] || targetCode,
+      date: recDate,
+      regDate: recDate,
+      time: recTime,
+      regTime: recTime,
     };
     setOpRecords((current) => [taggedOP, ...current]);
 
@@ -1037,8 +1071,19 @@ export default function AppShell({ path = '/dashboard', navigate }) {
     }
   };
 
-  const deleteOPRecord = (recordId) => {
-    setOpRecords((prev) => prev.filter((r) => r.id !== recordId && r._id !== recordId));
+  const deleteOPRecord = async (recordId) => {
+    setOpRecords((prev) => prev.filter((r) => r.id !== recordId && r._id !== recordId && r.regNo !== recordId));
+    try {
+      const token = localStorage.getItem('kh_auth_token');
+      await fetch(`/api/v1/op-records/${encodeURIComponent(recordId)}`, {
+        method: 'DELETE',
+        headers: {
+          ...(token ? { 'Authorization': `Bearer ${token}` } : {}),
+        },
+      });
+    } catch (err) {
+      console.warn('Could not delete OP record from backend API:', err.message);
+    }
   };
 
   const handleOpenEnterResult = (test = null) => {

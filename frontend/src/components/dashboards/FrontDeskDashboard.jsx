@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import {
   ClipboardList,
   Plus,
@@ -12,6 +12,7 @@ import { TimeFilterBar } from '../common/TimeFilterBar';
 import { PanelHeader } from '../common/PanelHeader';
 import { PatientTable } from '../common/PatientTable';
 import { initialOPRecords } from '../data/initialData';
+import { getNormalizedDateParts } from '../../lib/dateUtils';
 
 function QuickAction({ icon, label, color, onClick }) {
   return (
@@ -26,21 +27,31 @@ export function FrontDeskDashboard({ profile, onNavigate, onAddOPRecord, onViewP
   const firstName = profile.full_name.split(' ')[0];
   const [filterState, setFilterState] = useState({ filterMode: 'all' });
 
-  const opCountDiff = opRecords.length - initialOPRecords.length;
-  let multiplier = 1;
-  if (filterState.filterMode === 'monthly') multiplier = 24;
-  if (filterState.filterMode === 'yearly') multiplier = 280;
+  const filteredOPRecords = useMemo(() => {
+    if (!filterState || filterState.filterMode === 'all') return opRecords;
+    return opRecords.filter((r) => {
+      const { year, month, fullDate } = getNormalizedDateParts(r);
+      if (filterState.filterMode === 'date') return Boolean(fullDate && fullDate === filterState.selectedDate);
+      if (filterState.filterMode === 'today') {
+        const todayStr = new Date().toISOString().split('T')[0];
+        return Boolean(fullDate && fullDate === todayStr);
+      }
+      if (filterState.filterMode === 'monthly') return Boolean(month && month === filterState.selectedMonth);
+      if (filterState.filterMode === 'yearly') return Boolean(year && year === filterState.selectedYear);
+      return true;
+    });
+  }, [opRecords, filterState]);
 
-  const totalRecords = opRecords.length * multiplier;
-  const rawOpsCount = opRecords.filter(r => !(r.recordType || '').startsWith('IP') && !(r.recordType || '').startsWith('Emergency')).length * multiplier;
-  const rawIpsCount = opRecords.filter(r => (r.recordType || '').startsWith('IP')).length * multiplier;
-  const rawEmergencyCount = opRecords.filter(r => (r.recordType || '').startsWith('Emergency')).length * multiplier;
+  const rawOpsCount = filteredOPRecords.filter(r => !(r.recordType || '').startsWith('IP') && !(r.recordType || '').startsWith('Emergency')).length;
+  const rawIpsCount = filteredOPRecords.filter(r => (r.recordType || '').startsWith('IP')).length;
+  const rawEmergencyCount = filteredOPRecords.filter(r => (r.recordType || '').startsWith('Emergency')).length;
 
   const opsCount = rawOpsCount;
   const ipsCount = rawIpsCount;
   const emergencyCount = rawEmergencyCount;
 
   const getDetailText = () => {
+    if (filterState.filterMode === 'today') return `Today: ${new Date().toISOString().split('T')[0]}`;
     if (filterState.filterMode === 'date') return `Date: ${filterState.selectedDate}`;
     if (filterState.filterMode === 'monthly') return `Month: ${filterState.selectedMonth}`;
     if (filterState.filterMode === 'yearly') return `Year: ${filterState.selectedYear}`;

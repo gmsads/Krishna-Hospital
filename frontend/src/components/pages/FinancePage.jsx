@@ -3,6 +3,7 @@ import { CircleDollarSign, FlaskConical, WalletCards, Filter, TrendingDown, Pill
 import { StatCard } from '../common/StatCard';
 import { PanelHeader } from '../common/PanelHeader';
 import { TimeFilterBar } from '../common/TimeFilterBar';
+import { getNormalizedDateParts } from '../../lib/dateUtils';
 
 function Category({ name, value, percent, color, icon: Icon }) {
   return (
@@ -34,26 +35,88 @@ export function FinancePage({
   const [filterState, setFilterState] = useState({ filterMode: 'all' });
   const [sourceFilter, setSourceFilter] = useState('all'); // 'all', 'op', 'lab', 'pharmacy'
 
-  // Real Department Collections Calculations from MongoDB Records
+  // Time-Filtered Datasets based on filterState
+  const filteredOpRecords = useMemo(() => {
+    if (!filterState || filterState.filterMode === 'all') return opRecords;
+    return opRecords.filter((r) => {
+      const { year, month, fullDate } = getNormalizedDateParts(r);
+      if (filterState.filterMode === 'date') return Boolean(fullDate && fullDate === filterState.selectedDate);
+      if (filterState.filterMode === 'today') {
+        const todayStr = new Date().toISOString().split('T')[0];
+        return Boolean(fullDate && fullDate === todayStr);
+      }
+      if (filterState.filterMode === 'monthly') return Boolean(month && month === filterState.selectedMonth);
+      if (filterState.filterMode === 'yearly') return Boolean(year && year === filterState.selectedYear);
+      return true;
+    });
+  }, [opRecords, filterState]);
+
+  const filteredLabTests = useMemo(() => {
+    if (!filterState || filterState.filterMode === 'all') return labTests;
+    return labTests.filter((t) => {
+      const { year, month, fullDate } = getNormalizedDateParts(t);
+      if (filterState.filterMode === 'date') return Boolean(fullDate && fullDate === filterState.selectedDate);
+      if (filterState.filterMode === 'today') {
+        const todayStr = new Date().toISOString().split('T')[0];
+        return Boolean(fullDate && fullDate === todayStr);
+      }
+      if (filterState.filterMode === 'monthly') return Boolean(month && month === filterState.selectedMonth);
+      if (filterState.filterMode === 'yearly') return Boolean(year && year === filterState.selectedYear);
+      return true;
+    });
+  }, [labTests, filterState]);
+
+  const filteredPharmacySales = useMemo(() => {
+    if (!filterState || filterState.filterMode === 'all') return pharmacySales;
+    return pharmacySales.filter((s) => {
+      const { year, month, fullDate } = getNormalizedDateParts(s);
+      if (filterState.filterMode === 'date') return Boolean(fullDate && fullDate === filterState.selectedDate);
+      if (filterState.filterMode === 'today') {
+        const todayStr = new Date().toISOString().split('T')[0];
+        return Boolean(fullDate && fullDate === todayStr);
+      }
+      if (filterState.filterMode === 'monthly') return Boolean(month && month === filterState.selectedMonth);
+      if (filterState.filterMode === 'yearly') return Boolean(year && year === filterState.selectedYear);
+      return true;
+    });
+  }, [pharmacySales, filterState]);
+
+  const filteredExpensesList = useMemo(() => {
+    if (!filterState || filterState.filterMode === 'all') return expensesList;
+    return expensesList.filter((e) => {
+      const { year, month, fullDate } = getNormalizedDateParts(e);
+      if (filterState.filterMode === 'date') return Boolean(fullDate && fullDate === filterState.selectedDate);
+      if (filterState.filterMode === 'today') {
+        const todayStr = new Date().toISOString().split('T')[0];
+        return Boolean(fullDate && fullDate === todayStr);
+      }
+      if (filterState.filterMode === 'monthly') return Boolean(month && month === filterState.selectedMonth);
+      if (filterState.filterMode === 'yearly') return Boolean(year && year === filterState.selectedYear);
+      return true;
+    });
+  }, [expensesList, filterState]);
+
+  // Real Department Collections Calculations from Filtered MongoDB Records
   const labRevenue = useMemo(() => {
-    return labTests.reduce((sum, item) => {
+    return filteredLabTests.reduce((sum, item) => {
       const paid = typeof item.paidAmount === 'number'
         ? item.paidAmount
         : (parseFloat(String(item.amountPaid || item.paidAmount || '0').replace(/[^0-9.]/g, '')) || 0);
       return sum + paid;
     }, 0);
-  }, [labTests]);
+  }, [filteredLabTests]);
 
   const opRevenue = useMemo(() => {
-    return opRecords.reduce((sum, item) => {
+    return filteredOpRecords.reduce((sum, item) => {
+      if (item.paymentStatus === 'Cancelled' || item.status === 'Cancelled' || item.isCancelled) return sum;
       const amtStr = String(item.charges || item.amount || '300').replace(/[^0-9.]/g, '');
       const amt = parseFloat(amtStr) || 300;
       return sum + amt;
     }, 0);
-  }, [opRecords]);
+  }, [filteredOpRecords]);
 
   const pharmacyRevenue = useMemo(() => {
-    return pharmacySales.reduce((sum, item) => {
+    return filteredPharmacySales.reduce((sum, item) => {
       const amt = typeof item.collectingAmount === 'number'
         ? item.collectingAmount
         : typeof item.totalCollection === 'number'
@@ -63,7 +126,7 @@ export function FinancePage({
         : (parseFloat(String(item.collectingAmount || item.totalCollection || item.total || item.amountPaid || item.amount || '0').replace(/[^0-9.]/g, '')) || 0);
       return sum + amt;
     }, 0);
-  }, [pharmacySales]);
+  }, [filteredPharmacySales]);
 
   const allRevenueTotal = labRevenue + opRevenue + pharmacyRevenue;
 
@@ -72,29 +135,29 @@ export function FinancePage({
   if (sourceFilter === 'lab') totalRevenueNumber = labRevenue;
   if (sourceFilter === 'pharmacy') totalRevenueNumber = pharmacyRevenue;
 
-  // Exact Sum of Expenses for Scoped Branch / Global
+  // Exact Sum of Expenses for Scoped Branch / Period
   const actualExpenseSum = useMemo(() => {
-    return expensesList.reduce((sum, item) => sum + (Number(item.amount) || 0), 0);
-  }, [expensesList]);
+    return filteredExpensesList.reduce((sum, item) => sum + (Number(item.amount) || 0), 0);
+  }, [filteredExpensesList]);
 
   // Expenses Category Breakdown
   const labSuppliesExpense = useMemo(() => {
-    return expensesList
+    return filteredExpensesList
       .filter((e) => (e.category || '').toLowerCase().includes('lab') || (e.category || '').toLowerCase().includes('medical'))
       .reduce((sum, item) => sum + (Number(item.amount) || 0), 0);
-  }, [expensesList]);
+  }, [filteredExpensesList]);
 
   const officeExpense = useMemo(() => {
-    return expensesList
+    return filteredExpensesList
       .filter((e) => (e.category || '').toLowerCase().includes('office') || (e.category || '').toLowerCase().includes('front'))
       .reduce((sum, item) => sum + (Number(item.amount) || 0), 0);
-  }, [expensesList]);
+  }, [filteredExpensesList]);
 
   const utilitiesExpense = useMemo(() => {
-    return expensesList
+    return filteredExpensesList
       .filter((e) => (e.category || '').toLowerCase().includes('utility') || (e.category || '').toLowerCase().includes('staff'))
       .reduce((sum, item) => sum + (Number(item.amount) || 0), 0);
-  }, [expensesList]);
+  }, [filteredExpensesList]);
 
   const netIncomeNumber = totalRevenueNumber - actualExpenseSum;
 
@@ -111,13 +174,16 @@ export function FinancePage({
         return ib === bName || (bCode && ic === bCode) || ib.includes(bName) || bName.includes(ib);
       };
 
-      const bLab = labTests.filter((t) => isMatch(t.branch, t.branchCode)).reduce((sum, t) => sum + (Number(t.paidAmount || t.amountPaid) || 0), 0);
-      const bOp = opRecords.filter((r) => isMatch(r.branch, r.branchCode)).reduce((sum, r) => sum + (parseFloat(String(r.charges || r.amount || '300').replace(/[^0-9.]/g, '')) || 300), 0);
-      const bPharm = pharmacySales.filter((s) => isMatch(s.branch, s.branchCode)).reduce((sum, s) => {
+      const bLab = filteredLabTests.filter((t) => isMatch(t.branch, t.branchCode)).reduce((sum, t) => sum + (Number(t.paidAmount || t.amountPaid) || 0), 0);
+      const bOp = filteredOpRecords.filter((r) => isMatch(r.branch, r.branchCode)).reduce((sum, r) => {
+        if (r.paymentStatus === 'Cancelled' || r.status === 'Cancelled' || r.isCancelled) return sum;
+        return sum + (parseFloat(String(r.charges || r.amount || '300').replace(/[^0-9.]/g, '')) || 300);
+      }, 0);
+      const bPharm = filteredPharmacySales.filter((s) => isMatch(s.branch, s.branchCode)).reduce((sum, s) => {
         const amt = typeof s.collectingAmount === 'number' ? s.collectingAmount : typeof s.totalCollection === 'number' ? s.totalCollection : typeof s.total === 'number' ? s.total : (parseFloat(String(s.collectingAmount || s.totalCollection || s.total || s.amount || '0').replace(/[^0-9.]/g, '')) || 0);
         return sum + amt;
       }, 0);
-      const bExp = expensesList.filter((e) => isMatch(e.branch, e.branchCode)).reduce((sum, e) => sum + (Number(e.amount) || 0), 0);
+      const bExp = filteredExpensesList.filter((e) => isMatch(e.branch, e.branchCode)).reduce((sum, e) => sum + (Number(e.amount) || 0), 0);
 
       const bTotal = bLab + bOp + bPharm;
       const bNet = bTotal - bExp;

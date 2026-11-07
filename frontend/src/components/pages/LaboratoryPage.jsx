@@ -435,7 +435,7 @@ export function LaboratoryPage({ tests = initialLabTests, isDoctor = false, doct
                         className="secondary-button"
                         style={{ padding: '6px 12px', fontSize: '11px', gap: '4px', color: '#1769d7', borderColor: '#b8d5f7', background: '#f4f8fe', fontWeight: '700' }}
                         onClick={() => onEnterResult(test)}
-                        title="Edit lab test findings and details"
+                        title="Edit lab test findings, add more tests, and details"
                       >
                         <Edit2 size={13} /> {test.result || test.status === 'Result ready' ? 'Edit' : 'Enter Result'}
                       </button>
