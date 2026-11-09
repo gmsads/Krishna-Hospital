@@ -13,6 +13,12 @@ export function EditOPRecordModal({ record, onClose, onSave, onNotify }) {
   const [address, setAddress] = useState(record.address || '');
   const [dob, setDob] = useState(record.dob || '');
 
+  // Registration Date & Time
+  const initialRegDate = record.regDate || record.date || new Date().toISOString().split('T')[0];
+  const initialRegTime = record.regTime || record.time || new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+  const [regDate, setRegDate] = useState(initialRegDate);
+  const [regTime, setRegTime] = useState(initialRegTime);
+
   // Clinical & Doctor Info
   const [recordType, setRecordType] = useState(record.recordType || 'OP');
   const [doctor, setDoctor] = useState(record.doctor || '');
@@ -123,6 +129,10 @@ export function EditOPRecordModal({ record, onClose, onSave, onNotify }) {
       bloodGroup,
       dob,
       address: address.trim(),
+      regDate: regDate,
+      date: regDate,
+      regTime: regTime,
+      time: regTime,
       recordType,
       doctor: doctor.trim(),
       department: department.trim(),
@@ -347,6 +357,33 @@ export function EditOPRecordModal({ record, onClose, onSave, onNotify }) {
                   placeholder="Street, Area, City"
                   style={{ padding: '8px 10px', fontSize: '12px', border: '1px solid #cbd5e1', borderRadius: '6px', width: '100%', boxSizing: 'border-box' }}
                 />
+              </div>
+
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', marginTop: '10px' }}>
+                <div className="field">
+                  <span style={{ fontSize: '11px', fontWeight: '700', color: '#475569', display: 'block', marginBottom: '4px' }}>
+                    Registration Date *
+                  </span>
+                  <input
+                    type="date"
+                    value={regDate}
+                    onChange={(e) => setRegDate(e.target.value)}
+                    required
+                    style={{ padding: '8px 10px', fontSize: '12px', border: '1px solid #cbd5e1', borderRadius: '6px', width: '100%', boxSizing: 'border-box' }}
+                  />
+                </div>
+                <div className="field">
+                  <span style={{ fontSize: '11px', fontWeight: '700', color: '#475569', display: 'block', marginBottom: '4px' }}>
+                    Registration Time
+                  </span>
+                  <input
+                    type="text"
+                    value={regTime}
+                    onChange={(e) => setRegTime(e.target.value)}
+                    placeholder="10:30 AM"
+                    style={{ padding: '8px 10px', fontSize: '12px', border: '1px solid #cbd5e1', borderRadius: '6px', width: '100%', boxSizing: 'border-box' }}
+                  />
+                </div>
               </div>
             </div>
 

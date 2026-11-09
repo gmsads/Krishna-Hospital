@@ -298,7 +298,7 @@ export default function AppShell({ path = '/dashboard', navigate }) {
             const dueNum = Math.max(0, netNum - paidNum);
             const status = r.paymentStatus || (dueNum <= 0 ? 'Paid' : paidNum > 0 ? 'Partial' : 'Pending');
 
-            const resolvedDate = r.regDate || r.date || (r.createdAt ? new Date(r.createdAt).toISOString().split('T')[0] : '');
+            const resolvedDate = (r.regDate && r.regDate !== 'Today' ? r.regDate : '') || (r.date && r.date !== 'Today' ? r.date : '') || (r.createdAt ? new Date(r.createdAt).toISOString().split('T')[0] : '');
             const resolvedTime = r.regTime || r.time || (r.createdAt ? new Date(r.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '');
 
             const vitalsObj = r.vitals && typeof r.vitals === 'object' && Object.keys(r.vitals).length > 0
@@ -1028,8 +1028,8 @@ export default function AppShell({ path = '/dashboard', navigate }) {
       const existingVisits = prev[patientName] || [];
       const newVisit = {
         visitNo: existingVisits.length + 1,
-        date: opRecord.date || 'Today',
-        time: opRecord.time || 'Just now',
+        date: recDate,
+        time: recTime,
         opNumber: opRecord.id,
         department: opRecord.department,
         doctor: opRecord.doctor,

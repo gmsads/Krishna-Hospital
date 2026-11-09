@@ -7,26 +7,35 @@
 export function getNormalizedDateParts(item) {
   if (!item) return { year: '', month: '', fullDate: '' };
 
-  const raw = typeof item === 'string'
-    ? item
-    : (
-        item.regDate ||
-        item.date ||
-        item.createdAt ||
-        item.dateStr ||
-        item.expenseDate ||
-        item.registrationDate ||
-        item.sampleCollectedAt ||
-        item.saleDate ||
-        item.recordDate ||
-        item.timestamp ||
-        item.updatedAt ||
-        ''
-      );
+  let raw = '';
+  if (typeof item === 'string') {
+    raw = item;
+  } else if (item && typeof item === 'object') {
+    const candidates = [
+      item.regDate,
+      item.date,
+      item.dateStr,
+      item.expenseDate,
+      item.registrationDate,
+      item.sampleCollectedAt,
+      item.saleDate,
+      item.recordDate,
+      item.createdAt,
+      item.timestamp,
+      item.updatedAt,
+    ].filter(Boolean);
+
+    // Pick the first candidate that is not the literal string 'today'
+    const nonToday = candidates.find((c) => String(c).trim().toLowerCase() !== 'today');
+    raw = nonToday || candidates[0] || '';
+  }
 
   if (!raw) return { year: '', month: '', fullDate: '' };
 
   const str = String(raw).trim();
+  if (str.toLowerCase() === 'today') {
+    return { year: '', month: '', fullDate: '' };
+  }
 
   // 1. Strict YYYY-MM-DD
   if (/^\d{4}-\d{2}-\d{2}$/.test(str)) {
@@ -90,6 +99,25 @@ export function getNormalizedDateParts(item) {
 }
 
 export function formatDisplayDate(item, fallback = 'Today') {
+  if (!item) return fallback;
+  if (typeof item === 'string') {
+    const s = item.trim();
+    if (s.toLowerCase() === 'today') return fallback;
+    const { fullDate } = getNormalizedDateParts(s);
+    return fullDate || s;
+  }
+  if (typeof item === 'object') {
+    if (item.regDate && String(item.regDate).trim().toLowerCase() !== 'today') {
+      const { fullDate } = getNormalizedDateParts(item.regDate);
+      if (fullDate) return fullDate;
+      return String(item.regDate).trim();
+    }
+    if (item.date && String(item.date).trim().toLowerCase() !== 'today') {
+      const { fullDate } = getNormalizedDateParts(item.date);
+      if (fullDate) return fullDate;
+      return String(item.date).trim();
+    }
+  }
   const { fullDate } = getNormalizedDateParts(item);
   return fullDate || fallback;
 }

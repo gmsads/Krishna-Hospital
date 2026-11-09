@@ -477,7 +477,9 @@ export function CreateOPRecordForm({
       visitValidity: `${visitValidity} Days`,
       refCommPercent: `${refCommPercent}%`,
       time: regTime,
+      regTime: regTime,
       date: regDate,
+      regDate: regDate,
       charges: charges,
       discount: discNum,
       netAmount: netNum,
@@ -514,9 +516,14 @@ export function CreateOPRecordForm({
       const data = await res.json();
       if (res.ok && data.success && data.data) {
         savedObj = {
+          ...opRecord,
           ...data.data,
           id: data.data.regNo || data.data.id || opNumber,
           patient: data.data.patientName || opRecord.patient,
+          date: opRecord.date || regDate || data.data.regDate || data.data.date,
+          regDate: opRecord.regDate || regDate || data.data.regDate || data.data.date,
+          time: opRecord.time || regTime || data.data.regTime || data.data.time,
+          regTime: opRecord.regTime || regTime || data.data.regTime || data.data.time,
           amount: `₹ ${data.data.netAmount !== undefined ? data.data.netAmount : (data.data.charges || charges)}`,
         };
         notify && notify(`OP Record ${savedObj.regNo} saved to MongoDB!`);

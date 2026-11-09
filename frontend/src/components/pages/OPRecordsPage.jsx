@@ -266,16 +266,18 @@ export function OPRecordsPage({
   // Base records matching Date, Payment status, and Record type
   const basePeriodRecords = useMemo(() => {
     return records.filter((r) => {
+      const recDate = (r.regDate && r.regDate !== 'Today' ? r.regDate : '') || (r.date && r.date !== 'Today' ? r.date : '');
       const { year, month, fullDate } = getNormalizedDateParts(r);
+      const effectiveFullDate = fullDate || recDate;
       let dateMatch = true;
       if (filterMode === 'date') {
-        dateMatch = Boolean(fullDate && fullDate === selectedDate);
+        dateMatch = Boolean(effectiveFullDate && (effectiveFullDate === selectedDate || recDate === selectedDate));
       } else if (filterMode === 'today') {
-        dateMatch = Boolean(fullDate && fullDate === todayStr);
+        dateMatch = Boolean(effectiveFullDate && (effectiveFullDate === todayStr || recDate === todayStr));
       } else if (filterMode === 'monthly') {
-        dateMatch = Boolean(month && month === selectedMonth);
+        dateMatch = Boolean((month && month === selectedMonth) || (recDate && recDate.startsWith(selectedMonth)));
       } else if (filterMode === 'yearly') {
-        dateMatch = Boolean(year && year === selectedYear);
+        dateMatch = Boolean((year && year === selectedYear) || (recDate && recDate.startsWith(selectedYear)));
       }
 
       const isCancelled = r.paymentStatus === 'Cancelled' || r.isCancelled || r.status === 'Cancelled';
@@ -638,7 +640,7 @@ export function OPRecordsPage({
                         </span>
                       )}
                     </td>
-                    <td>{formatDisplayDate(record, 'Today')}, {record.time || record.regTime || ''}</td>
+                    <td>{formatDisplayDate(record, record.regDate || record.date || 'Today')}, {record.time || record.regTime || ''}</td>
                     {!isDoctor && (
                       <td>
                         {isCancelledRecord ? (

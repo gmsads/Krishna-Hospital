@@ -21,14 +21,18 @@ export const createOPRecord = async (recordData) => {
   const collectedVal = parseFloat(String(recordData.paidAmount ?? recordData.amountPaid ?? netVal).replace(/[^0-9.]/g, '')) || 0;
   const dueVal = Math.max(0, netVal - collectedVal);
   const statusToSet = recordData.paymentStatus || (dueVal <= 0 ? 'Paid' : collectedVal > 0 ? 'Partial' : 'Pending');
+  const targetDate = recordData.regDate || recordData.date || new Date().toISOString().split('T')[0];
+  const targetTime = recordData.regTime || recordData.time || new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
 
   const newRecord = await OPRecord.create({
     regNo: regNoToUse,
     recordType: recordData.recordType || 'OP',
     ipCareDetails: recordData.ipCareDetails || '',
     surgeryName: recordData.surgeryName || '',
-    regDate: recordData.regDate || new Date().toISOString().split('T')[0],
-    regTime: recordData.regTime || new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+    regDate: targetDate,
+    date: targetDate,
+    regTime: targetTime,
+    time: targetTime,
     patientName: recordData.patientName.trim(),
     gender: recordData.gender || 'Male',
     age: recordData.age || '30',
@@ -89,12 +93,23 @@ export const getOPRecordById = async (id) => {
 };
 
 export const updateOPRecord = async (id, updateData) => {
+  const payload = { ...updateData };
+  if (updateData.regDate || updateData.date) {
+    const d = updateData.regDate || updateData.date;
+    payload.regDate = d;
+    payload.date = d;
+  }
+  if (updateData.regTime || updateData.time) {
+    const t = updateData.regTime || updateData.time;
+    payload.regTime = t;
+    payload.time = t;
+  }
   let record = null;
   if (mongoose.Types.ObjectId.isValid(id)) {
-    record = await OPRecord.findByIdAndUpdate(id, updateData, { new: true, runValidators: true });
+    record = await OPRecord.findByIdAndUpdate(id, payload, { new: true, runValidators: true });
   }
   if (!record) {
-    record = await OPRecord.findOneAndUpdate({ $or: [{ regNo: id }, { opNumber: id }] }, updateData, { new: true, runValidators: true });
+    record = await OPRecord.findOneAndUpdate({ $or: [{ regNo: id }, { opNumber: id }] }, payload, { new: true, runValidators: true });
   }
   return record;
 };

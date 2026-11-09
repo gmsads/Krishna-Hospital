@@ -31,7 +31,15 @@ const opRecordSchema = new mongoose.Schema(
       type: String,
       default: () => new Date().toISOString().split('T')[0],
     },
+    date: {
+      type: String,
+      default: () => new Date().toISOString().split('T')[0],
+    },
     regTime: {
+      type: String,
+      default: () => new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+    },
+    time: {
       type: String,
       default: () => new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
     },
