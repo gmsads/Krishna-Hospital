@@ -36,6 +36,16 @@ export function LabInventoryPage({
   const [statusFilter, setStatusFilter] = useState('all');
   const [selectedServiceTest, setSelectedServiceTest] = useState('');
 
+  // Dynamic Options & Custom Entry States for Add Kit & Machinery
+  const [selectedKitOption, setSelectedKitOption] = useState('');
+  const [customKitName, setCustomKitName] = useState('');
+  const [selectedTestOption, setSelectedTestOption] = useState('');
+  const [customTestName, setCustomTestName] = useState('');
+  const [selectedCategoryOption, setSelectedCategoryOption] = useState('');
+  const [customCategory, setCustomCategory] = useState('');
+  const [selectedMachineCategoryOption, setSelectedMachineCategoryOption] = useState('');
+  const [customMachineCategory, setCustomMachineCategory] = useState('');
+
   // Formatted List of Lab Service Categories & Tests for Dropdown (Only database saved services)
   const labServiceOptions = useMemo(() => {
     return Array.isArray(masterServices) ? masterServices : [];
@@ -54,6 +64,7 @@ export function LabInventoryPage({
   const [formData, setFormData] = useState({
     itemType: 'Consumable',
     itemName: '',
+    linkedServiceName: '',
     category: 'Kits & Reagents',
     stockQuantity: 10,
     alertThreshold: 10,
@@ -106,6 +117,91 @@ export function LabInventoryPage({
     return items.filter((item) => item.itemType === 'Machine');
   }, [items]);
 
+  // 1. Dynamic Kit Names from MongoDB inventory items + common laboratory kits
+  const availableKitNames = useMemo(() => {
+    const commonKits = [
+      'Urea',
+      'Creatinine',
+      'Total Cholesterol',
+      'Triglycerides',
+      'Blood Sugar / Glucose (FBS/PPBS)',
+      'Bilirubin (Total & Direct)',
+      'SGOT / AST Reagent',
+      'SGPT / ALT Reagent',
+      'Alkaline Phosphatase (ALP)',
+      'Uric Acid',
+      'Calcium Reagent',
+      'Electrolytes (Na+/K+/Cl-) Reagent Pack',
+      'Thyroid T3/T4/TSH Kit',
+      'Dengue NS1 Antigen Card',
+      'Widal Slide Test Kit',
+      'HBsAg Rapid Card',
+      'HIV 1 & 2 Rapid Card',
+      'Urine Strip (10 Parameter)',
+      'Complete Blood Picture (CBP) Reagent Pack',
+      'Hemoglobin Reagent'
+    ];
+    const fromInventory = consumablesList.map((c) => c.itemName).filter(Boolean);
+    return Array.from(new Set([...fromInventory, ...commonKits]));
+  }, [consumablesList]);
+
+  // 2. Dynamic Test Names from Master Services + Database Inventory linked services + common hospital panels
+  const availableTestNames = useMemo(() => {
+    const commonTests = [
+      'Renal Function Test (RFT)',
+      'Liver Function Test (LFT)',
+      'Lipid Profile',
+      'Complete Blood Picture (CBP)',
+      'Complete Urine Examination (CUE)',
+      'Fasting Blood Sugar (FBS)',
+      'Post Prandial Blood Sugar (PPBS)',
+      'Random Blood Sugar (RBS)',
+      'HbA1c (Glycated Hemoglobin)',
+      'Thyroid Profile (T3, T4, TSH)',
+      'Serum Electrolytes',
+      'Serum Uric Acid',
+      'Serum Calcium',
+      'Widal Test',
+      'Dengue Serology (NS1 / IgG / IgM)',
+      'Viral Hepatitis Markers (HBsAg / HCV)',
+      'Coagulation / PT-INR'
+    ];
+    const fromMaster = (Array.isArray(masterServices) ? masterServices : []).map((s) => s.name || s.test).filter(Boolean);
+    const fromInventory = consumablesList.map((c) => c.linkedServiceName).filter(Boolean);
+    return Array.from(new Set([...fromInventory, ...fromMaster, ...commonTests]));
+  }, [masterServices, consumablesList]);
+
+  // 3. Dynamic Consumable Categories from base defaults + MongoDB inventory items
+  const availableConsumableCategories = useMemo(() => {
+    const defaults = [
+      'Kits & Reagents',
+      'Reagents & Solvents',
+      'Strips & Vials',
+      'General Consumables',
+      'Rapid Test Cards',
+      'Calibrators & Controls',
+      'Stains & Chemicals'
+    ];
+    const fromDb = consumablesList.map((c) => c.category).filter(Boolean);
+    return Array.from(new Set([...defaults, ...fromDb]));
+  }, [consumablesList]);
+
+  // 4. Dynamic Machine Categories from base defaults + Kit Method + MongoDB machine items
+  const availableMachineCategories = useMemo(() => {
+    const defaults = [
+      'Analyzer Machine',
+      'Centrifuge & Microscope',
+      'ELISA & Washing System',
+      'Autoclave & Sterilizer',
+      'Kit Method',
+      'Biochemistry Semi-Auto Analyzer',
+      'Cell Counter (Hematology Analyzer)',
+      'Electrolyte Analyzer'
+    ];
+    const fromDb = machinesList.map((m) => m.category).filter(Boolean);
+    return Array.from(new Set([...defaults, ...fromDb]));
+  }, [machinesList]);
+
   // KPI Computations
   const totalKitsCount = consumablesList.length;
   const activeMachinesCount = machinesList.filter((m) => m.machineStatus === 'Active').length;
@@ -114,10 +210,12 @@ export function LabInventoryPage({
 
   // Filtered lists for rendering
   const filteredConsumables = useMemo(() => {
+    const q = searchQuery.toLowerCase();
     return consumablesList.filter((item) => {
       const matchesSearch =
-        item.itemName.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        (item.category && item.category.toLowerCase().includes(searchQuery.toLowerCase()));
+        item.itemName.toLowerCase().includes(q) ||
+        (item.linkedServiceName && item.linkedServiceName.toLowerCase().includes(q)) ||
+        (item.category && item.category.toLowerCase().includes(q));
       const matchesCat = categoryFilter === 'all' || item.category === categoryFilter;
       return matchesSearch && matchesCat;
     });
@@ -128,8 +226,9 @@ export function LabInventoryPage({
       const matchesSearch =
         item.itemName.toLowerCase().includes(searchQuery.toLowerCase()) ||
         (item.modelSerialNo && item.modelSerialNo.toLowerCase().includes(searchQuery.toLowerCase())) ||
-        (item.manufacturer && item.manufacturer.toLowerCase().includes(searchQuery.toLowerCase()));
-      const matchesStatus = statusFilter === 'all' || item.machineStatus === statusFilter;
+        (item.manufacturer && item.manufacturer.toLowerCase().includes(searchQuery.toLowerCase())) ||
+        (item.category && item.category.toLowerCase().includes(searchQuery.toLowerCase()));
+      const matchesStatus = statusFilter === 'all' || item.machineStatus === statusFilter || item.category === statusFilter;
       return matchesSearch && matchesStatus;
     });
   }, [machinesList, searchQuery, statusFilter]);
@@ -137,9 +236,18 @@ export function LabInventoryPage({
   // Handlers
   const handleOpenAdd = (type) => {
     setAddType(type);
+    setSelectedKitOption('');
+    setCustomKitName('');
+    setSelectedTestOption('');
+    setCustomTestName('');
+    setSelectedCategoryOption(type === 'Consumable' ? 'Kits & Reagents' : '');
+    setCustomCategory('');
+    setSelectedMachineCategoryOption(type === 'Machine' ? 'Analyzer Machine' : '');
+    setCustomMachineCategory('');
     setFormData({
       itemType: type,
       itemName: '',
+      linkedServiceName: '',
       category: type === 'Consumable' ? 'Kits & Reagents' : 'Analyzer Machine',
       stockQuantity: 10,
       alertThreshold: 10,
@@ -159,9 +267,37 @@ export function LabInventoryPage({
 
   const handleSaveNewItem = async (e) => {
     e.preventDefault();
-    if (!formData.itemName.trim()) {
-      onNotify('Please enter a valid item/machine name.');
-      return;
+
+    const resolvedItemName = addType === 'Consumable'
+      ? (selectedKitOption && selectedKitOption !== 'MANUAL_CUSTOM'
+          ? selectedKitOption.trim()
+          : (customKitName.trim() || formData.itemName.trim()))
+      : formData.itemName.trim();
+
+    const resolvedLinkedService = addType === 'Consumable'
+      ? (selectedTestOption && selectedTestOption !== 'MANUAL_CUSTOM'
+          ? selectedTestOption.trim()
+          : (customTestName.trim() || formData.linkedServiceName.trim()))
+      : '';
+
+    const resolvedCategory = addType === 'Consumable'
+      ? (selectedCategoryOption === 'MANUAL_CUSTOM' ? customCategory.trim() : (formData.category.trim() || selectedCategoryOption.trim() || 'Kits & Reagents'))
+      : (selectedMachineCategoryOption === 'MANUAL_CUSTOM' ? customMachineCategory.trim() : (formData.category.trim() || selectedMachineCategoryOption.trim() || 'Analyzer Machine'));
+
+    if (addType === 'Consumable') {
+      if (!resolvedLinkedService) {
+        onNotify('Please select or enter the Test Name (e.g. RFT, LFT, Lipid Profile) for which this kit is used.');
+        return;
+      }
+      if (!resolvedItemName) {
+        onNotify('Please select or enter the Kit Name (e.g. Urea, Creatinine).');
+        return;
+      }
+    } else {
+      if (!resolvedItemName) {
+        onNotify('Please enter a valid machine name.');
+        return;
+      }
     }
 
     const unitCostNum = Number(formData.unitCost || 0);
@@ -169,6 +305,9 @@ export function LabInventoryPage({
 
     const payload = {
       ...formData,
+      itemName: resolvedItemName,
+      linkedServiceName: resolvedLinkedService,
+      category: resolvedCategory,
       unitCost: unitCostNum,
       totalAmount: totalAmtNum,
       createdBy: profile?.full_name || 'Lab Assistant',
@@ -187,7 +326,7 @@ export function LabInventoryPage({
           },
           body: JSON.stringify({
             expenseNo: `EXP-LAB-${Date.now().toString().slice(-4)}`,
-            title: `Lab ${formData.itemType || 'Item'} Purchase: ${formData.itemName}${formData.itemType === 'Consumable' ? ` (${formData.stockQuantity || 1} ${formData.unit || 'Kits'} @ ₹${unitCostNum})` : ''}`,
+            title: `Lab ${formData.itemType || 'Item'} Purchase: ${resolvedItemName}${formData.itemType === 'Consumable' ? ` (${formData.stockQuantity || 1} ${formData.unit || 'Kits'} @ ₹${unitCostNum})` : ''}`,
             category: 'Medical & Lab Supplies',
             amount: totalAmtNum,
             date: new Date().toISOString().split('T')[0],
@@ -213,16 +352,16 @@ export function LabInventoryPage({
       const data = await res.json();
       if (res.ok && data.success && data.data) {
         setItems((prev) => [data.data, ...prev]);
-        onNotify(`Successfully added ${formData.itemName} to inventory${totalAmtNum > 0 ? ` & logged ₹${totalAmtNum.toLocaleString('en-IN')} to Expenses!` : ''}`);
+        onNotify(`Successfully added ${resolvedItemName} to inventory${totalAmtNum > 0 ? ` & logged ₹${totalAmtNum.toLocaleString('en-IN')} to Expenses!` : ''}`);
       } else {
         const newItem = { ...payload, _id: `temp-${Date.now()}` };
         setItems((prev) => [newItem, ...prev]);
-        onNotify(`Added ${formData.itemName} to inventory${totalAmtNum > 0 ? ` & logged ₹${totalAmtNum.toLocaleString('en-IN')} to Expenses!` : ''}`);
+        onNotify(`Added ${resolvedItemName} to inventory${totalAmtNum > 0 ? ` & logged ₹${totalAmtNum.toLocaleString('en-IN')} to Expenses!` : ''}`);
       }
     } catch (err) {
       const newItem = { ...payload, _id: `temp-${Date.now()}` };
       setItems((prev) => [newItem, ...prev]);
-      onNotify(`Added ${formData.itemName} to local inventory.`);
+      onNotify(`Added ${resolvedItemName} to local inventory.`);
     }
 
     setIsAddModalOpen(false);
@@ -353,7 +492,8 @@ export function LabInventoryPage({
     setFormData({
       itemType: item.itemType || 'Consumable',
       itemName: item.itemName || '',
-      category: item.category || 'Kits & Reagents',
+      linkedServiceName: item.linkedServiceName || '',
+      category: item.category || (item.itemType === 'Machine' ? 'Analyzer Machine' : 'Kits & Reagents'),
       stockQuantity: item.stockQuantity || 0,
       alertThreshold: item.alertThreshold || 10,
       unit: item.unit || 'Kits',
@@ -589,9 +729,9 @@ export function LabInventoryPage({
                 className="py-1.5 px-3 text-xs font-semibold bg-white border border-slate-200 rounded-xl text-slate-700 focus:outline-none"
               >
                 <option value="all">All Categories</option>
-                <option value="Kits & Reagents">Kits & Reagents</option>
-                <option value="Reagents & Solvents">Reagents & Solvents</option>
-                <option value="Strips & Vials">Strips & Vials</option>
+                {availableConsumableCategories.map((cat) => (
+                  <option key={cat} value={cat}>{cat}</option>
+                ))}
               </select>
             ) : (
               <select
@@ -599,11 +739,20 @@ export function LabInventoryPage({
                 onChange={(e) => setStatusFilter(e.target.value)}
                 className="py-1.5 px-3 text-xs font-semibold bg-white border border-slate-200 rounded-xl text-slate-700 focus:outline-none"
               >
-                <option value="all">All Machine Statuses</option>
-                <option value="Active">✓ Active</option>
-                <option value="Calibration Due">⚠️ Calibration Due</option>
-                <option value="Under Maintenance">🔧 Under Maintenance</option>
-                <option value="Out of Service">🚫 Out of Service</option>
+                <option value="all">All Machinery & Methods</option>
+                <optgroup label="Categories & Methods">
+                  {availableMachineCategories.map((mc) => (
+                    <option key={`cat-${mc}`} value={mc}>
+                      {mc === 'Kit Method' ? '🧪 Kit Method' : mc}
+                    </option>
+                  ))}
+                </optgroup>
+                <optgroup label="Operating Statuses">
+                  <option value="Active">✓ Active</option>
+                  <option value="Calibration Due">⚠️ Calibration Due</option>
+                  <option value="Under Maintenance">🔧 Under Maintenance</option>
+                  <option value="Out of Service">🚫 Out of Service</option>
+                </optgroup>
               </select>
             )}
           </div>
@@ -629,7 +778,7 @@ export function LabInventoryPage({
                 <table className="w-full text-left border-collapse">
                   <thead>
                     <tr className="border-b border-slate-200 bg-slate-50 text-[11px] font-extrabold text-slate-500 uppercase tracking-wider">
-                      <th className="py-3 px-4">Item & Kit Name</th>
+                      <th className="py-3 px-4">Test Name & Kit Stock Name</th>
                       <th className="py-3 px-4">Category</th>
                       <th className="py-3 px-4">Current Stock</th>
                       <th className="py-3 px-4">Spent Cost (₹)</th>
@@ -650,8 +799,20 @@ export function LabInventoryPage({
                           }`}
                         >
                           <td className="py-3.5 px-4">
-                            <div className="font-extrabold text-slate-800">{item.itemName}</div>
-                            {item.notes && <div className="text-[11px] text-slate-400 font-normal">{item.notes}</div>}
+                            <div className="flex flex-col gap-1.5">
+                              <div className="flex items-center gap-2 flex-wrap">
+                                <span className="inline-flex items-center gap-1 text-[11px] font-bold text-blue-800 bg-blue-50 px-2.5 py-1 rounded-md border border-blue-200">
+                                  <span className="text-blue-500 font-medium">Test Name:</span>
+                                  <span className="font-extrabold">{item.linkedServiceName || 'General Lab'}</span>
+                                </span>
+                                <span className="text-slate-300 font-black">|</span>
+                                <span className="inline-flex items-center gap-1 text-[11px] font-bold text-slate-800 bg-slate-100 px-2.5 py-1 rounded-md border border-slate-200">
+                                  <span className="text-slate-500 font-medium">Kit Name:</span>
+                                  <span className="font-extrabold">{item.itemName}</span>
+                                </span>
+                              </div>
+                              {item.notes && <div className="text-[11px] text-slate-400 font-normal">{item.notes}</div>}
+                            </div>
                           </td>
                           <td className="py-3.5 px-4">
                             <span className="bg-slate-100 text-slate-600 px-2.5 py-1 rounded-lg text-[11px] font-bold">
@@ -846,13 +1007,14 @@ export function LabInventoryPage({
 
       {/* MODAL 1: Add Item / Machine */}
       {isAddModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-xs">
-          <div className="bg-white rounded-2xl max-w-md w-full shadow-2xl border border-slate-200 overflow-hidden animate-in fade-in zoom-in-95 duration-150">
-            <div className="px-6 py-4 border-b border-slate-100 flex items-center justify-between bg-slate-50">
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-slate-900/40 backdrop-blur-xs">
+          <div className="bg-white rounded-2xl max-w-lg w-full max-h-[92vh] flex flex-col shadow-2xl border border-slate-200 overflow-hidden animate-in fade-in zoom-in-95 duration-150">
+            <div className="px-6 py-3.5 border-b border-slate-100 flex items-center justify-between bg-slate-50 shrink-0">
               <h3 className="font-extrabold text-slate-800 text-sm">
                 Add New {addType === 'Consumable' ? 'Test Kit / Reagent Stock' : 'Lab Machinery / Analyzer'}
               </h3>
               <button
+                type="button"
                 onClick={() => setIsAddModalOpen(false)}
                 className="text-slate-400 hover:text-slate-600 p-1 rounded-lg"
               >
@@ -860,88 +1022,131 @@ export function LabInventoryPage({
               </button>
             </div>
 
-            <form onSubmit={handleSaveNewItem} className="p-6 space-y-4 text-xs font-semibold text-slate-700">
-              {addType === 'Consumable' ? (
-                <div>
-                  <label className="block font-bold text-blue-700 mb-1">
-                    Select Kit Name / Lab Service Category *
-                  </label>
-                  <select
-                    value={selectedServiceTest}
-                    onChange={(e) => {
-                      const val = e.target.value;
-                      setSelectedServiceTest(val);
-                      if (val === 'MANUAL_CUSTOM') {
-                        setFormData((prev) => ({ ...prev, itemName: '', linkedServiceName: '' }));
-                      } else if (val) {
-                        const matched = labServiceOptions.find((s) => (s.name || s.test) === val);
-                        const testNameStr = matched ? (matched.name || matched.test) : val;
-                        setFormData((prev) => ({
-                          ...prev,
-                          itemName: testNameStr.includes('Kit') ? testNameStr : `${testNameStr} Kit`,
-                          linkedServiceName: testNameStr,
-                          category: matched?.category || prev.category || 'Kits & Reagents',
-                        }));
-                      }
-                    }}
-                    className="w-full px-3 py-2 border border-blue-300 rounded-xl focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none font-bold text-slate-800 bg-blue-50/40 mb-2"
-                  >
-                    <option value="">-- Select from Lab Service Categories --</option>
-                    {labServiceOptions.map((srv, i) => {
-                      const title = srv.name || srv.test;
-                      const cat = srv.category || 'Lab Category';
-                      return (
-                        <option key={srv.id || `${title}-${i}`} value={title}>
-                          🧪 {title} ({cat})
-                        </option>
-                      );
-                    })}
-                    <option value="MANUAL_CUSTOM">✍️ Enter Manual / Custom Kit Name...</option>
-                  </select>
-
-                  {(selectedServiceTest === 'MANUAL_CUSTOM' || !selectedServiceTest) && (
-                    <div className="mt-2">
-                      <label className="block text-slate-500 mb-1">Custom / Manual Kit Name *</label>
-                      <input
-                        type="text"
-                        required={selectedServiceTest === 'MANUAL_CUSTOM'}
-                        placeholder="e.g., Custom Reagent Solution B"
-                        value={formData.itemName}
-                        onChange={(e) => setFormData({ ...formData, itemName: e.target.value, linkedServiceName: e.target.value })}
-                        className="w-full px-3 py-2 border border-slate-200 rounded-xl focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none"
-                      />
-                    </div>
-                  )}
-                </div>
-              ) : (
-                <div>
-                  <label className="block text-slate-500 mb-1">Machine Name *</label>
-                  <input
-                    type="text"
-                    required
-                    placeholder="e.g., Immunoassay Analyzer X-500"
-                    value={formData.itemName}
-                    onChange={(e) => setFormData({ ...formData, itemName: e.target.value })}
-                    className="w-full px-3 py-2 border border-slate-200 rounded-xl focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none"
-                  />
-                </div>
-              )}
-
+            <form onSubmit={handleSaveNewItem} className="flex-1 overflow-y-auto p-5 sm:p-6 space-y-4 text-xs font-semibold text-slate-700">
               {addType === 'Consumable' ? (
                 <>
+                  {/* Field 1: Lab Test Name (Used For Test / Service) */}
+                  <div>
+                    <label className="block font-bold text-blue-700 mb-1">
+                      1. Select Test Name (Used For Test) *
+                    </label>
+                    <select
+                      value={selectedTestOption}
+                      onChange={(e) => {
+                        const val = e.target.value;
+                        setSelectedTestOption(val);
+                        if (val === 'MANUAL_CUSTOM') {
+                          setFormData((prev) => ({ ...prev, linkedServiceName: customTestName }));
+                        } else {
+                          setFormData((prev) => ({ ...prev, linkedServiceName: val }));
+                        }
+                      }}
+                      className="w-full px-3 py-2 border border-blue-300 rounded-xl focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none font-bold text-slate-800 bg-blue-50/40 mb-1.5"
+                    >
+                      <option value="">-- Select Lab Test / Panel --</option>
+                      {availableTestNames.map((tName) => (
+                        <option key={tName} value={tName}>
+                          🧪 {tName}
+                        </option>
+                      ))}
+                      <option value="MANUAL_CUSTOM">✍️ Enter Manual / Custom Test Name...</option>
+                    </select>
+
+                    {selectedTestOption === 'MANUAL_CUSTOM' && (
+                      <input
+                        type="text"
+                        placeholder="Enter custom test name, e.g. Renal Function Test (RFT)"
+                        value={customTestName}
+                        onChange={(e) => {
+                          const val = e.target.value;
+                          setCustomTestName(val);
+                          setFormData((prev) => ({ ...prev, linkedServiceName: val }));
+                        }}
+                        required
+                        className="w-full px-3 py-2 border border-blue-200 rounded-xl focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none mb-1.5 bg-white font-semibold text-slate-800"
+                      />
+                    )}
+                  </div>
+
+                  {/* Field 2: Kit / Reagent Name */}
+                  <div>
+                    <label className="block font-bold text-slate-800 mb-1">
+                      2. Kit / Reagent Name *
+                    </label>
+                    <select
+                      value={selectedKitOption}
+                      onChange={(e) => {
+                        const val = e.target.value;
+                        setSelectedKitOption(val);
+                        if (val === 'MANUAL_CUSTOM') {
+                          setFormData((prev) => ({ ...prev, itemName: customKitName }));
+                        } else {
+                          setFormData((prev) => ({ ...prev, itemName: val }));
+                        }
+                      }}
+                      className="w-full px-3 py-2 border border-slate-300 rounded-xl focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none font-bold text-slate-800 bg-slate-50/60 mb-1.5"
+                    >
+                      <option value="">-- Select Kit Name from Database / Common Kits --</option>
+                      {availableKitNames.map((kName) => (
+                        <option key={kName} value={kName}>
+                          📦 {kName}
+                        </option>
+                      ))}
+                      <option value="MANUAL_CUSTOM">✍️ Enter Manual / Custom Kit Name...</option>
+                    </select>
+
+                    {selectedKitOption === 'MANUAL_CUSTOM' && (
+                      <input
+                        type="text"
+                        placeholder="Enter custom kit name, e.g., Urea, Creatinine"
+                        value={customKitName}
+                        onChange={(e) => {
+                          const val = e.target.value;
+                          setCustomKitName(val);
+                          setFormData((prev) => ({ ...prev, itemName: val }));
+                        }}
+                        required
+                        className="w-full px-3 py-2 border border-slate-200 rounded-xl focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none font-semibold text-slate-800"
+                      />
+                    )}
+                  </div>
+
+                  {/* Category & Unit */}
                   <div className="grid grid-cols-2 gap-3">
                     <div>
                       <label className="block text-slate-500 mb-1">Category</label>
                       <select
-                        value={formData.category}
-                        onChange={(e) => setFormData({ ...formData, category: e.target.value })}
-                        className="w-full px-3 py-2 border border-slate-200 rounded-xl outline-none"
+                        value={selectedCategoryOption}
+                        onChange={(e) => {
+                          const val = e.target.value;
+                          setSelectedCategoryOption(val);
+                          if (val === 'MANUAL_CUSTOM') {
+                            setFormData((prev) => ({ ...prev, category: customCategory || 'Kits & Reagents' }));
+                          } else {
+                            setFormData((prev) => ({ ...prev, category: val }));
+                          }
+                        }}
+                        className="w-full px-3 py-2 border border-slate-200 rounded-xl outline-none mb-1.5"
                       >
-                        <option value="Kits & Reagents">Kits & Reagents</option>
-                        <option value="Reagents & Solvents">Reagents & Solvents</option>
-                        <option value="Strips & Vials">Strips & Vials</option>
-                        <option value="Consumables">General Consumables</option>
+                        {availableConsumableCategories.map((cat) => (
+                          <option key={cat} value={cat}>{cat}</option>
+                        ))}
+                        <option value="MANUAL_CUSTOM">✍️ Enter Manual / Custom Category...</option>
                       </select>
+
+                      {selectedCategoryOption === 'MANUAL_CUSTOM' && (
+                        <input
+                          type="text"
+                          placeholder="e.g. Serology Kits, Molecular Reagents"
+                          value={customCategory}
+                          onChange={(e) => {
+                            setCustomCategory(e.target.value);
+                            setFormData((prev) => ({ ...prev, category: e.target.value }));
+                          }}
+                          required
+                          className="w-full px-3 py-2 border border-slate-200 rounded-xl outline-none text-xs"
+                        />
+                      )}
                     </div>
                     <div>
                       <label className="block text-slate-500 mb-1">Unit</label>
@@ -1014,17 +1219,41 @@ export function LabInventoryPage({
                 <>
                   <div className="grid grid-cols-2 gap-3">
                     <div>
-                      <label className="block text-slate-500 mb-1">Category</label>
+                      <label className="block text-slate-500 mb-1">Category / Method</label>
                       <select
-                        value={formData.category}
-                        onChange={(e) => setFormData({ ...formData, category: e.target.value })}
-                        className="w-full px-3 py-2 border border-slate-200 rounded-xl outline-none"
+                        value={selectedMachineCategoryOption}
+                        onChange={(e) => {
+                          const val = e.target.value;
+                          setSelectedMachineCategoryOption(val);
+                          if (val === 'MANUAL_CUSTOM') {
+                            setFormData((prev) => ({ ...prev, category: customMachineCategory || 'Analyzer Machine' }));
+                          } else {
+                            setFormData((prev) => ({ ...prev, category: val }));
+                          }
+                        }}
+                        className="w-full px-3 py-2 border border-slate-200 rounded-xl outline-none mb-1.5 font-semibold text-slate-800"
                       >
-                        <option value="Analyzer Machine">Analyzer Machine</option>
-                        <option value="Centrifuge & Microscope">Centrifuge & Microscope</option>
-                        <option value="ELISA & Washing System">ELISA & Washing System</option>
-                        <option value="Autoclave & Sterilizer">Autoclave & Sterilizer</option>
+                        {availableMachineCategories.map((cat) => (
+                          <option key={cat} value={cat}>
+                            {cat === 'Kit Method' ? '🧪 Kit Method (Manual / Rapid Test)' : cat}
+                          </option>
+                        ))}
+                        <option value="MANUAL_CUSTOM">✍️ Enter Manual / Custom Category...</option>
                       </select>
+
+                      {selectedMachineCategoryOption === 'MANUAL_CUSTOM' && (
+                        <input
+                          type="text"
+                          placeholder="e.g. Semi-Automated Bench, Cold Storage"
+                          value={customMachineCategory}
+                          onChange={(e) => {
+                            setCustomMachineCategory(e.target.value);
+                            setFormData((prev) => ({ ...prev, category: e.target.value }));
+                          }}
+                          required
+                          className="w-full px-3 py-2 border border-slate-200 rounded-xl outline-none text-xs font-semibold"
+                        />
+                      )}
                     </div>
                     <div>
                       <label className="block text-slate-500 mb-1">Model / Serial No</label>
@@ -1086,7 +1315,7 @@ export function LabInventoryPage({
                 </>
               )}
 
-              <div className="pt-3 border-t border-slate-100 flex items-center justify-end gap-3">
+              <div className="pt-3 border-t border-slate-100 flex items-center justify-end gap-3 sticky bottom-0 bg-white/95 backdrop-blur-xs shrink-0">
                 <button
                   type="button"
                   onClick={() => setIsAddModalOpen(false)}
@@ -1108,13 +1337,14 @@ export function LabInventoryPage({
 
       {/* MODAL 2: Edit / Restock / Update Status */}
       {isEditModalOpen && selectedItemForEdit && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-xs">
-          <div className="bg-white rounded-2xl max-w-md w-full shadow-2xl border border-slate-200 overflow-hidden">
-            <div className="px-6 py-4 border-b border-slate-100 flex items-center justify-between bg-slate-50">
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-slate-900/40 backdrop-blur-xs">
+          <div className="bg-white rounded-2xl max-w-lg w-full max-h-[92vh] flex flex-col shadow-2xl border border-slate-200 overflow-hidden animate-in fade-in zoom-in-95 duration-150">
+            <div className="px-6 py-3.5 border-b border-slate-100 flex items-center justify-between bg-slate-50 shrink-0">
               <h3 className="font-extrabold text-slate-800 text-sm">
                 Edit {selectedItemForEdit.itemName}
               </h3>
               <button
+                type="button"
                 onClick={() => setIsEditModalOpen(false)}
                 className="text-slate-400 hover:text-slate-600 p-1 rounded-lg"
               >
@@ -1122,17 +1352,68 @@ export function LabInventoryPage({
               </button>
             </div>
 
-            <form onSubmit={handleSaveEdit} className="p-6 space-y-4 text-xs font-semibold text-slate-700">
-              <div>
-                <label className="block text-slate-500 mb-1">Item Name</label>
-                <input
-                  type="text"
-                  required
-                  value={formData.itemName}
-                  onChange={(e) => setFormData({ ...formData, itemName: e.target.value })}
-                  className="w-full px-3 py-2 border border-slate-200 rounded-xl outline-none"
-                />
-              </div>
+            <form onSubmit={handleSaveEdit} className="flex-1 overflow-y-auto p-5 sm:p-6 space-y-4 text-xs font-semibold text-slate-700">
+              {selectedItemForEdit.itemType === 'Consumable' ? (
+                <>
+                  <div>
+                    <label className="block font-bold text-blue-700 mb-1">Test Name (Used For Test / Service)</label>
+                    <input
+                      type="text"
+                      placeholder="e.g. Renal Function Test (RFT)"
+                      value={formData.linkedServiceName || ''}
+                      onChange={(e) => setFormData({ ...formData, linkedServiceName: e.target.value })}
+                      className="w-full px-3 py-2 border border-blue-200 rounded-xl outline-none font-semibold text-blue-700 mb-1"
+                    />
+                    <span className="text-[10px] text-slate-400 font-normal">Specifies which diagnostic test this kit is used for (e.g. RFT)</span>
+                  </div>
+
+                  <div>
+                    <label className="block font-bold text-slate-700 mb-1">Kit / Reagent Name *</label>
+                    <input
+                      type="text"
+                      required
+                      placeholder="e.g. Urea, Creatinine"
+                      value={formData.itemName}
+                      onChange={(e) => setFormData({ ...formData, itemName: e.target.value })}
+                      className="w-full px-3 py-2 border border-slate-200 rounded-xl outline-none font-bold text-slate-800 mb-1"
+                    />
+                    <span className="text-[10px] text-slate-400 font-normal">Specifies the specific chemical reagent kit (e.g. Urea or Creatinine)</span>
+                  </div>
+
+                  <div>
+                    <label className="block text-slate-500 mb-1">Category</label>
+                    <input
+                      type="text"
+                      value={formData.category}
+                      onChange={(e) => setFormData({ ...formData, category: e.target.value })}
+                      className="w-full px-3 py-2 border border-slate-200 rounded-xl outline-none"
+                    />
+                  </div>
+                </>
+              ) : (
+                <>
+                  <div>
+                    <label className="block text-slate-500 mb-1">Machine Name *</label>
+                    <input
+                      type="text"
+                      required
+                      value={formData.itemName}
+                      onChange={(e) => setFormData({ ...formData, itemName: e.target.value })}
+                      className="w-full px-3 py-2 border border-slate-200 rounded-xl outline-none font-bold mb-2"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-slate-500 mb-1">Category / Method</label>
+                    <input
+                      type="text"
+                      value={formData.category}
+                      onChange={(e) => setFormData({ ...formData, category: e.target.value })}
+                      className="w-full px-3 py-2 border border-slate-200 rounded-xl outline-none mb-2"
+                    />
+                  </div>
+                </>
+              )}
 
               {selectedItemForEdit.itemType === 'Consumable' ? (
                 <div className="grid grid-cols-2 gap-3">
@@ -1196,7 +1477,7 @@ export function LabInventoryPage({
                 </div>
               )}
 
-              <div className="pt-3 border-t border-slate-100 flex items-center justify-end gap-3">
+              <div className="pt-3 border-t border-slate-100 flex items-center justify-end gap-3 sticky bottom-0 bg-white/95 backdrop-blur-xs shrink-0">
                 <button
                   type="button"
                   onClick={() => setIsEditModalOpen(false)}
