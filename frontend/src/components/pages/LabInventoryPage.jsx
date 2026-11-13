@@ -47,6 +47,8 @@ export function LabInventoryPage({
   const [customCategory, setCustomCategory] = useState('');
   const [selectedMachineCategoryOption, setSelectedMachineCategoryOption] = useState('');
   const [customMachineCategory, setCustomMachineCategory] = useState('');
+  const [selectedMachineOption, setSelectedMachineOption] = useState('');
+  const [customMachineName, setCustomMachineName] = useState('');
 
   // Formatted List of Lab Service Categories & Tests for Dropdown (Only database saved services)
   const labServiceOptions = useMemo(() => {
@@ -204,6 +206,25 @@ export function LabInventoryPage({
     return Array.from(new Set([...defaults, ...fromDb]));
   }, [machinesList]);
 
+  // 5. Dynamic Machine Names from MongoDB machine items + common hospital machinery / analyzers
+  const availableMachineNames = useMemo(() => {
+    const commonMachines = [
+      'Erba Chem 5 Semi-Auto Biochemistry Analyzer',
+      'Erba H360 3-Part Cell Counter',
+      'Sysmex XP-300 Hematology Analyzer',
+      'AGD Electrolyte Analyzer (Na+/K+/Cl-)',
+      'Remi Centrifuge R-8C',
+      'Binocular Microscope Olympus / Magnus',
+      'ELISA Microplate Reader & Washer',
+      'Vertical High Pressure Autoclave',
+      'Urine Chemistry Analyzer',
+      'Hormone / CLIA Analyzer',
+      'Coagulation Analyzer'
+    ];
+    const fromDb = machinesList.map((m) => m.itemName).filter(Boolean);
+    return Array.from(new Set([...fromDb, ...commonMachines]));
+  }, [machinesList]);
+
   // KPI Computations
   const totalKitsCount = consumablesList.length;
   const activeMachinesCount = machinesList.filter((m) => m.machineStatus === 'Active').length;
@@ -244,6 +265,8 @@ export function LabInventoryPage({
     setCustomTestName('');
     setSelectedCategoryOption(type === 'Consumable' ? 'Kits & Reagents' : '');
     setCustomCategory('');
+    setSelectedMachineOption('');
+    setCustomMachineName('');
     setSelectedMachineCategoryOption(type === 'Machine' ? 'Analyzer Machine' : '');
     setCustomMachineCategory('');
     setFormData({
@@ -274,7 +297,17 @@ export function LabInventoryPage({
       ? (selectedKitOption && selectedKitOption !== 'MANUAL_CUSTOM'
           ? selectedKitOption.trim()
           : (customKitName.trim() || formData.itemName.trim()))
-      : formData.itemName.trim();
+      : (
+          (selectedMachineOption && selectedMachineOption !== 'MANUAL_CUSTOM' ? selectedMachineOption.trim() : '') ||
+          customMachineName.trim() ||
+          formData.itemName.trim() ||
+          (selectedMachineCategoryOption && selectedMachineCategoryOption !== 'MANUAL_CUSTOM' && selectedMachineCategoryOption !== 'Analyzer Machine' ? selectedMachineCategoryOption.trim() : '') ||
+          customMachineCategory.trim() ||
+          formData.modelSerialNo?.trim() ||
+          formData.manufacturer?.trim() ||
+          (formData.category && formData.category !== 'Analyzer Machine' ? formData.category.trim() : '') ||
+          'Analyzer Machine'
+        );
 
     const resolvedLinkedService = addType === 'Consumable'
       ? (selectedTestOption && selectedTestOption !== 'MANUAL_CUSTOM'
@@ -293,11 +326,6 @@ export function LabInventoryPage({
       }
       if (!resolvedItemName) {
         onNotify('Please select or enter the Kit Name (e.g. Urea, Creatinine).');
-        return;
-      }
-    } else {
-      if (!resolvedItemName) {
-        onNotify('Please enter a valid machine name.');
         return;
       }
     }
@@ -1240,17 +1268,44 @@ export function LabInventoryPage({
               ) : (
                 <>
                   <div>
-                    <label className="block font-bold text-slate-800 mb-1">
-                      Machine Name / Analyzer Equipment *
+                    <label className="block font-bold text-indigo-700 mb-1">
+                      Machine / Equipment Name *
                     </label>
-                    <input
-                      type="text"
-                      required
-                      placeholder="e.g. Immunoassay Analyzer X-500, Cell Counter H360"
-                      value={formData.itemName}
-                      onChange={(e) => setFormData({ ...formData, itemName: e.target.value })}
-                      className="w-full px-3 py-2 border border-slate-300 rounded-xl focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none font-bold text-slate-800 bg-white"
-                    />
+                    <select
+                      value={selectedMachineOption}
+                      onChange={(e) => {
+                        const val = e.target.value;
+                        setSelectedMachineOption(val);
+                        if (val === 'MANUAL_CUSTOM') {
+                          setFormData((prev) => ({ ...prev, itemName: customMachineName }));
+                        } else {
+                          setFormData((prev) => ({ ...prev, itemName: val }));
+                        }
+                      }}
+                      className="w-full px-3 py-2 border border-indigo-200 rounded-xl focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 outline-none font-bold text-slate-800 bg-indigo-50/20 mb-1.5"
+                    >
+                      <option value="">-- Select Machine from Database / Common Analyzers --</option>
+                      {availableMachineNames.map((mName) => (
+                        <option key={mName} value={mName}>
+                          ⚙️ {mName}
+                        </option>
+                      ))}
+                      <option value="MANUAL_CUSTOM">✍️ Enter Manual / Custom Machine Name...</option>
+                    </select>
+
+                    {(selectedMachineOption === 'MANUAL_CUSTOM' || !selectedMachineOption) && (
+                      <input
+                        type="text"
+                        placeholder="e.g. Immunoassay Analyzer X-500, Cell Counter H360, Erba Chem 5"
+                        value={customMachineName || formData.itemName}
+                        onChange={(e) => {
+                          const val = e.target.value;
+                          setCustomMachineName(val);
+                          setFormData((prev) => ({ ...prev, itemName: val }));
+                        }}
+                        className="w-full px-3 py-2 border border-slate-300 rounded-xl focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 outline-none font-bold text-slate-800 bg-white"
+                      />
+                    )}
                   </div>
 
                   <div className="grid grid-cols-2 gap-3">
