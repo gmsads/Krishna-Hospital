@@ -320,6 +320,7 @@ export function DoctorsPage({ doctors = [], onNotify, notify, effectiveBranch = 
               <option value="Orthopedics">Orthopedics</option>
               <option value="Dermatology">Dermatology</option>
               <option value="Dental">Dental</option>
+              <option value="ENT">ENT</option>
               <option value="Neurology">Neurology</option>
               <option value="Diabetes">Diabetes</option>
               <option value="Gynaecology">Gynaecology</option>
@@ -687,6 +688,7 @@ export function DoctorsPage({ doctors = [], onNotify, notify, effectiveBranch = 
                     <option value="Orthopedics">Orthopedics</option>
                     <option value="Dermatology">Dermatology</option>
                     <option value="Dental">Dental</option>
+              <option value="ENT">ENT</option>
                     <option value="Neurology">Neurology</option>
                     <option value="Diabetes">Diabetes</option>
                     <option value="Gynaecology">Gynaecology</option>
@@ -965,6 +967,7 @@ export function DoctorsPage({ doctors = [], onNotify, notify, effectiveBranch = 
                     <option value="Orthopedics">Orthopedics</option>
                     <option value="Dermatology">Dermatology</option>
                     <option value="Dental">Dental</option>
+              <option value="ENT">ENT</option>
                     <option value="Neurology">Neurology</option>
                     <option value="Diabetes">Diabetes</option>
                     <option value="Gynaecology">Gynaecology</option>

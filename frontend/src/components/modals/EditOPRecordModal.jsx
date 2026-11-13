@@ -423,11 +423,28 @@ export function EditOPRecordModal({ record, onClose, onSave, onNotify }) {
                   </span>
                   <input
                     type="text"
+                    list="edit-op-dept-list"
                     value={department}
                     onChange={(e) => setDepartment(e.target.value)}
-                    placeholder="e.g. Cardiology"
+                    placeholder="e.g. ENT, Cardiology"
                     style={{ padding: '8px 10px', fontSize: '12px', border: '1px solid #cbd5e1', borderRadius: '6px', width: '100%', boxSizing: 'border-box' }}
                   />
+                  <datalist id="edit-op-dept-list">
+                    <option value="General medicine" />
+                    <option value="General Medicine and Surgeon" />
+                    <option value="Internal medicine" />
+                    <option value="Cardiology" />
+                    <option value="Pediatrics" />
+                    <option value="Orthopedics" />
+                    <option value="Dermatology" />
+                    <option value="Dental" />
+                    <option value="ENT" />
+                    <option value="Neurology" />
+                    <option value="Diabetes" />
+                    <option value="Gynaecology" />
+                    <option value="Physiotherapy" />
+                    <option value="Surgeon" />
+                  </datalist>
                 </div>
 
                 <div className="field">

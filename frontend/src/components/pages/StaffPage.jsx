@@ -570,6 +570,7 @@ export function StaffPage({ staff = initialStaff, onAddStaff, onUpdateStaff, onD
                     <option value="Cardiology">Cardiology</option>
                     <option value="Pediatrics">Pediatrics</option>
                     <option value="Dental">Dental</option>
+                    <option value="ENT">ENT</option>
                     <option value="Neurology">Neurology</option>
                     <option value="Diabetes">Diabetes</option>
                     <option value="Gynaecology">Gynaecology</option>

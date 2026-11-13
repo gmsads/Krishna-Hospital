@@ -7,7 +7,14 @@ import { Expense } from '../expenses/expense.model.js';
 export const getAllInventoryItems = async (branchFilter) => {
   const query = {};
   if (branchFilter && branchFilter !== 'All') {
-    query.$or = [{ branch: branchFilter }, { branch: 'All' }, { branch: '' }];
+    query.$or = [
+      { branch: branchFilter },
+      { branch: 'All' },
+      { branch: 'All Hospital Branches' },
+      { branch: 'Global' },
+      { branch: '' },
+      { branch: null },
+    ];
   }
   return await LabInventoryItem.find(query).sort({ updatedAt: -1 });
 };
@@ -21,6 +28,8 @@ export const createInventoryItem = async (data) => {
 
   const itemData = {
     ...data,
+    branch: data.branch || 'All',
+    branchCode: data.branch === 'All' ? 'ALL' : (data.branchCode || 'BRANCH'),
     unitCost: unitCostNum,
     totalAmount: totalAmtNum,
   };

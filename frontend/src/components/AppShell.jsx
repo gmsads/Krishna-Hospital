@@ -2088,6 +2088,7 @@ export default function AppShell({ path = '/dashboard', navigate }) {
               effectiveBranch={effectiveBranch}
               branchesList={branchesList}
               masterServices={masterServices}
+              isSuperAdmin={isSuperAdmin}
               onNotify={notify}
             />
           )}

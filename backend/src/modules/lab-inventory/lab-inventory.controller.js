@@ -13,9 +13,19 @@ export const create = asyncHandler(async (req, res) => {
     return ApiResponse.error(res, 'Item name is required', 400);
   }
 
-  if (req.user && !req.body.branch && req.user.branch && req.user.branch !== 'All') {
-    req.body.branch = req.user.branch;
-    req.body.branchCode = req.user.branchCode;
+  const isSuperAdminUser = req.user?.role === 'Super Admin' || req.user?.role === 'Super-Admin';
+
+  if (!req.body.branch) {
+    if (isSuperAdminUser) {
+      req.body.branch = 'All';
+      req.body.branchCode = 'ALL';
+    } else if (req.user?.branch && req.user.branch !== 'All') {
+      req.body.branch = req.user.branch;
+      req.body.branchCode = req.user.branchCode || 'BRANCH';
+    } else {
+      req.body.branch = 'All';
+      req.body.branchCode = 'ALL';
+    }
   }
 
   const newItem = await inventoryService.createInventoryItem(req.body);

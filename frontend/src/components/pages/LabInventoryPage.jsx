@@ -27,7 +27,9 @@ export function LabInventoryPage({
   branchesList = [],
   masterServices = [],
   onNotify = () => {},
+  isSuperAdmin = false,
 }) {
+  const isSuperAdminUser = isSuperAdmin || profile?.role === 'Super Admin' || profile?.role === 'Super-Admin';
   const [activeTab, setActiveTab] = useState('consumables'); // 'consumables' | 'machines'
   const [items, setItems] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -76,7 +78,7 @@ export function LabInventoryPage({
     machineStatus: 'Active',
     lastMaintenanceDate: '',
     nextMaintenanceDate: '',
-    branch: effectiveBranch === 'All' ? 'Central Campus' : effectiveBranch,
+    branch: isSuperAdminUser ? (effectiveBranch === 'All' ? 'All' : effectiveBranch) : (effectiveBranch === 'All' ? (profile?.branch || 'Central Campus') : effectiveBranch),
     notes: '',
   });
 
@@ -259,7 +261,7 @@ export function LabInventoryPage({
       machineStatus: 'Active',
       lastMaintenanceDate: new Date().toISOString().split('T')[0],
       nextMaintenanceDate: '',
-      branch: effectiveBranch === 'All' ? 'Central Campus' : effectiveBranch,
+      branch: isSuperAdminUser ? (effectiveBranch === 'All' ? 'All' : effectiveBranch) : (effectiveBranch === 'All' ? (profile?.branch || 'Central Campus') : effectiveBranch),
       notes: '',
     });
     setIsAddModalOpen(true);
@@ -300,6 +302,14 @@ export function LabInventoryPage({
       }
     }
 
+    const resolvedBranch = isSuperAdminUser
+      ? (formData.branch || (effectiveBranch === 'All' ? 'All' : effectiveBranch))
+      : (profile?.branch || (effectiveBranch === 'All' ? 'Central Campus' : effectiveBranch));
+
+    const resolvedBranchCode = resolvedBranch === 'All'
+      ? 'ALL'
+      : (branchesList.find((b) => b.name === resolvedBranch)?.code || formData.branchCode || 'BRANCH');
+
     const unitCostNum = Number(formData.unitCost || 0);
     const totalAmtNum = Number(formData.totalAmount || (formData.itemType === 'Consumable' ? unitCostNum * Number(formData.stockQuantity || 1) : unitCostNum));
 
@@ -308,9 +318,11 @@ export function LabInventoryPage({
       itemName: resolvedItemName,
       linkedServiceName: resolvedLinkedService,
       category: resolvedCategory,
+      branch: resolvedBranch,
+      branchCode: resolvedBranchCode,
       unitCost: unitCostNum,
       totalAmount: totalAmtNum,
-      createdBy: profile?.full_name || 'Lab Assistant',
+      createdBy: profile?.full_name || (isSuperAdminUser ? 'Super Admin' : 'Lab Assistant'),
     };
 
     const token = localStorage.getItem('kh_auth_token');
@@ -810,6 +822,16 @@ export function LabInventoryPage({
                                   <span className="text-slate-500 font-medium">Kit Name:</span>
                                   <span className="font-extrabold">{item.itemName}</span>
                                 </span>
+                                <span className="text-slate-300 font-black">|</span>
+                                {item.branch === 'All' || item.branch === 'Global' || !item.branch ? (
+                                  <span className="inline-flex items-center gap-1 text-[10px] font-bold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200">
+                                    🌐 All Branches
+                                  </span>
+                                ) : (
+                                  <span className="inline-flex items-center gap-1 text-[10px] font-bold text-slate-600 bg-slate-100 px-2 py-0.5 rounded border border-slate-200">
+                                    📍 {item.branch}
+                                  </span>
+                                )}
                               </div>
                               {item.notes && <div className="text-[11px] text-slate-400 font-normal">{item.notes}</div>}
                             </div>
@@ -972,7 +994,7 @@ export function LabInventoryPage({
                         </div>
                         <div>
                           <span className="text-slate-400 font-semibold block">Branch:</span>
-                          <span className="font-bold text-slate-700">{machine.branch || effectiveBranch}</span>
+                          <span className="font-bold text-slate-700">{machine.branch === 'All' || machine.branch === 'Global' || !machine.branch ? '🌐 All Branches' : machine.branch}</span>
                         </div>
                         <div>
                           <span className="text-slate-400 font-semibold block">Next Calibration:</span>
@@ -1217,6 +1239,20 @@ export function LabInventoryPage({
                 </>
               ) : (
                 <>
+                  <div>
+                    <label className="block font-bold text-slate-800 mb-1">
+                      Machine Name / Analyzer Equipment *
+                    </label>
+                    <input
+                      type="text"
+                      required
+                      placeholder="e.g. Immunoassay Analyzer X-500, Cell Counter H360"
+                      value={formData.itemName}
+                      onChange={(e) => setFormData({ ...formData, itemName: e.target.value })}
+                      className="w-full px-3 py-2 border border-slate-300 rounded-xl focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none font-bold text-slate-800 bg-white"
+                    />
+                  </div>
+
                   <div className="grid grid-cols-2 gap-3">
                     <div>
                       <label className="block text-slate-500 mb-1">Category / Method</label>
@@ -1313,6 +1349,35 @@ export function LabInventoryPage({
                     <span className="text-[10px] text-indigo-600 font-semibold block mt-0.5">Auto-logs to Lab Expenses under Medical & Lab Supplies</span>
                   </div>
                 </>
+              )}
+
+              {isSuperAdminUser && (
+                <div className="bg-blue-50/40 p-2.5 rounded-xl border border-blue-200">
+                  <label className="block text-blue-800 font-bold mb-1">
+                    Target Branch Scope *
+                  </label>
+                  <select
+                    value={formData.branch || 'All'}
+                    onChange={(e) => {
+                      const bName = e.target.value;
+                      const bCode = bName === 'All' ? 'ALL' : (branchesList.find((b) => b.name === bName)?.code || 'BRANCH');
+                      setFormData({ ...formData, branch: bName, branchCode: bCode });
+                    }}
+                    className="w-full px-3 py-1.5 border border-blue-300 rounded-lg outline-none bg-white font-bold text-blue-900 text-xs"
+                  >
+                    <option value="All">🌐 All Branches (Visible in all branches)</option>
+                    {branchesList.filter((b) => b.name && b.name !== 'All').map((b) => (
+                      <option key={b.id || b.name} value={b.name}>
+                        📍 {b.name} only
+                      </option>
+                    ))}
+                  </select>
+                  <span className="text-[10px] text-blue-700 font-semibold block mt-1">
+                    {(formData.branch === 'All' || !formData.branch)
+                      ? '✓ Global: This item will appear in all hospital branches.'
+                      : `✓ Branch-specific: This item will only appear in ${formData.branch}.`}
+                  </span>
+                </div>
               )}
 
               <div className="pt-3 border-t border-slate-100 flex items-center justify-end gap-3 sticky bottom-0 bg-white/95 backdrop-blur-xs shrink-0">
@@ -1474,6 +1539,35 @@ export function LabInventoryPage({
                       />
                     </div>
                   </div>
+                </div>
+              )}
+
+              {isSuperAdminUser && (
+                <div className="bg-blue-50/40 p-2.5 rounded-xl border border-blue-200">
+                  <label className="block text-blue-800 font-bold mb-1">
+                    Target Branch Scope *
+                  </label>
+                  <select
+                    value={formData.branch || 'All'}
+                    onChange={(e) => {
+                      const bName = e.target.value;
+                      const bCode = bName === 'All' ? 'ALL' : (branchesList.find((b) => b.name === bName)?.code || 'BRANCH');
+                      setFormData({ ...formData, branch: bName, branchCode: bCode });
+                    }}
+                    className="w-full px-3 py-1.5 border border-blue-300 rounded-lg outline-none bg-white font-bold text-blue-900 text-xs"
+                  >
+                    <option value="All">🌐 All Branches (Visible in all branches)</option>
+                    {branchesList.filter((b) => b.name && b.name !== 'All').map((b) => (
+                      <option key={b.id || b.name} value={b.name}>
+                        📍 {b.name} only
+                      </option>
+                    ))}
+                  </select>
+                  <span className="text-[10px] text-blue-700 font-semibold block mt-1">
+                    {(formData.branch === 'All' || !formData.branch)
+                      ? '✓ Global: This item will appear in all hospital branches.'
+                      : `✓ Branch-specific: This item will only appear in ${formData.branch}.`}
+                  </span>
                 </div>
               )}
 

@@ -229,10 +229,29 @@ export default function AuthScreen({ path = window.location.pathname, navigate }
                 <div className="field-row">
                   <Field icon={<Building2 size={16} />} label="Department (optional)">
                     <input 
+                      list="auth-dept-list"
                       value={department} 
                       onChange={(e) => setDepartment(e.target.value)} 
-                      placeholder="General medicine" 
+                      placeholder="General medicine (or ENT, Cardiology)" 
                     />
+                    <datalist id="auth-dept-list">
+                      <option value="General medicine" />
+                      <option value="General Medicine and Surgeon" />
+                      <option value="Internal medicine" />
+                      <option value="Cardiology" />
+                      <option value="Pediatrics" />
+                      <option value="Orthopedics" />
+                      <option value="Dermatology" />
+                      <option value="Dental" />
+                      <option value="ENT" />
+                      <option value="Neurology" />
+                      <option value="Diabetes" />
+                      <option value="Gynaecology" />
+                      <option value="Physiotherapy" />
+                      <option value="Surgeon" />
+                      <option value="Laboratory" />
+                      <option value="Pharmacy" />
+                    </datalist>
                   </Field>
                   <Field icon={<Phone size={16} />} label="Phone (optional)">
                     <input 
