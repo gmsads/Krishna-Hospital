@@ -319,9 +319,19 @@ export function LabAssistantDashboard({ profile, onNavigate, onEnterResult, onDe
                   )}
 
                   {test.result && (
-                    <p style={{ margin: '6px 0 0', fontSize: '11px', color: '#15803d', fontWeight: '700' }}>
-                      Completed Findings: {test.result}
-                    </p>
+                    <div style={{ marginTop: '6px', display: 'grid', gap: '3px' }}>
+                      {test.result.includes(' | ') ? (
+                        test.result.split(' | ').map((subRes, sIdx) => (
+                          <div key={sIdx} style={{ fontSize: '11px', color: '#15803d', fontWeight: '700', background: '#f0fdf4', padding: '2px 8px', borderRadius: '4px', border: '1px solid #dcfce7' }}>
+                            🔬 {subRes}
+                          </div>
+                        ))
+                      ) : (
+                        <p style={{ margin: '6px 0 0', fontSize: '11px', color: '#15803d', fontWeight: '700' }}>
+                          Completed Findings: {test.result}
+                        </p>
+                      )}
+                    </div>
                   )}
                 </div>
 

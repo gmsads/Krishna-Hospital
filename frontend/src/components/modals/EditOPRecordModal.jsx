@@ -7,7 +7,10 @@ export function EditOPRecordModal({ record, onClose, onSave, onNotify }) {
   // Patient Info
   const [patientName, setPatientName] = useState(record.patient || record.patientName || '');
   const [phone, setPhone] = useState(record.phone || '');
-  const [age, setAge] = useState((record.age || '').replace(/[^0-9]/g, '') || '');
+  const initialAgeStr = String(record.age || '');
+  const isInitialMonths = initialAgeStr.toLowerCase().includes('month') || initialAgeStr.toLowerCase().includes('mos');
+  const [age, setAge] = useState(initialAgeStr.replace(/[^0-9]/g, '') || '');
+  const [ageUnit, setAgeUnit] = useState(isInitialMonths ? 'Months' : 'Years');
   const [gender, setGender] = useState(record.gender || 'Male');
   const [bloodGroup, setBloodGroup] = useState(record.bloodGroup || record.vitals?.bloodGroup || '');
   const [address, setAddress] = useState(record.address || '');
@@ -124,7 +127,7 @@ export function EditOPRecordModal({ record, onClose, onSave, onNotify }) {
       patient: patientName.trim(),
       patientName: patientName.trim(),
       phone: phone.trim(),
-      age: age ? `${age} Yrs` : record.age,
+      age: age ? `${age} ${ageUnit === 'Months' ? 'Months' : 'Yrs'}` : record.age,
       gender,
       bloodGroup,
       dob,
@@ -299,16 +302,33 @@ export function EditOPRecordModal({ record, onClose, onSave, onNotify }) {
 
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '12px', marginTop: '10px' }}>
                 <div className="field">
-                  <span style={{ fontSize: '11px', fontWeight: '700', color: '#475569', display: 'block', marginBottom: '4px' }}>
-                    Age (Years)
-                  </span>
-                  <input
-                    type="number"
-                    value={age}
-                    onChange={(e) => setAge(e.target.value)}
-                    placeholder="32"
-                    style={{ padding: '8px 10px', fontSize: '12px', border: '1px solid #cbd5e1', borderRadius: '6px', width: '100%', boxSizing: 'border-box' }}
-                  />
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '4px' }}>
+                    <span style={{ fontSize: '11px', fontWeight: '700', color: '#475569' }}>
+                      Age *
+                    </span>
+                    <span style={{ fontSize: '9px', fontWeight: '800', color: ageUnit === 'Months' ? '#0284c7' : '#15803d' }}>
+                      {ageUnit === 'Months' ? '👶 Months' : 'Years'}
+                    </span>
+                  </div>
+                  <div style={{ display: 'grid', gridTemplateColumns: '1.2fr 1fr', gap: '4px', width: '100%', boxSizing: 'border-box' }}>
+                    <input
+                      type="number"
+                      min="0"
+                      max={ageUnit === 'Months' ? 36 : 120}
+                      value={age}
+                      onChange={(e) => setAge(e.target.value)}
+                      placeholder={ageUnit === 'Months' ? '6' : '32'}
+                      style={{ padding: '8px 6px', fontSize: '12px', border: '1px solid #cbd5e1', borderRadius: '6px', width: '100%', boxSizing: 'border-box' }}
+                    />
+                    <select
+                      value={ageUnit}
+                      onChange={(e) => setAgeUnit(e.target.value)}
+                      style={{ padding: '8px 4px', fontSize: '11px', border: '1px solid #cbd5e1', borderRadius: '6px', background: '#fff', width: '100%', boxSizing: 'border-box', fontWeight: '700', color: ageUnit === 'Months' ? '#0284c7' : '#334155' }}
+                    >
+                      <option value="Years">Years</option>
+                      <option value="Months">Months</option>
+                    </select>
+                  </div>
                 </div>
                 <div className="field">
                   <span style={{ fontSize: '11px', fontWeight: '700', color: '#475569', display: 'block', marginBottom: '4px' }}>

@@ -377,11 +377,21 @@ export function LaboratoryPage({ tests = initialLabTests, isDoctor = false, doct
                     )}
 
                     {test.result ? (
-                      <p style={{ margin: '4px 0 0', fontSize: '11px', color: '#15803d', fontWeight: '600' }}>
-                        Result: {test.result}
-                      </p>
+                      <div style={{ marginTop: '6px', display: 'grid', gap: '3px' }}>
+                        {test.result.includes(' | ') ? (
+                          test.result.split(' | ').map((subRes, sIdx) => (
+                            <div key={sIdx} style={{ fontSize: '11px', color: '#15803d', fontWeight: '600', background: '#f0fdf4', padding: '2px 8px', borderRadius: '4px', border: '1px solid #dcfce7' }}>
+                              🔬 {subRes}
+                            </div>
+                          ))
+                        ) : (
+                          <p style={{ margin: '4px 0 0', fontSize: '11px', color: '#15803d', fontWeight: '600' }}>
+                            Result: {test.result}
+                          </p>
+                        )}
+                      </div>
                     ) : (
-                      <p style={{ margin: '4px 0 0', fontSize: '11px', color: '#8b9bb0', italic: 'true' }}>
+                      <p style={{ margin: '4px 0 0', fontSize: '11px', color: '#8b9bb0', fontStyle: 'italic' }}>
                         Awaiting lab technician result entry
                       </p>
                     )}
@@ -404,7 +414,7 @@ export function LaboratoryPage({ tests = initialLabTests, isDoctor = false, doct
                           onClick={() => handleOpenLabPaymentModal(test)}
                           title="Collect lab test fee payment"
                         >
-                          <WalletCards size={13} /> Collect Fee
+                          <WalletCards size={13} /> Generate Bill & Collect Fee
                         </button>
                       ) : (
                         test.status === 'Result ready' && (
@@ -423,8 +433,22 @@ export function LaboratoryPage({ tests = initialLabTests, isDoctor = false, doct
                     {test.status === 'Result ready' ? (
                       <button
                         className="primary-button"
-                        style={{ padding: '6px 12px', fontSize: '11px', gap: '4px', background: '#15803d', borderColor: '#15803d' }}
-                        onClick={() => setActiveModalTest(test)}
+                        style={{
+                          padding: '6px 12px',
+                          fontSize: '11px',
+                          gap: '4px',
+                          background: dueFee > 0 ? '#64748b' : '#15803d',
+                          borderColor: dueFee > 0 ? '#64748b' : '#15803d',
+                        }}
+                        onClick={() => {
+                          if (dueFee > 0 && !isDoctor) {
+                            onNotify && onNotify(`⚠️ Please complete billing settlement (₹${dueFee} due) before generating the official PDF report.`);
+                            handleOpenLabPaymentModal(test);
+                          } else {
+                            setActiveModalTest(test);
+                          }
+                        }}
+                        title={dueFee > 0 ? "Complete fee billing before generating PDF report" : "View / Download Official PDF Report"}
                       >
                         <Printer size={13} /> View PDF Report
                       </button>

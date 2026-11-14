@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Save, Plus, Trash2, X, FlaskConical } from 'lucide-react';
+import { Save, Plus, Trash2, X, FlaskConical, Eye, CheckCircle2 } from 'lucide-react';
 import { initialLabTests, initialOPRecords, initialMasterLabServices } from '../data/initialData';
 
 // Preset generator helper for sub-parameter rows (Loads custom sub-categories defined in Master Services first)
@@ -50,49 +50,93 @@ const getInitialRowsForTest = (testName, masterServices = []) => {
   ];
 };
 
-// Helper to reliably restore and prefill existing test rows, sub-parameters and findings
-const resolveExistingRows = (testObj, activeTestName, services) => {
-  const candidateRows = (Array.isArray(testObj?.testRows) && testObj.testRows.length > 0)
+// Comprehensive helper to reliably restore and prefill sub-parameter rows for ALL tests in an order
+const resolveAllTestRows = (testObj, primaryTestName, extraTestsList = [], services = []) => {
+  const allTestNames = [];
+  if (primaryTestName && primaryTestName.trim()) {
+    allTestNames.push(primaryTestName.trim());
+  }
+  extraTestsList.forEach((et) => {
+    const tName = typeof et === 'string' ? et.trim() : (et?.name || et?.test || '').trim();
+    if (tName && !allTestNames.includes(tName)) {
+      allTestNames.push(tName);
+    }
+  });
+
+  if (testObj?.test && testObj.test.includes(' + ')) {
+    testObj.test.split(' + ').map((s) => s.trim()).filter(Boolean).forEach((tName) => {
+      if (!allTestNames.includes(tName)) allTestNames.push(tName);
+    });
+  } else if (Array.isArray(testObj?.testsList) && testObj.testsList.length > 0) {
+    testObj.testsList.forEach((t) => {
+      const tName = typeof t === 'string' ? t.trim() : (t?.name || t?.test || '').trim();
+      if (tName && !allTestNames.includes(tName)) allTestNames.push(tName);
+    });
+  }
+
+  if (allTestNames.length === 0) {
+    if (services.length > 0 && services[0]?.name) {
+      allTestNames.push(services[0].name);
+    } else {
+      allTestNames.push('Standard Lab Investigation');
+    }
+  }
+
+  const existingRows = (Array.isArray(testObj?.testRows) && testObj.testRows.length > 0)
     ? testObj.testRows
     : (Array.isArray(testObj?.results?.testRows) && testObj.results.testRows.length > 0)
     ? testObj.results.testRows
-    : null;
+    : [];
 
-  const defaultRows = getInitialRowsForTest(activeTestName, services);
   const resultStr = testObj?.result || testObj?.results?.summaryResult || testObj?.results?.result || '';
-
   let parsedMap = {};
   if (resultStr && typeof resultStr === 'string' && resultStr !== 'Pathology Report Available') {
-    const pairs = resultStr.split(',').map((s) => s.trim()).filter(Boolean);
+    const pairs = resultStr.split(/[,|]/).map((s) => s.trim()).filter(Boolean);
     pairs.forEach((p) => {
       const parts = p.split(':');
       if (parts.length >= 2) {
-        const k = parts[0].trim().toLowerCase();
+        const k = parts[0].replace(/^\[.*?\/\s*/, '').trim().toLowerCase();
         const v = parts.slice(1).join(':').trim();
         parsedMap[k] = v;
       }
     });
   }
 
-  if (candidateRows && candidateRows.length > 0) {
-    return candidateRows.map((row) => {
-      if (row.result && String(row.result).trim().length > 0) return row;
-      const rowKey = (row.name || '').trim().toLowerCase();
-      const matchedVal = parsedMap[rowKey] || Object.entries(parsedMap).find(([k]) => rowKey.includes(k) || k.includes(rowKey))?.[1];
-      return matchedVal ? { ...row, result: matchedVal } : row;
-    });
-  }
+  let finalRows = [];
+  allTestNames.forEach((tName, tIdx) => {
+    const matched = existingRows.filter((r) => 
+      (r.testSource && r.testSource.toLowerCase() === tName.toLowerCase()) ||
+      (!r.testSource && allTestNames.length === 1) ||
+      (!r.testSource && tIdx === 0)
+    );
 
-  if (Object.keys(parsedMap).length > 0) {
-    return defaultRows.map((r) => {
-      const rowKey = (r.name || '').trim().toLowerCase();
-      const matchedVal = parsedMap[rowKey] || Object.entries(parsedMap).find(([k]) => rowKey.includes(k) || k.includes(rowKey))?.[1];
-      return matchedVal ? { ...r, result: matchedVal } : r;
-    });
-  }
+    if (matched.length > 0) {
+      matched.forEach((r) => {
+        finalRows.push({
+          ...r,
+          testSource: tName,
+          result: r.result || parsedMap[(r.name || '').trim().toLowerCase()] || '',
+        });
+      });
+    } else {
+      const defRows = getInitialRowsForTest(tName, services);
+      defRows.forEach((r, idx) => {
+        const rowKey = (r.name || '').trim().toLowerCase();
+        const matchedVal = parsedMap[rowKey] || Object.entries(parsedMap).find(([k]) => rowKey.includes(k) || k.includes(rowKey))?.[1];
+        finalRows.push({
+          ...r,
+          id: Date.now() + tIdx * 100 + idx + Math.random(),
+          result: matchedVal || r.result || '',
+          testSource: tName,
+        });
+      });
+    }
+  });
 
-  return defaultRows;
+  return finalRows.length > 0 ? finalRows : getInitialRowsForTest(allTestNames[0], services);
 };
+
+const resolveExistingRows = resolveAllTestRows;
 
 export function EnterLabResultForm({
   tests = [],
@@ -126,6 +170,7 @@ export function EnterLabResultForm({
   );
   const [status, setStatus] = useState(initialSelectedTest?.status || 'Sample collected');
   const [autoFetchSuccess, setAutoFetchSuccess] = useState(false);
+  const [isVerificationModalOpen, setIsVerificationModalOpen] = useState(false);
 
   // Auto-fetch branch-scoped next Lab Record Number starting from LAB-0001 from backend
   React.useEffect(() => {
@@ -192,7 +237,7 @@ export function EnterLabResultForm({
 
   // Dynamic Multi-Row Sub-Parameter State (e.g. T1, T2, T3, T4, TSH)
   const [testRows, setTestRows] = useState(() =>
-    resolveExistingRows(initialSelectedTest, initialMainTest, masterServices)
+    resolveAllTestRows(initialSelectedTest, initialMainTest, initialSelectedTest?.testsList || [], masterServices)
   );
 
   const [notes, setNotes] = useState(initialSelectedTest?.notes || '');
@@ -421,20 +466,23 @@ export function EnterLabResultForm({
         if (rawTName.includes(' + ')) {
           const parts = rawTName.split(' + ').map((s) => s.trim());
           setTestName(parts[0]);
-          setAdditionalTests(
-            parts.slice(1).map((name) => {
-              const srv = masterServices.find((s) => s.name === name);
-              return { name, fee: parseFloat(srv?.rate) || 0 };
-            })
-          );
+          const extras = parts.slice(1).map((name) => {
+            const srv = masterServices.find((s) => s.name === name);
+            return { name, fee: parseFloat(srv?.rate) || 0 };
+          });
+          setAdditionalTests(extras);
+          setTestRows(resolveAllTestRows(initialSelectedTest, parts[0], extras, masterServices));
         } else if (Array.isArray(initialSelectedTest.testsList) && initialSelectedTest.testsList.length > 1) {
-          setTestName(initialSelectedTest.testsList[0].name || rawTName);
-          setAdditionalTests(initialSelectedTest.testsList.slice(1));
+          const primary = initialSelectedTest.testsList[0].name || rawTName;
+          const extras = initialSelectedTest.testsList.slice(1);
+          setTestName(primary);
+          setAdditionalTests(extras);
+          setTestRows(resolveAllTestRows(initialSelectedTest, primary, extras, masterServices));
         } else {
           setTestName(rawTName);
           setAdditionalTests([]);
+          setTestRows(resolveAllTestRows(initialSelectedTest, rawTName, [], masterServices));
         }
-        setTestRows(resolveExistingRows(initialSelectedTest, rawTName, masterServices));
       }
       if (initialSelectedTest.notes || initialSelectedTest.clinicalNotes) {
         setNotes(initialSelectedTest.notes || initialSelectedTest.clinicalNotes);
@@ -480,7 +528,7 @@ export function EnterLabResultForm({
   // Handle Main Test Selection -> Auto-populate presets & rates
   const handleMainTestChange = (selectedName) => {
     setTestName(selectedName);
-    const mainRows = getInitialRowsForTest(selectedName, masterServices);
+    const mainRows = getInitialRowsForTest(selectedName, masterServices).map(r => ({ ...r, testSource: selectedName }));
     const extraRows = testRows.filter((r) => r.testSource && r.testSource !== testName);
     setTestRows([...mainRows, ...extraRows]);
 
@@ -677,17 +725,6 @@ export function EnterLabResultForm({
       : [];
     const finalPaymentHistory = existingHistory.length > 0 ? existingHistory : initialHistoryEntry;
 
-    // Format main result summary string for cards
-    const summaryResult = testRows
-      .filter((r) => r.name && r.result && String(r.result).trim().length > 0)
-      .map((r) => `${r.name}: ${r.result}`)
-      .join(', ');
-
-    const existingResult = initialSelectedTest?.result || initialSelectedTest?.results?.summaryResult || '';
-    const isSampleStage = status === 'Sample collected' || status === 'Processing' || status === 'Awaiting sample';
-    const fallbackStatusLabel = isSampleStage ? (status || 'Sample collected') : 'Pathology Report Available';
-    const resolvedResultValue = summaryResult || existingResult || fallbackStatusLabel;
-
     // All tests in this order
     const primaryRate = parseFloat(masterServices.find(s => s.name === testName.trim())?.rate) || grossFeeNum;
     const allTestsList = [
@@ -695,6 +732,29 @@ export function EnterLabResultForm({
       ...additionalTests,
     ];
     const combinedTestName = allTestsList.map((t) => t.name).join(' + ');
+
+    // Format main result summary string for cards with all tests clearly distinguished
+    const summaryResult = allTestsList.map((t) => {
+      const tRows = testRows.filter((r) => 
+        (r.testSource && r.testSource.toLowerCase() === t.name.toLowerCase()) ||
+        (!r.testSource && allTestsList.length === 1)
+      );
+      const findings = tRows
+        .filter((r) => r.name && r.result && String(r.result).trim().length > 0)
+        .map((r) => `${r.name}: ${r.result}`)
+        .join(', ');
+      return findings ? `[${t.name}] ${findings}` : null;
+    }).filter(Boolean).join(' | ');
+
+    const allFilledRows = testRows
+      .filter((r) => r.name && r.result && String(r.result).trim().length > 0)
+      .map((r) => `${r.name}: ${r.result}`)
+      .join(', ');
+
+    const existingResult = initialSelectedTest?.result || initialSelectedTest?.results?.summaryResult || '';
+    const isSampleStage = status === 'Sample collected' || status === 'Processing' || status === 'Awaiting sample';
+    const fallbackStatusLabel = isSampleStage ? (status || 'Sample collected') : 'Pathology Report Available';
+    const resolvedResultValue = summaryResult || allFilledRows || existingResult || fallbackStatusLabel;
 
     const targetBranch = effectiveBranch === 'All' ? (branchesList[0]?.name || 'Central Campus') : effectiveBranch;
     const resolvedLabNo = initialSelectedTest?.labOrderNo || (opNumber.trim().startsWith('LAB-') ? opNumber.trim() : (initialSelectedTest?.id?.startsWith('LAB-') ? initialSelectedTest.id : opNumber.trim()));
@@ -805,6 +865,21 @@ export function EnterLabResultForm({
     }
 
     onSave(payload);
+  };
+
+  const primaryRateForRender = parseFloat(masterServices.find(s => s.name === (testName || '').trim())?.rate) || grossFeeNum;
+  const currentTestsList = [
+    { name: (testName || '').trim() || 'Primary Diagnostic Test', fee: primaryRateForRender },
+    ...additionalTests,
+  ];
+
+  const handleOpenVerification = (e) => {
+    e && e.preventDefault();
+    if (!opNumber.trim() || !patientName.trim() || !testName.trim()) {
+      notify && notify('Please fill in Lab record number, patient name, and main test name before previewing.');
+      return;
+    }
+    setIsVerificationModalOpen(true);
   };
 
   return (
@@ -1289,6 +1364,25 @@ export function EnterLabResultForm({
 
           {/* Action Buttons */}
           <div style={{ display: 'flex', gap: '12px', marginTop: '10px', flexWrap: 'wrap' }}>
+            <button
+              type="button"
+              className="secondary-button"
+              onClick={handleOpenVerification}
+              style={{
+                padding: '12px 22px',
+                flex: '1 1 auto',
+                justifyContent: 'center',
+                background: '#f0fdf4',
+                borderColor: '#86efac',
+                color: '#15803d',
+                fontWeight: '800',
+                gap: '8px',
+                fontSize: '13px'
+              }}
+              title="Preview and verify all entered test findings and billing details before saving"
+            >
+              <Eye size={17} /> Preview &amp; Verify Results ({currentTestsList.length} Tests)
+            </button>
             <button type="submit" className="primary-button" style={{ padding: '12px 28px', flex: '1 1 auto', justifyContent: 'center' }}>
               <Save size={17} /> Save Lab Result
             </button>
@@ -1298,6 +1392,164 @@ export function EnterLabResultForm({
           </div>
         </form>
       </section>
+
+      {/* PREVIEW & VERIFICATION MODAL BEFORE FINAL SAVE */}
+      {isVerificationModalOpen && (
+        <div style={{ position: 'fixed', inset: 0, zIndex: 110, background: 'rgba(15, 45, 85, 0.65)', display: 'grid', placeItems: 'center', padding: '16px', overflowY: 'auto' }}>
+          <div style={{ background: '#fff', borderRadius: '12px', padding: '24px', maxWidth: '740px', width: '100%', maxHeight: '90vh', overflowY: 'auto', boxShadow: '0 20px 40px rgba(0,0,0,0.25)', border: '1px solid #cbd5e1' }}>
+            {/* Header */}
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid #e2e8f0', paddingBottom: '12px', marginBottom: '16px' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <FlaskConical size={22} color="#15803d" />
+                <div>
+                  <h3 style={{ margin: 0, fontSize: '16px', color: '#162d4a', fontWeight: '800' }}>
+                    Preview &amp; Verify Lab Results Before Saving
+                  </h3>
+                  <span style={{ fontSize: '11px', color: '#64748b' }}>Check all {currentTestsList.length} test findings, biological reference values, and billing accuracy</span>
+                </div>
+              </div>
+              <button
+                type="button"
+                className="icon-button"
+                onClick={() => setIsVerificationModalOpen(false)}
+              >
+                <X size={18} />
+              </button>
+            </div>
+
+            {/* Verification Notice */}
+            <div style={{ background: '#f0fdf4', border: '1px solid #bbf7d0', padding: '10px 14px', borderRadius: '8px', marginBottom: '14px', fontSize: '11px', color: '#166534', fontWeight: '600' }}>
+              ✓ Verification Mode Active: Confirm that each test result has been entered correctly before persisting to the database and issuing reports.
+            </div>
+
+            {/* Patient & Order Details Card */}
+            <div style={{ border: '1px solid #cbd5e1', borderRadius: '8px', padding: '12px 14px', background: '#f8fafc', marginBottom: '16px', display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '10px', fontSize: '12px' }}>
+              <div>
+                <div>Patient Name: <strong style={{ color: '#0f2d55' }}>{patientName}</strong></div>
+                <div>Lab Order No: <strong>{opNumber}</strong></div>
+                <div>OP / Reg Number: <strong>{patientOpNumber || 'Walk-In'}</strong></div>
+                <div>Contact Phone: <strong>{phone || 'N/A'}</strong></div>
+              </div>
+              <div>
+                <div>Prescribing Doctor: <strong>{doctor || 'Self / Hospital'}</strong></div>
+                <div>Status Flag: <strong style={{ color: '#15803d' }}>{status}</strong></div>
+                <div>Branch: <strong>{effectiveBranch === 'All' ? (branchesList[0]?.name || 'Central Campus') : effectiveBranch}</strong></div>
+                <div>Report Date: <strong>{new Date().toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })}</strong></div>
+              </div>
+            </div>
+
+            {/* Grouped Tests & Parameters Verification Table */}
+            <div style={{ marginBottom: '16px' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px' }}>
+                <h4 style={{ margin: 0, fontSize: '13px', color: '#0f2d55', fontWeight: '800' }}>
+                  Entered Diagnostic Tests &amp; Observations ({currentTestsList.length} Tests)
+                </h4>
+                <span style={{ fontSize: '11px', fontWeight: '700', color: '#15803d' }}>
+                  Total {testRows.length} Sub-Parameters
+                </span>
+              </div>
+
+              {currentTestsList.map((tItem, tIdx) => {
+                const rowsForThisTest = testRows.filter(
+                  (r) => (r.testSource && r.testSource.toLowerCase() === tItem.name.toLowerCase()) ||
+                         (!r.testSource && currentTestsList.length === 1) ||
+                         (!r.testSource && tIdx === 0)
+                );
+                return (
+                  <div key={tIdx} style={{ marginBottom: '14px', border: '1px solid #e2e8f0', borderRadius: '8px', overflow: 'hidden' }}>
+                    <div style={{ background: '#f1f5f9', padding: '8px 12px', borderBottom: '1px solid #e2e8f0', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                      <span style={{ fontWeight: '800', color: '#1e3a8a', fontSize: '12px' }}>
+                        🧪 Test {tIdx + 1}: {tItem.name}
+                      </span>
+                      <span style={{ fontSize: '11px', color: '#64748b', fontWeight: '700' }}>
+                        Test Fee: ₹{tItem.fee}
+                      </span>
+                    </div>
+
+                    <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '12px' }}>
+                      <thead>
+                        <tr style={{ background: '#f8fafc', borderBottom: '1px solid #e2e8f0', textAlign: 'left' }}>
+                          <th style={{ padding: '6px 10px', color: '#475569', fontSize: '11px' }}>Parameter</th>
+                          <th style={{ padding: '6px 10px', color: '#475569', fontSize: '11px' }}>Observed Result</th>
+                          <th style={{ padding: '6px 10px', color: '#475569', fontSize: '11px' }}>Reference Range</th>
+                          <th style={{ padding: '6px 10px', color: '#475569', fontSize: '11px' }}>Status</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {rowsForThisTest.length === 0 ? (
+                          <tr>
+                            <td colSpan={4} style={{ padding: '8px 10px', textAlign: 'center', color: '#94a3b8' }}>
+                              No sub-parameters listed for this test.
+                            </td>
+                          </tr>
+                        ) : (
+                          rowsForThisTest.map((r, rIdx) => (
+                            <tr key={r.id || rIdx} style={{ borderBottom: '1px solid #f1f5f9', background: rIdx % 2 === 0 ? '#fff' : '#fafafa' }}>
+                              <td style={{ padding: '6px 10px', fontWeight: '600' }}>{r.name || 'Parameter'}</td>
+                              <td style={{ padding: '6px 10px', fontWeight: '800', color: r.result ? '#15803d' : '#94a3b8' }}>
+                                {r.result || 'Pending / Blank'}
+                              </td>
+                              <td style={{ padding: '6px 10px', color: '#64748b', fontSize: '11px' }}>{r.normalRange || 'Standard'}</td>
+                              <td style={{ padding: '6px 10px' }}>
+                                <span style={{ fontSize: '10px', fontWeight: '800', padding: '1px 6px', borderRadius: '4px', background: r.result ? '#dcfce7' : '#f1f5f9', color: r.result ? '#15803d' : '#64748b' }}>
+                                  {r.result ? 'Entered' : 'Empty'}
+                                </span>
+                              </td>
+                            </tr>
+                          ))
+                        )}
+                      </tbody>
+                    </table>
+                  </div>
+                );
+              })}
+            </div>
+
+            {/* Billing Verification Summary */}
+            <div style={{ border: '1px solid #bbf7d0', borderRadius: '8px', padding: '10px 14px', background: '#f0fdf4', marginBottom: '16px', fontSize: '11px' }}>
+              <div style={{ fontWeight: '800', color: '#166534', marginBottom: '6px', fontSize: '12px' }}>
+                💳 Billing &amp; Settlement Verification
+              </div>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '8px' }}>
+                <div>Total Fee: <strong>₹{netPayableNum}</strong></div>
+                <div>Amount Paid: <strong style={{ color: '#15803d' }}>₹{calculatedTotalCollected}</strong></div>
+                <div>Balance Due: <strong style={{ color: (netPayableNum - calculatedTotalCollected) > 0 ? '#dc2626' : '#15803d' }}>₹{Math.max(0, netPayableNum - calculatedTotalCollected)}</strong></div>
+                <div>Payment Mode: <strong>{paymentSummaryStr || 'Cash'}</strong></div>
+              </div>
+            </div>
+
+            {/* Remarks / Clinical Notes */}
+            {notes && (
+              <div style={{ background: '#f8fafc', border: '1px solid #e2e8f0', padding: '8px 12px', borderRadius: '6px', fontSize: '11px', marginBottom: '16px' }}>
+                <strong>Technician Remarks:</strong> {notes}
+              </div>
+            )}
+
+            {/* Modal Buttons */}
+            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px', borderTop: '1px solid #e2e8f0', paddingTop: '14px' }}>
+              <button
+                type="button"
+                className="secondary-button"
+                onClick={() => setIsVerificationModalOpen(false)}
+                style={{ padding: '8px 16px' }}
+              >
+                ✏️ Back to Edit
+              </button>
+              <button
+                type="button"
+                className="primary-button"
+                onClick={(e) => {
+                  setIsVerificationModalOpen(false);
+                  handleSubmit(e);
+                }}
+                style={{ padding: '8px 22px', background: '#15803d', borderColor: '#15803d', fontWeight: '800' }}
+              >
+                <Save size={15} /> Confirm &amp; Save All Results
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </>
   );
 }

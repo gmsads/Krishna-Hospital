@@ -6,6 +6,7 @@ export function RegisterPatientForm({ patientsList = initialPatients, onSave, on
   const [name, setName] = useState('');
   const [phone, setPhone] = useState('');
   const [age, setAge] = useState('');
+  const [ageUnit, setAgeUnit] = useState('Years');
   const [gender, setGender] = useState('Female');
   const [matchedPatient, setMatchedPatient] = useState(null);
 
@@ -30,7 +31,14 @@ export function RegisterPatientForm({ patientsList = initialPatients, onSave, on
   const handleAutoFillMatchedPatient = () => {
     if (matchedPatient) {
       setName(matchedPatient.name || '');
-      setAge(matchedPatient.age ? matchedPatient.age.toString() : '');
+      if (matchedPatient.age) {
+        const aStr = String(matchedPatient.age);
+        const isM = aStr.toLowerCase().includes('month') || aStr.toLowerCase().includes('mos');
+        setAgeUnit(isM ? 'Months' : 'Years');
+        setAge(aStr.replace(/[^0-9]/g, ''));
+      } else {
+        setAge('');
+      }
       setGender(matchedPatient.gender || 'Female');
       setPhone(matchedPatient.phone || phone);
       notify && notify(`✓ Auto-filled existing patient profile for ${matchedPatient.name} (${matchedPatient.id})`);
@@ -47,7 +55,7 @@ export function RegisterPatientForm({ patientsList = initialPatients, onSave, on
     onSave({
       id: `KH-${1050 + Math.floor(Math.random() * 90)}`,
       name: name.trim(),
-      age: Number(age),
+      age: age ? `${age} ${ageUnit === 'Months' ? 'Months' : 'Yrs'}` : '30 Yrs',
       gender,
       phone: phone.trim(),
       lastVisit: 'Today, just now',
@@ -87,17 +95,32 @@ export function RegisterPatientForm({ patientsList = initialPatients, onSave, on
 
           <div className="responsive-grid-2">
             <div className="field">
-              <span style={{ color: '#4a5e7a', fontSize: '12px', fontWeight: '700' }}>Age</span>
-              <input
-                type="number"
-                min="0"
-                max="120"
-                value={age}
-                onChange={(e) => setAge(e.target.value)}
-                placeholder="Age"
-                required
-                style={{ padding: '12px 14px', border: '1px solid #dde7f1', borderRadius: '9px', fontSize: '13px', background: '#fff' }}
-              />
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <span style={{ color: '#4a5e7a', fontSize: '12px', fontWeight: '700' }}>Age *</span>
+                <span style={{ fontSize: '10px', fontWeight: '800', color: ageUnit === 'Months' ? '#0284c7' : '#15803d' }}>
+                  {ageUnit === 'Months' ? '👶 Months (Infant/Child)' : 'Years'}
+                </span>
+              </div>
+              <div style={{ display: 'grid', gridTemplateColumns: '1.2fr 1fr', gap: '6px', width: '100%', boxSizing: 'border-box' }}>
+                <input
+                  type="number"
+                  min="0"
+                  max={ageUnit === 'Months' ? 36 : 120}
+                  value={age}
+                  onChange={(e) => setAge(e.target.value)}
+                  placeholder={ageUnit === 'Months' ? 'e.g. 6' : 'e.g. 32'}
+                  required
+                  style={{ padding: '12px 14px', border: '1px solid #dde7f1', borderRadius: '9px', fontSize: '13px', background: '#fff' }}
+                />
+                <select
+                  value={ageUnit}
+                  onChange={(e) => setAgeUnit(e.target.value)}
+                  style={{ padding: '12px 10px', border: '1px solid #dde7f1', borderRadius: '9px', fontSize: '12px', background: '#fff', fontWeight: '700', color: ageUnit === 'Months' ? '#0284c7' : '#334155' }}
+                >
+                  <option value="Years">Years</option>
+                  <option value="Months">Months</option>
+                </select>
+              </div>
             </div>
 
             <div className="field">

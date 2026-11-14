@@ -43,6 +43,7 @@ export function CreateOPRecordForm({
   const [patientName, setPatientName] = useState('');
   const [gender, setGender] = useState('Male');
   const [age, setAge] = useState('32');
+  const [ageUnit, setAgeUnit] = useState('Years');
   const [dob, setDob] = useState('');
   const [address, setAddress] = useState('');
   const [phone, setPhone] = useState('');
@@ -379,7 +380,12 @@ export function CreateOPRecordForm({
       if (name) setPatientName(name);
       if (type !== 'phone' && found.phone) setPhone(found.phone);
       if (found.gender) setGender(found.gender);
-      if (found.age) setAge(found.age.replace(/[^0-9]/g, '') || '30');
+      if (found.age) {
+        const ageStr = String(found.age);
+        const isMonths = ageStr.toLowerCase().includes('month') || ageStr.toLowerCase().includes('mos');
+        setAgeUnit(isMonths ? 'Months' : 'Years');
+        setAge(ageStr.replace(/[^0-9]/g, '') || '30');
+      }
       if (found.dob) setDob(found.dob);
       if (found.address) setAddress(found.address);
       if (found.doctor && found.doctor !== 'Unassigned') setDoctor(found.doctor);
@@ -463,7 +469,7 @@ export function CreateOPRecordForm({
       patient: patientName.trim(),
       patientName: patientName.trim(),
       gender,
-      age: `${age} Yrs`,
+      age: age ? `${age} ${ageUnit === 'Months' ? 'Months' : 'Yrs'}` : '30 Yrs',
       dob,
       address: address.trim(),
       phone: phone.trim(),
@@ -731,13 +737,32 @@ export function CreateOPRecordForm({
               </div>
 
               <div className="field">
-                <span style={{ color: '#4a5e7a', fontSize: '10px', fontWeight: '700' }}>Age (Yrs)</span>
-                <input
-                  type="number"
-                  value={age}
-                  onChange={(e) => setAge(e.target.value)}
-                  style={{ padding: '8px 6px', border: '1px solid #dde7f1', borderRadius: '6px', fontSize: '11px', width: '100%', minWidth: 0, boxSizing: 'border-box' }}
-                />
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <span style={{ color: '#4a5e7a', fontSize: '10px', fontWeight: '700' }}>Age *</span>
+                  <span style={{ fontSize: '9px', fontWeight: '800', color: ageUnit === 'Months' ? '#0284c7' : '#15803d' }}>
+                    {ageUnit === 'Months' ? '👶 Months' : 'Years'}
+                  </span>
+                </div>
+                <div style={{ display: 'grid', gridTemplateColumns: '1.2fr 1fr', gap: '4px', width: '100%', boxSizing: 'border-box' }}>
+                  <input
+                    type="number"
+                    min="0"
+                    max={ageUnit === 'Months' ? 36 : 120}
+                    value={age}
+                    onChange={(e) => setAge(e.target.value)}
+                    placeholder={ageUnit === 'Months' ? 'e.g. 6' : 'e.g. 32'}
+                    required
+                    style={{ padding: '8px 6px', border: '1px solid #dde7f1', borderRadius: '6px', fontSize: '11px', width: '100%', minWidth: 0, boxSizing: 'border-box' }}
+                  />
+                  <select
+                    value={ageUnit}
+                    onChange={(e) => setAgeUnit(e.target.value)}
+                    style={{ padding: '8px 4px', border: '1px solid #dde7f1', borderRadius: '6px', background: '#fff', fontSize: '10px', width: '100%', minWidth: 0, boxSizing: 'border-box', fontWeight: '700', color: ageUnit === 'Months' ? '#0284c7' : '#334155' }}
+                  >
+                    <option value="Years">Years</option>
+                    <option value="Months">Months</option>
+                  </select>
+                </div>
               </div>
 
               <div className="field">
