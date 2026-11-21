@@ -1,0 +1,2305 @@
+import React, { useMemo, useState, useRef, useEffect } from 'react';
+import {
+  Activity,
+  Bell,
+  Boxes,
+  ChevronDown,
+  ChevronRight,
+  ClipboardList,
+  FlaskConical,
+  LayoutDashboard,
+  Menu,
+  MessageCircle,
+  Search,
+  Settings,
+  UsersRound,
+  UserRound,
+  WalletCards,
+  CreditCard,
+  X,
+  LogOut,
+  Plus,
+  History,
+  ArrowRight,
+  MessageSquareShare,
+  Layers,
+  Stethoscope,
+  Building2,
+  Crown,
+  Receipt,
+  Pill,
+  Workflow,
+  FileText,
+} from 'lucide-react';
+import { useAuth } from '../lib/auth';
+
+// Data & Hooks
+import { initialPatients, initialOPRecords, initialLabTests, initialStaff, initialPatientHistory, initialMasterLabServices, initialDoctors, initialBranches, initialExpenses } from './data/initialData';
+import { useToast } from './common/useToast';
+
+// Dashboards
+import { Dashboard } from './dashboards/Dashboard';
+import { PharmacyDashboard } from './dashboards/PharmacyDashboard';
+
+// Forms
+import { CreateOPRecordForm } from './forms/CreateOPRecordForm';
+import { EnterLabResultForm } from './forms/EnterLabResultForm';
+import { AddStaffForm } from './forms/AddStaffForm';
+import { RegisterPatientForm } from './forms/RegisterPatientForm';
+import { AddPharmacySaleForm } from './forms/AddPharmacySaleForm';
+
+// Modals
+import { RequestLabTestModal } from './modals/RequestLabTestModal';
+
+// Pages
+import { PatientsPage } from './pages/PatientsPage';
+import { PatientHistoryPage } from './pages/PatientHistoryPage';
+import { OPRecordsPage } from './pages/OPRecordsPage';
+import { LaboratoryPage } from './pages/LaboratoryPage';
+import { LabInventoryPage } from './pages/LabInventoryPage';
+import { FinancePage } from './pages/FinancePage';
+import { StaffPage } from './pages/StaffPage';
+import { MarketingPage } from './pages/MarketingPage';
+import { WhatsAppInboxPage } from './pages/WhatsAppInboxPage';
+import { WhatsAppTemplatesPage } from './pages/WhatsAppTemplatesPage';
+import { LabServicesPage } from './pages/LabServicesPage';
+import { DoctorsPage } from './pages/DoctorsPage';
+import { BranchesPage } from './pages/BranchesPage';
+import { ExpensesPage } from './pages/ExpensesPage';
+import { SettingsPage } from './pages/SettingsPage';
+
+// Navigation configuration for different roles
+const roleNav = {
+  'Super Admin': [
+    { label: 'Dashboard', path: '/dashboard', icon: LayoutDashboard },
+    {
+      group: 'Records & Finance',
+      icon: ClipboardList,
+      items: [
+        { label: 'All Records', path: '/op-records', icon: ClipboardList },
+        { label: 'Expenses', path: '/expenses', icon: Receipt },
+        { label: 'Finance', path: '/finance', icon: WalletCards },
+        { label: 'Branches', path: '/branches', icon: Building2 },
+      ],
+    },
+    {
+      group: 'Staff Management',
+      icon: UsersRound,
+      items: [
+        { label: 'Staff', path: '/staff', icon: UserRound },
+        { label: 'Doctors', path: '/doctors', icon: Stethoscope },
+      ],
+    },
+    {
+      group: 'Marketing',
+      icon: MessageSquareShare,
+      items: [
+        { label: 'Marketing', path: '/marketing', icon: MessageSquareShare },
+        { label: 'Meta Templates', path: '/templates', icon: FileText },
+        { label: 'WhatsApp Inbox', path: '/inbox', icon: MessageCircle },
+      ],
+    },
+    {
+      group: 'Pharmacy',
+      icon: Pill,
+      items: [
+        { label: 'Pharmacy Workspace', path: '/pharmacy', icon: Pill },
+        { label: 'Pharmacy Credits', path: '/pharmacy/credits', icon: CreditCard },
+      ],
+    },
+    {
+      group: 'Laboratory',
+      icon: FlaskConical,
+      items: [
+        { label: 'Laboratory Workspace', path: '/laboratory', icon: FlaskConical },
+        { label: 'Lab Inventory', path: '/laboratory/inventory', icon: Boxes },
+        { label: 'Lab Services', path: '/admin/services', icon: Layers },
+      ],
+    },
+  ],
+  Admin: [
+    { label: 'Dashboard', path: '/dashboard', icon: LayoutDashboard },
+    {
+      group: 'Records & Finance',
+      icon: ClipboardList,
+      items: [
+        { label: 'All Records', path: '/op-records', icon: ClipboardList },
+        { label: 'Expenses', path: '/expenses', icon: Receipt },
+        { label: 'Finance', path: '/finance', icon: WalletCards },
+      ],
+    },
+    {
+      group: 'Staff Management',
+      icon: UsersRound,
+      items: [
+        { label: 'Staff', path: '/staff', icon: UserRound },
+        { label: 'Doctors', path: '/doctors', icon: Stethoscope },
+      ],
+    },
+    {
+      group: 'Marketing',
+      icon: MessageSquareShare,
+      items: [
+        { label: 'Marketing', path: '/marketing', icon: MessageSquareShare },
+        { label: 'Meta Templates', path: '/templates', icon: FileText },
+        { label: 'WhatsApp Inbox', path: '/inbox', icon: MessageCircle },
+      ],
+    },
+    {
+      group: 'Pharmacy',
+      icon: Pill,
+      items: [
+        { label: 'Pharmacy Workspace', path: '/pharmacy', icon: Pill },
+        { label: 'Pharmacy Credits', path: '/pharmacy/credits', icon: CreditCard },
+      ],
+    },
+    {
+      group: 'Laboratory',
+      icon: FlaskConical,
+      items: [
+        { label: 'Laboratory Workspace', path: '/laboratory', icon: FlaskConical },
+        { label: 'Lab Inventory', path: '/laboratory/inventory', icon: Boxes },
+        { label: 'Lab Services', path: '/admin/services', icon: Layers },
+      ],
+    },
+  ],
+  Doctor: [
+    { label: 'Dashboard', path: '/dashboard', icon: LayoutDashboard },
+    { label: 'All Records', path: '/op-records', icon: ClipboardList },
+    { label: 'Laboratory', path: '/laboratory', icon: FlaskConical },
+  ],
+  'Front Desk': [
+    { label: 'Dashboard', path: '/dashboard', icon: LayoutDashboard },
+    { label: 'All Records', path: '/op-records', icon: ClipboardList },
+    { label: 'Lab Inventory', path: '/laboratory/inventory', icon: Boxes },
+    { label: 'Marketing', path: '/marketing', icon: MessageSquareShare },
+    { label: 'Meta Templates', path: '/templates', icon: FileText },
+    { label: 'WhatsApp Inbox', path: '/inbox', icon: MessageCircle },
+    { label: 'Expenses', path: '/expenses', icon: Receipt },
+  ],
+  'Lab Assistant': [
+    { label: 'Dashboard', path: '/dashboard', icon: LayoutDashboard },
+    { label: 'Laboratory', path: '/laboratory', icon: FlaskConical },
+    { label: 'Lab Inventory', path: '/laboratory/inventory', icon: Boxes },
+    { label: 'Expenses', path: '/expenses', icon: Receipt },
+  ],
+  Pharmacist: [
+    { label: 'Dashboard', path: '/dashboard', icon: LayoutDashboard },
+    { label: 'Pharmacy Credits', path: '/pharmacy/credits', icon: CreditCard },
+  ],
+};
+
+const roleLabel = {
+  'Super Admin': 'Super Admin',
+  Admin: 'Administrator',
+  Doctor: 'Doctor',
+  'Front Desk': 'Front Desk',
+  'Lab Assistant': 'Lab Assistant',
+  Pharmacist: 'Pharmacist',
+};
+
+export const getRoleKey = (role = '') => {
+  const r = (role || '').toLowerCase().trim();
+  if (r.includes('super')) return 'Super Admin';
+  if (r.includes('admin')) return 'Admin';
+  if (r.includes('doctor') || r.includes('physician')) return 'Doctor';
+  if (r.includes('front') || r.includes('reception')) return 'Front Desk';
+  if (r.includes('lab') || r.includes('patholog')) return 'Lab Assistant';
+  if (r.includes('pharm')) return 'Pharmacist';
+  return 'Admin';
+};
+
+export default function AppShell({ path = '/dashboard', navigate }) {
+  const { profile, signOut } = useAuth();
+  const [branchesList, setBranchesList] = useState(initialBranches);
+
+  const [patients, setPatients] = useState(initialPatients);
+  const [opRecords, setOpRecords] = useState(initialOPRecords);
+  const [labTests, setLabTests] = useState(initialLabTests);
+  const [staff, setStaff] = useState(initialStaff);
+  const [doctorsList, setDoctorsList] = useState(initialDoctors);
+  const [patientHistoryMap, setPatientHistoryMap] = useState(initialPatientHistory);
+  const [masterServices, setMasterServices] = useState(initialMasterLabServices);
+  const [pharmacySales, setPharmacySales] = useState([]);
+
+  // Fetch branches and staff from backend API on mount
+  useEffect(() => {
+    const token = localStorage.getItem('kh_auth_token');
+
+    fetch('/api/v1/branches')
+      .then((res) => res.json())
+      .then((data) => {
+        if (data.success && Array.isArray(data.data)) {
+          setBranchesList(data.data);
+        }
+      })
+      .catch((err) => console.warn('Could not fetch branches from backend API:', err.message));
+
+    fetch('/api/v1/settings')
+      .then((res) => res.json())
+      .then((data) => {
+        if (data.success && data.data) {
+          if (data.data.allMap && Object.keys(data.data.allMap).length > 0) {
+            setBrandingMap((prev) => ({
+              ...prev,
+              ...data.data.allMap,
+              All: data.data.current || data.data.allMap.Global || prev.All,
+            }));
+          } else if (data.data.current) {
+            setBrandingMap((prev) => ({
+              ...prev,
+              All: data.data.current,
+              'Central Campus': data.data.current,
+            }));
+          }
+        }
+      })
+      .catch((err) => console.warn('Could not fetch Hospital Settings from MongoDB:', err.message));
+
+    fetch('/api/v1/staff', {
+      headers: {
+        ...(token ? { 'Authorization': `Bearer ${token}` } : {}),
+      },
+    })
+      .then((res) => res.json())
+      .then((data) => {
+        if (data.success && Array.isArray(data.data)) {
+          setStaff(data.data);
+        }
+      })
+      .catch((err) => console.warn('Could not fetch staff from backend API:', err.message));
+
+    fetch('/api/v1/doctors', {
+      headers: {
+        ...(token ? { 'Authorization': `Bearer ${token}` } : {}),
+      },
+    })
+      .then((res) => res.json())
+      .then((data) => {
+        if (data.success && Array.isArray(data.data)) {
+          setDoctorsList(data.data);
+        }
+      })
+      .catch((err) => console.warn('Could not fetch doctors from backend API:', err.message));
+
+    fetch('/api/v1/op-records', {
+      headers: {
+        ...(token ? { 'Authorization': `Bearer ${token}` } : {}),
+      },
+    })
+      .then((res) => res.json())
+      .then((data) => {
+        if (data.success && Array.isArray(data.data)) {
+          const mapped = data.data.map(r => {
+            const grossNum = parseFloat(String(r.grossCharges || r.charges || '200').replace(/[^0-9.]/g, '')) || 200;
+            const rawDiscNum = typeof r.discount === 'number' ? r.discount : (parseFloat(String(r.discount || '0').replace(/[^0-9.]/g, '')) || 0);
+            const rawDiscPct = typeof r.discountPercent === 'number' ? r.discountPercent : (parseFloat(String(r.discountPercent || '0').replace(/[^0-9.]/g, '')) || 0);
+            const discountPctNum = rawDiscPct > 0
+              ? rawDiscPct
+              : (grossNum > 0 && rawDiscNum > 0 ? Math.round(((rawDiscNum / grossNum) * 100) * 100) / 100 : 0);
+            const discountNum = rawDiscNum > 0
+              ? rawDiscNum
+              : (grossNum > 0 && discountPctNum > 0 ? Math.round(((grossNum * discountPctNum) / 100) * 100) / 100 : 0);
+            const netNum = (typeof r.netAmount === 'number' && (r.netAmount > 0 || discountNum >= grossNum))
+              ? r.netAmount
+              : Math.max(0, Math.round((grossNum - discountNum) * 100) / 100);
+            const paidNum = typeof r.paidAmount === 'number' ? r.paidAmount : (parseFloat(String(r.amountPaid || r.paidAmount || '0').replace(/[^0-9.]/g, '')) || 0);
+            const dueNum = Math.max(0, netNum - paidNum);
+            const status = r.paymentStatus || (dueNum <= 0 ? 'Paid' : paidNum > 0 ? 'Partial' : 'Pending');
+
+            const resolvedDate = (r.regDate && r.regDate !== 'Today' ? r.regDate : '') || (r.date && r.date !== 'Today' ? r.date : '') || (r.createdAt ? new Date(r.createdAt).toISOString().split('T')[0] : '');
+            const resolvedTime = r.regTime || r.time || (r.createdAt ? new Date(r.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '');
+
+            const vitalsObj = r.vitals && typeof r.vitals === 'object' && Object.keys(r.vitals).length > 0
+              ? r.vitals
+              : {
+                  bp: r.bp || '120/80',
+                  pr: r.pr || '72',
+                  temp: r.temp || '98.6',
+                  weight: r.weight || '68',
+                  height: r.height || '170',
+                  spo2: r.spo2 || '98%',
+                  bloodGroup: r.bloodGroup || '',
+                };
+
+            return {
+              ...r,
+              id: r.regNo || r.id || r._id,
+              regNo: r.regNo || r.id,
+              recordType: r.recordType || 'OP',
+              ipCareDetails: r.ipCareDetails || '',
+              patient: r.patientName || r.patient,
+              patientName: r.patientName || r.patient,
+              doctor: r.doctor || 'Dr. Unassigned',
+              branch: r.branch || '',
+              vitals: vitalsObj,
+              bp: r.bp || vitalsObj.bp,
+              pr: r.pr || vitalsObj.pr,
+              temp: r.temp || vitalsObj.temp,
+              weight: r.weight || vitalsObj.weight,
+              height: r.height || vitalsObj.height,
+              spo2: r.spo2 || vitalsObj.spo2,
+              bloodGroup: r.bloodGroup || vitalsObj.bloodGroup,
+              notes: r.notes || r.clinicalNotes || '',
+              charges: grossNum.toString(),
+              grossCharges: grossNum,
+              discount: discountNum,
+              discountPercent: discountPctNum,
+              netAmount: netNum,
+              paidAmount: paidNum,
+              amountPaid: paidNum.toString(),
+              dueBalance: dueNum,
+              paymentStatus: status,
+              amount: `₹ ${netNum}`,
+              surgeryName: r.surgeryName || '',
+              date: resolvedDate,
+              regDate: resolvedDate,
+              time: resolvedTime,
+              regTime: resolvedTime,
+            };
+          });
+          setOpRecords(mapped);
+        }
+      })
+      .catch((err) => console.warn('Could not fetch OP Records from backend API:', err.message));
+
+    fetch('/api/v1/laboratory', {
+      headers: {
+        ...(token ? { 'Authorization': `Bearer ${token}` } : {}),
+      },
+    })
+      .then((res) => res.json())
+      .then((data) => {
+        if (data.success && Array.isArray(data.data)) {
+          const mapped = data.data.map(l => {
+            const feeNum = typeof l.amount === 'number' ? l.amount : (parseFloat(String(l.testFee || l.amount || '1200').replace(/[^0-9.]/g, '')) || 1200);
+            const paidNum = typeof l.paidAmount === 'number' ? l.paidAmount : (parseFloat(String(l.amountPaid || l.paidAmount || '0').replace(/[^0-9.]/g, '')) || 0);
+            const dueNum = typeof l.dueBalance === 'number' ? l.dueBalance : Math.max(0, feeNum - paidNum);
+            const payStatus = l.paymentStatus || (dueNum <= 0 ? 'Paid' : paidNum > 0 ? 'Partial' : 'Pending');
+
+            const resolvedRows = (Array.isArray(l.testRows) && l.testRows.length > 0)
+              ? l.testRows
+              : (Array.isArray(l.results?.testRows) && l.results.testRows.length > 0)
+              ? l.results.testRows
+              : [];
+            const resolvedResult = l.result || l.results?.summaryResult || l.results?.result || '';
+
+            return {
+              ...l,
+              id: l.labOrderNo || l.id || l._id,
+              labOrderNo: l.labOrderNo || l.id,
+              test: l.testName || l.test,
+              testName: l.testName || l.test,
+              patient: l.patientName || l.patient,
+              patientName: l.patientName || l.patient,
+              phone: l.phone || '',
+              doctor: l.doctor || l.orderingDoctor || 'Self Created / Walk-In',
+              notes: l.clinicalNotes || l.notes || '',
+              clinicalNotes: l.clinicalNotes || l.notes || '',
+              result: resolvedResult,
+              testRows: resolvedRows,
+              results: l.results || { testRows: resolvedRows, summaryResult: resolvedResult },
+              requested: l.sampleCollectedAt || l.requested || 'Today, just now',
+              amount: feeNum,
+              testFee: feeNum.toString(),
+              paidAmount: paidNum,
+              amountPaid: paidNum.toString(),
+              dueBalance: dueNum,
+              paymentStatus: payStatus,
+              isSelfCreated: l.isSelfCreated !== undefined ? l.isSelfCreated : (!l.doctor || l.doctor.includes('Self') || l.doctor.includes('Walk-In') || l.doctor.includes('Unassigned')),
+            };
+          });
+          setLabTests(mapped);
+        }
+      })
+      .catch((err) => console.warn('Could not fetch Lab Orders from backend API:', err.message));
+
+    fetch('/api/v1/lab-services', {
+      headers: {
+        ...(token ? { 'Authorization': `Bearer ${token}` } : {}),
+      },
+    })
+      .then((res) => res.json())
+      .then((data) => {
+        if (data.success && Array.isArray(data.data)) {
+          const mapped = data.data.map(s => ({
+            ...s,
+            id: s.serviceId || s.id || s._id,
+          }));
+          setMasterServices(mapped);
+        }
+      })
+      .catch((err) => console.warn('Could not fetch Lab Services Catalogue from backend API:', err.message));
+
+    fetch('/api/v1/pharmacy', {
+      headers: {
+        ...(token ? { 'Authorization': `Bearer ${token}` } : {}),
+      },
+    })
+      .then((res) => res.json())
+      .then((data) => {
+        if (data.success && Array.isArray(data.data)) {
+          setPharmacySales(data.data);
+        }
+      })
+      .catch((err) => console.warn('Could not fetch Pharmacy sales from backend API:', err.message));
+
+  }, []);
+
+  // Active branch selection context (Default: 'All' for Super Admin, or user's assigned branch)
+  const isSuperAdmin = profile?.role === 'Super Admin';
+  const userBranch = profile?.branch || (branchesList[0]?.name || 'Unassigned Branch');
+  const [activeBranch, setActiveBranch] = useState(isSuperAdmin ? 'All' : userBranch);
+  const [showBranchDropdown, setShowBranchDropdown] = useState(false);
+  const branchDropdownRef = useRef(null);
+
+  // Sync activeBranch whenever profile finishes loading from auth
+  useEffect(() => {
+    if (profile) {
+      if (profile.role === 'Super Admin') {
+        setActiveBranch('All');
+      } else if (profile.branch) {
+        setActiveBranch(profile.branch);
+      }
+    }
+  }, [profile]);
+
+  // Fetch branch-scoped expenses from backend API on mount or activeBranch change
+  useEffect(() => {
+    const token = localStorage.getItem('kh_auth_token');
+    const targetBranch = isSuperAdmin ? activeBranch : (profile?.branch || activeBranch || 'All');
+    const branchQuery = targetBranch && targetBranch !== 'All' ? `?branch=${encodeURIComponent(targetBranch)}` : '';
+
+    fetch(`/api/v1/expenses${branchQuery}`, {
+      headers: {
+        ...(token ? { 'Authorization': `Bearer ${token}` } : {}),
+      },
+    })
+      .then((res) => res.json())
+      .then((data) => {
+        if (data.success && Array.isArray(data.data)) {
+          const mapped = data.data.map(e => ({
+            ...e,
+            id: e._id || e.expenseNo || e.id,
+          }));
+          setExpensesList(mapped);
+        }
+      })
+      .catch((err) => console.warn('Could not fetch Expenses from backend API:', err.message));
+  }, [activeBranch, profile?.branch, isSuperAdmin]);
+
+  // Dynamic Hospital Branding & Assets State (Per Branch / Global Scope)
+  const defaultBranding = useMemo(() => ({
+    logo: null,
+    signature: 'https://images.unsplash.com/photo-1600132806370-bf17e65e942f?auto=format&fit=crop&q=80&w=300',
+    watermark: 'https://images.unsplash.com/photo-1516549655169-df83a0774514?auto=format&fit=crop&q=80&w=300',
+    hospitalName: 'KRISHNA HOSPITALS',
+    tagline: 'Healthcare Excellence for Every Family',
+    registrationNo: 'HOSP-KMC-984021',
+    gstin: '32AAAAA0000A1Z5',
+    phone: '+91 98470 00000',
+    email: 'contact@krishnahospital.org',
+    address: 'House 14, MG Road, Central Campus, Central City',
+    footerNote: 'Emergency Contact: 108 / +91 98470 00000 | Prescription valid for 7 days from issue.',
+    upiHandles: ['krishnahospital@okicici', 'krishnalab@ybl', 'krishnaglobal@hdfcbank'],
+  }), []);
+
+  const [brandingMap, setBrandingMap] = useState(() => {
+    try {
+      const saved = localStorage.getItem('kh_hospital_branding_map');
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (parsed && typeof parsed === 'object' && Object.keys(parsed).length > 0) {
+          return parsed;
+        }
+      }
+    } catch (e) {
+      console.warn('Could not parse kh_hospital_branding_map from localStorage:', e.message);
+    }
+    return {
+      All: defaultBranding,
+      'Central Campus': defaultBranding,
+      'City Extension': { ...defaultBranding, tagline: 'City Extension Branch' },
+      'North Hospital': { ...defaultBranding, tagline: 'North Medical Campus' },
+    };
+  });
+
+  const addMasterService = (newService) => {
+    setMasterServices((prev) => [newService, ...prev]);
+  };
+
+  const updateMasterService = (updatedService) => {
+    setMasterServices((prev) =>
+      prev.map((s) => (s.id === updatedService.id || s.name === updatedService.name ? updatedService : s))
+    );
+  };
+
+  const deleteMasterService = (serviceIdOrName) => {
+    setMasterServices((prev) =>
+      prev.filter((s) => s.id !== serviceIdOrName && s.name !== serviceIdOrName)
+    );
+  };
+
+  const [query, setQuery] = useState('');
+  const [showSearchDropdown, setShowSearchDropdown] = useState(false);
+  const searchContainerRef = useRef(null);
+
+  const [showMobileNav, setShowMobileNav] = useState(false);
+  const [openGroups, setOpenGroups] = useState({
+    'Records & Finance': false,
+    'Staff Management': false,
+    'Marketing': false,
+    'Pharmacy': false,
+    'Laboratory': false,
+  });
+
+  const toggleGroup = (groupName) => {
+    setOpenGroups((prev) => ({
+      ...prev,
+      [groupName]: !prev[groupName],
+    }));
+  };
+
+  const [selectedTestForResult, setSelectedTestForResult] = useState(null);
+  const [selectedPatientForHistory, setSelectedPatientForHistory] = useState(initialPatients[0]);
+  const [isRequestLabModalOpen, setIsRequestLabModalOpen] = useState(false);
+  const [patientForLabOrder, setPatientForLabOrder] = useState(null);
+  const [selectedRecordTypeFilter, setSelectedRecordTypeFilter] = useState('all');
+
+  const [signingOut, setSigningOut] = useState(false);
+  const { toast, notify } = useToast();
+
+  // Branch Data Scoping Computations
+  const effectiveBranch = isSuperAdmin ? activeBranch : (profile?.branch || 'Central Campus');
+  const currentBranding = brandingMap[effectiveBranch] || brandingMap['All'] || defaultBranding;
+
+  const handleSaveBranding = async (updatedBranding) => {
+    const targetBranch = (isSuperAdmin && activeBranch === 'All') ? 'Global' : (effectiveBranch === 'All' ? 'Central Campus' : effectiveBranch);
+
+    setBrandingMap((prev) => {
+      let nextMap;
+      if (isSuperAdmin && activeBranch === 'All') {
+        nextMap = {};
+        Object.keys(prev).forEach((bKey) => {
+          nextMap[bKey] = { ...prev[bKey], ...updatedBranding };
+        });
+      } else {
+        nextMap = {
+          ...prev,
+          [targetBranch]: { ...prev[targetBranch], ...updatedBranding },
+        };
+      }
+      try {
+        localStorage.setItem('kh_hospital_branding_map', JSON.stringify(nextMap));
+      } catch (e) {
+        console.warn('Could not save kh_hospital_branding_map to localStorage:', e.message);
+      }
+      return nextMap;
+    });
+
+    try {
+      const token = localStorage.getItem('kh_auth_token');
+      await fetch(`/api/v1/settings?branch=${encodeURIComponent(targetBranch)}`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
+        body: JSON.stringify({
+          branchKey: targetBranch,
+          ...updatedBranding,
+        }),
+      });
+      notify('Hospital Settings & Cloudinary Branding saved to MongoDB Atlas permanently!');
+    } catch (err) {
+      console.warn('Could not persist Settings to backend MongoDB:', err.message);
+    }
+  };
+
+  const [expensesList, setExpensesList] = useState(initialExpenses);
+
+  // Smart Flexible Branch Match Helper
+  const isBranchMatch = (itemBranch, itemBranchCode, targetBranchName) => {
+    if (!targetBranchName || targetBranchName === 'All') return true;
+    if (!itemBranch && !itemBranchCode) return true; // Include untagged records in view
+
+    const itemB = (itemBranch || '').toLowerCase().trim();
+    const itemC = (itemBranchCode || '').toLowerCase().trim();
+    const targetB = (targetBranchName || '').toLowerCase().trim();
+
+    const matchingBranchObj = (branchesList || []).find(
+      (b) => b.name?.toLowerCase().trim() === targetB || b.code?.toLowerCase().trim() === targetB
+    );
+    const targetC = (matchingBranchObj?.code || '').toLowerCase().trim();
+
+    return (
+      itemB === targetB ||
+      (targetC && itemC === targetC) ||
+      (targetC && itemB === targetC) ||
+      (itemB && targetB && (itemB.includes(targetB) || targetB.includes(itemB)))
+    );
+  };
+
+  const scopedPatients = useMemo(() => {
+    if (isSuperAdmin && activeBranch === 'All') return patients;
+    const targetBranch = isSuperAdmin ? activeBranch : (profile?.branch || 'Central Campus');
+    return patients.filter((p) => isBranchMatch(p.branch, p.branchCode, targetBranch));
+  }, [patients, isSuperAdmin, activeBranch, profile?.branch, branchesList]);
+
+  const userRole = profile?.role;
+  const userName = profile?.full_name || profile?.fullName || profile?.name || '';
+
+  const normalizeDocName = (name) => (name || '').toLowerCase().replace(/^(dr\.?|doctor)\s+/i, '').replace(/\s+/g, ' ').trim();
+
+  const scopedOpRecords = useMemo(() => {
+    let list = opRecords;
+    if (!isSuperAdmin || activeBranch !== 'All') {
+      const targetBranch = isSuperAdmin ? activeBranch : (profile?.branch || 'Central Campus');
+      list = list.filter((r) => isBranchMatch(r.branch, r.branchCode, targetBranch));
+    }
+    // Strict Scoping for Doctors (Only see records assigned to them)
+    if (userRole === 'Doctor' && userName) {
+      const userDocNorm = normalizeDocName(userName);
+      list = list.filter((r) => {
+        if (!r.doctor || r.doctor === 'Dr. Unassigned') return false;
+        const recordDocNorm = normalizeDocName(r.doctor);
+        return recordDocNorm === userDocNorm || recordDocNorm.includes(userDocNorm) || userDocNorm.includes(recordDocNorm);
+      });
+    }
+    return list;
+  }, [opRecords, isSuperAdmin, activeBranch, profile?.branch, profile?.role, profile?.full_name, branchesList]);
+
+  const scopedLabTests = useMemo(() => {
+    let list = labTests;
+    if (!isSuperAdmin || activeBranch !== 'All') {
+      const targetBranch = isSuperAdmin ? activeBranch : (profile?.branch || 'Central Campus');
+      list = list.filter((t) => isBranchMatch(t.branch, t.branchCode, targetBranch));
+    }
+    // Strict Scoping for Doctors & Lab Assistants
+    if (userRole === 'Doctor' && userName) {
+      const userDocNorm = normalizeDocName(userName);
+      list = list.filter((t) => {
+        if (!t.doctor || t.doctor === 'Dr. Unassigned') return false;
+        const recordDocNorm = normalizeDocName(t.doctor);
+        return recordDocNorm === userDocNorm || recordDocNorm.includes(userDocNorm) || userDocNorm.includes(recordDocNorm);
+      });
+    } else if (userRole === 'Lab Assistant' && userName) {
+      const staffFirstName = (userName ? userName.split(' ')[0] : '').toLowerCase();
+      list = list.filter((t) => {
+        if (!t.assignedLabAssistant && !t.assignedStaff) return true; // Show unassigned branch lab queue
+        const assigned = (t.assignedLabAssistant || t.assignedStaff || '').toLowerCase();
+        return assigned.includes(staffFirstName) || t.createdBy === userName;
+      });
+    }
+    return list;
+  }, [labTests, isSuperAdmin, activeBranch, profile?.branch, profile?.role, profile?.full_name, branchesList]);
+
+  const scopedStaff = useMemo(() => {
+    if (isSuperAdmin && activeBranch === 'All') return staff;
+    const targetBranch = isSuperAdmin ? activeBranch : (profile?.branch || 'Central Campus');
+    return staff.filter((s) => isBranchMatch(s.branch, s.branchCode, targetBranch));
+  }, [staff, isSuperAdmin, activeBranch, profile?.branch, branchesList]);
+
+  const scopedDoctors = useMemo(() => {
+    if (isSuperAdmin && activeBranch === 'All') return doctorsList;
+    const targetBranch = isSuperAdmin ? activeBranch : (profile?.branch || 'Central Campus');
+    return doctorsList.filter((d) => isBranchMatch(d.branch, d.branchCode, targetBranch));
+  }, [doctorsList, isSuperAdmin, activeBranch, profile?.branch, branchesList]);
+
+  const scopedPharmacySales = useMemo(() => {
+    if (isSuperAdmin && activeBranch === 'All') return pharmacySales;
+    const targetBranch = isSuperAdmin ? activeBranch : (profile?.branch || 'Central Campus');
+    return pharmacySales.filter((s) => isBranchMatch(s.branch, s.branchCode, targetBranch));
+  }, [pharmacySales, isSuperAdmin, activeBranch, profile?.branch, branchesList]);
+
+  const scopedExpenses = useMemo(() => {
+    let list = expensesList;
+
+    // 1. Branch Scoping (Super Admin global vs Branch scope)
+    if (!isSuperAdmin || activeBranch !== 'All') {
+      const targetBranch = isSuperAdmin ? activeBranch : (profile?.branch || 'Central Campus');
+      list = list.filter((e) => isBranchMatch(e.branch, e.branchCode, targetBranch));
+    }
+
+    // 2. Creator Scoping for Front Desk & Lab Assistant (Only see what they created)
+    if (userRole === 'Front Desk' || userRole === 'Lab Assistant') {
+      list = list.filter((e) => {
+        if (!e.createdBy) return true;
+        const createdByLower = e.createdBy.toLowerCase();
+        const nameLower = (userName || '').toLowerCase();
+        const roleLower = (userRole || '').toLowerCase();
+        // If created by current user or current role
+        return (
+          createdByLower.includes(nameLower) ||
+          createdByLower.includes(roleLower) ||
+          (userRole === 'Front Desk' && createdByLower.includes('front desk')) ||
+          (userRole === 'Lab Assistant' && createdByLower.includes('lab assistant'))
+        );
+      });
+    }
+
+    return list;
+  }, [expensesList, isSuperAdmin, activeBranch, profile?.branch, userRole, userName, branchesList]);
+
+  const addExpense = async (newExp) => {
+    const token = localStorage.getItem('kh_auth_token');
+    try {
+      const res = await fetch('/api/v1/expenses', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(token ? { 'Authorization': `Bearer ${token}` } : {}),
+        },
+        body: JSON.stringify(newExp),
+      });
+      const data = await res.json();
+      if (res.ok && data.success && data.data) {
+        const createdObj = { ...data.data, id: data.data._id || data.data.expenseNo };
+        setExpensesList((prev) => [createdObj, ...prev]);
+      } else {
+        setExpensesList((prev) => [newExp, ...prev]);
+      }
+    } catch (err) {
+      console.warn('Backend expense save fallback:', err.message);
+      setExpensesList((prev) => [newExp, ...prev]);
+    }
+  };
+
+  const deleteExpense = async (expId) => {
+    const token = localStorage.getItem('kh_auth_token');
+    setExpensesList((prev) => prev.filter((e) => e.id !== expId && e._id !== expId));
+    notify('Expense record deleted successfully.');
+
+    try {
+      await fetch(`/api/v1/expenses/${expId}`, {
+        method: 'DELETE',
+        headers: {
+          ...(token ? { 'Authorization': `Bearer ${token}` } : {}),
+        },
+      });
+    } catch (err) {
+      console.warn('Could not delete expense from backend API:', err.message);
+    }
+  };
+
+  const handleOpenRequestLab = (patient = null) => {
+    let fullPatient = patient;
+    if (patient) {
+      const pId = (patient.opNumber || patient.regNo || patient.id || '').toLowerCase();
+      const pName = (patient.name || patient.patient || '').toLowerCase();
+      const foundInOp = opRecords.find(
+        (r) => (r.id && r.id.toLowerCase() === pId) || (r.regNo && r.regNo.toLowerCase() === pId) || (pName && r.patient && r.patient.toLowerCase() === pName)
+      );
+      const foundInPat = patients.find(
+        (p) => (p.id && p.id.toLowerCase() === pId) || (pName && p.name && p.name.toLowerCase() === pName)
+      );
+      const matched = foundInOp || foundInPat;
+      if (matched) {
+        fullPatient = {
+          ...matched,
+          ...patient,
+          phone: patient.phone || matched.phone || matched.mobile || matched.contact || '',
+          doctor: patient.doctor || matched.doctor || '',
+          patient: patient.name || patient.patient || matched.patient || matched.name,
+          name: patient.name || patient.patient || matched.patient || matched.name,
+          opNumber: patient.opNumber || patient.regNo || matched.regNo || matched.id,
+        };
+      }
+    }
+    setPatientForLabOrder(fullPatient);
+    setIsRequestLabModalOpen(true);
+  };
+
+  const handleSaveLabOrder = (newOrder) => {
+    const targetBranch = effectiveBranch === 'All' ? 'Central Campus' : effectiveBranch;
+    const taggedOrder = {
+      ...newOrder,
+      id: newOrder.labOrderNo || newOrder.id,
+      patient: newOrder.patientName || newOrder.patient,
+      test: newOrder.testName || newOrder.test,
+      branch: newOrder.branch || targetBranch,
+    };
+    setLabTests((current) => {
+      const opTrim = String(taggedOrder.opNumber || '').trim();
+      const existingIdx = current.findIndex(
+        (t) =>
+          (taggedOrder._id && t._id && String(t._id) === String(taggedOrder._id)) ||
+          (opTrim && !opTrim.toUpperCase().startsWith('LAB-') && t.opNumber && t.opNumber.toLowerCase() === opTrim.toLowerCase())
+      );
+      if (existingIdx !== -1) {
+        return current.map((t, idx) =>
+          idx === existingIdx
+            ? {
+                ...t,
+                ...taggedOrder,
+                id: taggedOrder.labOrderNo || t.id || taggedOrder.id,
+                labOrderNo: taggedOrder.labOrderNo || t.labOrderNo,
+                _id: taggedOrder._id || t._id,
+              }
+            : t
+        );
+      }
+      return [taggedOrder, ...current];
+    });
+    setIsRequestLabModalOpen(false);
+    handleNavigate('/laboratory');
+    notify(`Lab order ${taggedOrder.id} saved successfully! Redirecting to Laboratory queue...`);
+  };
+
+  // Close search and branch dropdowns on click outside
+  useEffect(() => {
+    function handleClickOutside(event) {
+      if (searchContainerRef.current && !searchContainerRef.current.contains(event.target)) {
+        setShowSearchDropdown(false);
+      }
+      if (branchDropdownRef.current && !branchDropdownRef.current.contains(event.target)) {
+        setShowBranchDropdown(false);
+      }
+    }
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
+
+  const filteredPatients = useMemo(
+    () => patients.filter((patient) => 
+      `${patient.name} ${patient.id} ${patient.phone}`
+        .toLowerCase()
+        .includes(query.toLowerCase())
+    ),
+    [patients, query],
+  );
+
+  // Role & Dashboard Scope-Specific Search Computation
+  const searchResults = useMemo(() => {
+    const q = query.trim().toLowerCase();
+    if (!q) return { opRecords: [], labTests: [], staff: [], doctors: [], masterServices: [], actions: [] };
+
+    const userRole = profile?.role || 'Admin';
+    const isLabView = userRole === 'Lab Assistant' || path.startsWith('/laboratory');
+    const isAdminView = userRole === 'Admin' || path.startsWith('/admin') || path === '/doctors' || path === '/staff' || path === '/services';
+    const isDoctorView = userRole === 'Doctor';
+    const isFrontDeskView = userRole === 'Front Desk';
+    const isPharmacistView = userRole === 'Pharmacist';
+
+    // 1. OP Records (Scoped to Front Desk, Doctor, or general OPD pages)
+    let matchingOps = [];
+    if (!isLabView && !isAdminView && !isPharmacistView) {
+      const qDigits = q.replace(/\D/g, '');
+      const filtered = opRecords.filter((r) => {
+        if (isDoctorView && (profile?.full_name || profile?.fullName || profile?.name)) {
+          const docFullName = profile.full_name || profile.fullName || profile.name || '';
+          const docFirstName = (docFullName ? docFullName.split(' ')[0] : '').toLowerCase();
+          const matchesDoc = r.doctor && (r.doctor === docFullName || r.doctor.toLowerCase().includes(docFirstName));
+          if (!matchesDoc) return false;
+        }
+        const patientName = (r.patient || r.patientName || '').toLowerCase();
+        const recId = (r.id || r.regNo || '').toLowerCase();
+        const recPhone = (r.phone || '').replace(/\D/g, '');
+        const matchesPhone = qDigits.length >= 4 && recPhone.includes(qDigits);
+        return patientName.includes(q) || recId.includes(q) || (r.phone && r.phone.includes(q)) || matchesPhone || (r.doctor && r.doctor.toLowerCase().includes(q));
+      });
+
+      // Deduplicate by distinct patient name so family members sharing a phone number all show up individually
+      const seenPatients = new Set();
+      const distinctOps = [];
+      for (const op of filtered) {
+        const pKey = (op.patient || op.patientName || op.id || '').trim().toLowerCase();
+        if (!seenPatients.has(pKey)) {
+          seenPatients.add(pKey);
+          distinctOps.push(op);
+        }
+      }
+      matchingOps = distinctOps.slice(0, 6);
+    }
+
+    // 2. Lab Tests (Scoped to Lab Assistant, Laboratory page, or Doctor view)
+    let matchingLabs = [];
+    if (isLabView || isDoctorView || path === '/laboratory') {
+      matchingLabs = labTests.filter((t) => {
+        if (isDoctorView && (profile?.full_name || profile?.fullName || profile?.name)) {
+          const docFullName = profile.full_name || profile.fullName || profile.name || '';
+          const docFirstName = (docFullName ? docFullName.split(' ')[0] : '').toLowerCase();
+          const matchesDoc = t.doctor && (t.doctor === docFullName || t.doctor.toLowerCase().includes(docFirstName));
+          if (!matchesDoc) return false;
+        }
+        return t.test.toLowerCase().includes(q) || t.patient.toLowerCase().includes(q) || (t.doctor && t.doctor.toLowerCase().includes(q));
+      }).slice(0, 4);
+    }
+
+    // 3. Staff Members (Scoped to Admin view)
+    let matchingStaff = [];
+    if (isAdminView) {
+      matchingStaff = staff.filter(
+        (s) => s.name.toLowerCase().includes(q) || s.role.toLowerCase().includes(q) || (s.department && s.department.toLowerCase().includes(q))
+      ).slice(0, 3);
+    }
+
+    // 4. Doctors (Scoped to Admin view)
+    let matchingDoctors = [];
+    if (isAdminView) {
+      matchingDoctors = (doctorsList || []).filter(
+        (d) => d.name.toLowerCase().includes(q) || d.department.toLowerCase().includes(q) || (d.licenseNo && d.licenseNo.toLowerCase().includes(q))
+      ).slice(0, 3);
+    }
+
+    // 5. Master Services (Scoped to Admin view)
+    let matchingServices = [];
+    if (isAdminView) {
+      matchingServices = (masterServices || []).filter(
+        (srv) => srv.name.toLowerCase().includes(q) || (srv.category && srv.category.toLowerCase().includes(q))
+      ).slice(0, 3);
+    }
+
+    // 6. Dashboard Scope-Specific Quick Actions
+    let allActions = [];
+    if (isLabView) {
+      allActions = [
+        { label: 'Add / Enter Lab Test Result', path: '/laboratory/enter-result', icon: Plus },
+        { label: 'Laboratory Operations Queue', path: '/laboratory', icon: FlaskConical },
+      ];
+    } else if (isAdminView) {
+      allActions = [
+        { label: 'Doctors Directory', path: '/doctors', icon: Stethoscope },
+        { label: 'Staff Management', path: '/staff', icon: UserRound },
+        { label: 'Services Catalogue', path: '/services', icon: Layers },
+        { label: 'Settings & Security', path: '/settings', icon: Settings },
+      ];
+    } else if (isDoctorView) {
+      allActions = [
+        { label: 'Create OP Consultation Record', path: '/op-records/new', icon: Plus },
+        { label: 'Assigned OP Consultations', path: '/op-records', icon: ClipboardList },
+        { label: 'Patient Lab Test Reports', path: '/laboratory', icon: FlaskConical },
+      ];
+    } else if (isFrontDeskView) {
+      allActions = [
+        { label: 'Register New Patient', path: '/patients/new', icon: Plus },
+        { label: 'Create OP Registration', path: '/op-records/new', icon: Plus },
+        { label: 'OP Consultation Records', path: '/op-records', icon: ClipboardList },
+      ];
+    }
+
+    const matchingActions = allActions.filter((a) => a.label.toLowerCase().includes(q));
+
+    return {
+      opRecords: matchingOps,
+      labTests: matchingLabs,
+      staff: matchingStaff,
+      doctors: matchingDoctors,
+      masterServices: matchingServices,
+      actions: matchingActions,
+    };
+  }, [query, profile, path, opRecords, labTests, staff, doctorsList, masterServices]);
+
+  if (!profile) return null;
+
+  const currentRoleKey = getRoleKey(profile.role);
+  const navItems = roleNav[currentRoleKey] || [];
+  const userDisplayName = profile.full_name || profile.fullName || profile.name || profile.username || profile.email || 'User';
+  const initials = (userDisplayName || 'KH')
+    .split(' ')
+    .filter(Boolean)
+    .map((w) => w[0])
+    .join('')
+    .slice(0, 2)
+    .toUpperCase() || 'KH';
+
+  const handleNavigate = (toPath) => {
+    if (navigate) {
+      navigate(toPath);
+    } else {
+      window.history.pushState({}, '', toPath);
+    }
+    setShowMobileNav(false);
+    setShowSearchDropdown(false);
+    setQuery('');
+  };
+
+  // Dynamic Branch Code Lookup Map
+  const branchCodeMap = useMemo(() => {
+    const map = {
+      'Central Campus': 'HQ-CENTRAL',
+      'City Extension': 'EXT-CITY',
+      'North Hospital': 'NORTH-MED',
+      'South Extension': 'SOUTH-EXT',
+    };
+    (branchesList || []).forEach((b) => {
+      if (b.name && b.code) map[b.name] = b.code;
+    });
+    return map;
+  }, [branchesList]);
+
+  const addPatient = (patient) => {
+    const targetBranch = effectiveBranch === 'All' ? 'Central Campus' : effectiveBranch;
+    const targetCode = branchCodeMap[targetBranch] || 'HQ-CENTRAL';
+    const taggedPatient = { 
+      ...patient, 
+      branch: patient.branch || targetBranch,
+      branchCode: patient.branchCode || branchCodeMap[patient.branch] || targetCode,
+    };
+    setPatients((current) => [taggedPatient, ...current]);
+    handleNavigate('/op-records');
+    notify('Patient registered successfully');
+  };
+
+  const addOPRecord = (opRecord) => {
+    const targetBranch = effectiveBranch === 'All' ? 'Central Campus' : effectiveBranch;
+    const targetCode = branchCodeMap[targetBranch] || 'HQ-CENTRAL';
+    const recDate = opRecord.regDate || opRecord.date || new Date().toISOString().split('T')[0];
+    const recTime = opRecord.regTime || opRecord.time || new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+    const taggedOP = { 
+      ...opRecord, 
+      id: opRecord.regNo || opRecord.id,
+      patient: opRecord.patientName || opRecord.patient,
+      amount: opRecord.amount || `₹ ${opRecord.netAmount !== undefined ? opRecord.netAmount : (opRecord.charges || '200')}`,
+      branch: opRecord.branch || targetBranch,
+      branchCode: opRecord.branchCode || branchCodeMap[opRecord.branch] || targetCode,
+      date: recDate,
+      regDate: recDate,
+      time: recTime,
+      regTime: recTime,
+    };
+    setOpRecords((current) => [taggedOP, ...current]);
+
+    const patientName = opRecord.patient;
+    setPatientHistoryMap((prev) => {
+      const existingVisits = prev[patientName] || [];
+      const newVisit = {
+        visitNo: existingVisits.length + 1,
+        date: recDate,
+        time: recTime,
+        opNumber: opRecord.id,
+        department: opRecord.department,
+        doctor: opRecord.doctor,
+        referralDoctor: opRecord.referralDoctor || 'None',
+        charges: opRecord.amount,
+        paymentMethod: opRecord.paymentMethod,
+        status: opRecord.status || 'In consultation',
+        vitals: opRecord.vitals || { temp: '98.6 °F', weight: '68 kg', height: '170 cm', bmi: '23.5', bloodGroup: 'O+', bp: '120/80 mmHg' },
+        complaints: opRecord.symptoms || 'General consultation visit',
+        labTests: []
+      };
+      return {
+        ...prev,
+        [patientName]: [newVisit, ...existingVisits]
+      };
+    });
+
+    handleNavigate('/op-records');
+    notify('OP record created successfully');
+  };
+
+  const updateOPRecord = async (updatedRecord) => {
+    const recId = updatedRecord._id || updatedRecord.id || updatedRecord.regNo;
+    setOpRecords((prev) =>
+      prev.map((r) => (r.id === recId || r.regNo === recId || r._id === recId ? updatedRecord : r))
+    );
+    try {
+      const token = localStorage.getItem('kh_auth_token');
+      await fetch(`/api/v1/op-records/${recId}`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(token ? { 'Authorization': `Bearer ${token}` } : {}),
+        },
+        body: JSON.stringify(updatedRecord),
+      });
+    } catch (err) {
+      console.warn('Could not persist OP Record settlement update to backend API:', err.message);
+    }
+  };
+
+  const deleteOPRecord = async (recordId) => {
+    setOpRecords((prev) => prev.filter((r) => r.id !== recordId && r._id !== recordId && r.regNo !== recordId));
+    try {
+      const token = localStorage.getItem('kh_auth_token');
+      await fetch(`/api/v1/op-records/${encodeURIComponent(recordId)}`, {
+        method: 'DELETE',
+        headers: {
+          ...(token ? { 'Authorization': `Bearer ${token}` } : {}),
+        },
+      });
+    } catch (err) {
+      console.warn('Could not delete OP record from backend API:', err.message);
+    }
+  };
+
+  const handleOpenEnterResult = (test = null) => {
+    setSelectedTestForResult(test);
+    handleNavigate('/laboratory/enter-result');
+  };
+
+  const saveLabResult = (resultData) => {
+    const targetBranch = effectiveBranch === 'All' ? 'Central Campus' : effectiveBranch;
+    setLabTests((current) => {
+      const targetOrderNo = resultData.labOrderNo || resultData.id;
+      const opTrim = String(resultData.opNumber || '').trim();
+
+      const existingMatch = selectedTestForResult || current.find(
+        (t) =>
+          (resultData._id && t._id && String(t._id) === String(resultData._id)) ||
+          (resultData.originalId && (t.id === resultData.originalId || t.labOrderNo === resultData.originalId || String(t._id) === String(resultData.originalId))) ||
+          (resultData.originalLabOrderNo && (t.labOrderNo === resultData.originalLabOrderNo || t.id === resultData.originalLabOrderNo)) ||
+          (targetOrderNo && (t.labOrderNo === targetOrderNo || t.id === targetOrderNo)) ||
+          (resultData.id && (t.id === resultData.id || t.labOrderNo === resultData.id || String(t._id) === String(resultData.id))) ||
+          (opTrim && !opTrim.toUpperCase().startsWith('LAB-') && t.opNumber && t.opNumber.toLowerCase() === opTrim.toLowerCase())
+      );
+
+      const mergedRecord = {
+        ...(existingMatch || {}),
+        ...resultData,
+        id: existingMatch?.id || resultData.labOrderNo || resultData.id || existingMatch?.labOrderNo,
+        labOrderNo: resultData.labOrderNo || existingMatch?.labOrderNo || resultData.id,
+        _id: resultData._id || existingMatch?._id,
+        branch: resultData.branch || existingMatch?.branch || targetBranch,
+        result: resultData.result !== undefined ? resultData.result : existingMatch?.result || '',
+        testRows: (Array.isArray(resultData.testRows) && resultData.testRows.length > 0)
+          ? resultData.testRows
+          : (existingMatch?.testRows || []),
+        results: resultData.results || existingMatch?.results || {
+          testRows: resultData.testRows || existingMatch?.testRows || [],
+          summaryResult: resultData.result || existingMatch?.result || '',
+        },
+      };
+
+      const filtered = current.filter((t) => {
+        if (existingMatch && t === existingMatch) return false;
+        if (selectedTestForResult && t === selectedTestForResult) return false;
+        if (mergedRecord._id && t._id && String(t._id) === String(mergedRecord._id)) return false;
+        if (resultData.originalId && (t.id === resultData.originalId || t.labOrderNo === resultData.originalId || String(t._id) === String(resultData.originalId))) return false;
+        if (resultData.originalLabOrderNo && (t.labOrderNo === resultData.originalLabOrderNo || t.id === resultData.originalLabOrderNo)) return false;
+        if (!mergedRecord._id || !t._id) {
+          if (mergedRecord.labOrderNo && (t.labOrderNo === mergedRecord.labOrderNo || t.id === mergedRecord.labOrderNo)) return false;
+          if (mergedRecord.id && (t.id === mergedRecord.id || t.labOrderNo === mergedRecord.id)) return false;
+        }
+        return true;
+      });
+
+      return [mergedRecord, ...filtered];
+    });
+
+    // Auto-Deduct inventory kit stock for used test kits (e.g. Thyroid T1, T2, etc.)
+    try {
+      const token = localStorage.getItem('kh_auth_token');
+      const testNameLower = (resultData.test || resultData.testName || '').toLowerCase();
+      const testRows = Array.isArray(resultData.testRows) ? resultData.testRows : [];
+
+      fetch(`/api/v1/lab-inventory?branch=${encodeURIComponent(targetBranch)}`, {
+        headers: { ...(token ? { Authorization: `Bearer ${token}` } : {}) },
+      })
+        .then((res) => res.json())
+        .then((data) => {
+          if (data.success && Array.isArray(data.data)) {
+            data.data.forEach((invItem) => {
+              if (invItem.itemType === 'Consumable') {
+                const itemLower = (invItem.itemName || '').toLowerCase();
+                const linkedLower = (invItem.linkedServiceName || '').toLowerCase();
+                const cleanTestName = testNameLower.replace(/\(.*\)/g, '').trim();
+
+                const isLinkedMatch = linkedLower && (cleanTestName.includes(linkedLower) || linkedLower.includes(cleanTestName));
+                const isNameMatch = itemLower && (cleanTestName.includes(itemLower) || itemLower.includes(cleanTestName));
+                const isThyroidMatch = testNameLower.includes('thyroid') && (itemLower.includes('thyroid') || itemLower.includes('t1') || itemLower.includes('t2') || linkedLower.includes('thyroid'));
+                const isRowMatch = testRows.some((r) => {
+                  const rName = (r.name || '').toLowerCase();
+                  return rName && ((itemLower && itemLower.includes(rName)) || (linkedLower && linkedLower.includes(rName)));
+                });
+
+                const isMatch = isLinkedMatch || isNameMatch || isThyroidMatch || isRowMatch;
+
+                if (isMatch && invItem.stockQuantity > 0) {
+                  fetch(`/api/v1/lab-inventory/${invItem._id || invItem.id}/consume`, {
+                    method: 'PATCH',
+                    headers: {
+                      'Content-Type': 'application/json',
+                      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+                    },
+                    body: JSON.stringify({ quantity: 1 }),
+                  }).catch(() => {});
+                }
+              }
+            });
+          }
+        })
+        .catch(() => {});
+    } catch (err) {
+      console.warn('Auto stock deduction triggered:', err.message);
+    }
+
+    setSelectedTestForResult(null);
+    if (profile?.role === 'Lab Assistant') {
+      handleNavigate('/dashboard');
+    } else {
+      handleNavigate('/laboratory');
+    }
+    notify('Lab result saved & inventory kit stock updated!');
+  };
+
+  const updateLabOrder = (updatedOrder) => {
+    setLabTests((prev) => {
+      const targetId = updatedOrder._id || updatedOrder.id;
+      const targetOrderNo = updatedOrder.labOrderNo || updatedOrder.id;
+      return prev.map((t) =>
+        (t._id && targetId && t._id === targetId) ||
+        (t.id && targetId && t.id === targetId) ||
+        (t.labOrderNo && targetOrderNo && t.labOrderNo === targetOrderNo)
+          ? {
+              ...t,
+              ...updatedOrder,
+              result: updatedOrder.result !== undefined ? updatedOrder.result : t.result,
+              testRows: updatedOrder.testRows !== undefined ? updatedOrder.testRows : t.testRows,
+              results: updatedOrder.results !== undefined ? updatedOrder.results : t.results,
+            }
+          : t
+      );
+    });
+  };
+
+  const deleteLabOrder = async (testOrId) => {
+    const targetObj = typeof testOrId === 'object' && testOrId !== null
+      ? testOrId
+      : (labTests.find((t) => t.id === testOrId || t.labOrderNo === testOrId || t._id === testOrId) || {});
+    const targetId = targetObj._id || targetObj.labOrderNo || targetObj.id || (typeof testOrId === 'string' ? testOrId : '');
+    const patientName = targetObj.patient || targetObj.patientName || 'patient';
+    const testLabel = targetObj.labOrderNo || targetObj.id || 'lab test';
+
+    if (window.confirm(`Are you sure you want to delete lab record ${testLabel} for ${patientName}?`)) {
+      const token = localStorage.getItem('kh_auth_token');
+      if (targetId) {
+        try {
+          const res = await fetch(`/api/v1/laboratory/${encodeURIComponent(targetId)}`, {
+            method: 'DELETE',
+            headers: {
+              ...(token ? { Authorization: `Bearer ${token}` } : {}),
+            },
+          });
+          const data = await res.json().catch(() => ({}));
+          if (!res.ok) {
+            console.warn('Backend lab delete warning:', res.status, data.message);
+          }
+        } catch (err) {
+          console.warn('Could not delete lab test in backend:', err.message);
+        }
+      }
+
+      setLabTests((prev) =>
+        prev.filter((t) => t !== targetObj && t._id !== targetId && t.labOrderNo !== targetId && t.id !== targetId)
+      );
+      notify(`Lab record ${testLabel} deleted successfully`);
+    }
+  };
+
+  const handleSavePharmacySale = (newSale) => {
+    const targetBranch = effectiveBranch === 'All' ? 'Central Campus' : effectiveBranch;
+    const taggedSale = { ...newSale, branch: newSale.branch || targetBranch };
+    setPharmacySales((current) => [taggedSale, ...current]);
+    handleNavigate('/pharmacy');
+    notify(`Pharmacy collection receipt ${taggedSale.saleNo || taggedSale.id} saved successfully!`);
+  };
+
+  const addStaffMember = (newStaff) => {
+    const targetBranch = effectiveBranch === 'All' ? 'Central Campus' : effectiveBranch;
+    const taggedStaff = { ...newStaff, branch: newStaff.branch || targetBranch };
+    setStaff((current) => [taggedStaff, ...current]);
+    handleNavigate('/staff');
+    notify('Staff member added successfully');
+  };
+
+  const updateStaffMember = (updatedStaff) => {
+    setStaff((current) =>
+      current.map((s) =>
+        s._id === updatedStaff._id || s.empId === updatedStaff.empId || s.id === updatedStaff.id || s.name === updatedStaff.name
+          ? { ...s, ...updatedStaff }
+          : s
+      )
+    );
+  };
+
+  const deleteStaffMember = (targetId, memberObj) => {
+    setStaff((current) =>
+      current.filter((s) =>
+        s !== memberObj &&
+        s._id !== targetId &&
+        s.empId !== targetId &&
+        s.id !== targetId &&
+        (!memberObj?.name || s.name !== memberObj.name)
+      )
+    );
+  };
+
+  const handleViewPatientHistory = (patient) => {
+    setSelectedPatientForHistory(patient);
+    handleNavigate('/patients/history');
+  };
+
+  const handleSignOut = async () => {
+    if (signingOut) return;
+    setSigningOut(true);
+    try {
+      await signOut();
+    } finally {
+      setSigningOut(false);
+    }
+  };
+
+  const isNavActive = (itemPath) => {
+    if (path === itemPath) return true;
+    if (itemPath === '/op-records' && (path === '/op-records/new' || path === '/patients/history')) return true;
+    if (itemPath === '/laboratory' && path === '/laboratory/enter-result') return true;
+    if (itemPath === '/pharmacy' && path === '/pharmacy/new') return true;
+    if (itemPath === '/staff' && path === '/staff/new') return true;
+    return false;
+  };
+
+  const getBreadcrumb = () => {
+    switch (path) {
+      case '/dashboard': return 'Dashboard';
+      case '/patients/new': return 'OP Records > Register New Patient';
+      case '/patients/history': return 'OP Records > Patient Medical History';
+      case '/op-records': return 'OP Records';
+      case '/op-records/new': return 'OP Records > Create OP Record';
+      case '/laboratory': return 'Laboratory';
+      case '/laboratory/enter-result': return 'Laboratory > Enter Lab Result';
+      case '/laboratory/inventory': return 'Laboratory > Lab Inventory & Machinery';
+      case '/pharmacy': return 'Pharmacy Workspace';
+      case '/pharmacy/credits': return 'Pharmacy > Pharmacy Credits Manager';
+      case '/pharmacy/new': return 'Pharmacy > Record Collection';
+      case '/admin/services': return 'Admin > Lab Service Categories';
+      case '/marketing': return 'Admin > Marketing Bulk WhatsApp';
+      case '/finance': return 'Finance';
+      case '/doctors': return 'Doctors Directory';
+      case '/staff': return 'Staff';
+      case '/staff/new': return 'Staff > Add Staff Member';
+      case '/settings': return 'Settings';
+      default: return 'Dashboard';
+    }
+  };
+
+  const hasSearchResults = 
+    searchResults.opRecords.length > 0 ||
+    searchResults.labTests.length > 0 ||
+    searchResults.staff.length > 0 ||
+    searchResults.doctors.length > 0 ||
+    searchResults.masterServices.length > 0 ||
+    searchResults.actions.length > 0;
+
+  const searchPlaceholder = profile?.role === 'Lab Assistant' || path.startsWith('/laboratory')
+    ? "Search Lab workspace (test name, patient, report ID)..."
+    : profile?.role === 'Admin' || path.startsWith('/admin') || path === '/doctors' || path === '/staff' || path === '/services'
+    ? "Search Admin workspace (doctors, staff, services)..."
+    : profile?.role === 'Doctor'
+    ? "Search Doctor workspace (OP patient, lab report)..."
+    : profile?.role === 'Front Desk'
+    ? "Search Front Desk workspace (patient name, OP number)..."
+    : "Search workspace...";
+
+  return (
+    <div className="app-shell">
+      {/* Sidebar */}
+      <aside className={`sidebar ${showMobileNav ? 'sidebar-open' : ''}`}>
+        <div className="brand-row">
+          <div className="brand-mark" style={{ overflow: 'hidden', display: 'grid', placeItems: 'center' }}>
+            {currentBranding.logo ? (
+              <img src={currentBranding.logo} alt="Logo" style={{ width: '28px', height: '28px', objectFit: 'contain' }} />
+            ) : (
+              <Activity size={22} strokeWidth={2.5} />
+            )}
+          </div>
+          <div>
+            <strong>{(currentBranding?.hospitalName || 'KRISHNA HOSPITALS').split(' ')[0] || 'KRISHNA'}</strong>
+            <span>{(currentBranding?.hospitalName || 'KRISHNA HOSPITALS').split(' ').slice(1).join(' ') || 'HOSPITALS'}</span>
+          </div>
+          <button 
+            className="icon-button mobile-close" 
+            onClick={() => setShowMobileNav(false)} 
+            aria-label="Close menu"
+          >
+            <X size={20} />
+          </button>
+        </div>
+        
+        {isSuperAdmin ? (
+          <div className="hospital-switcher" ref={branchDropdownRef} style={{ position: 'relative', cursor: 'pointer' }} onClick={() => setShowBranchDropdown(!showBranchDropdown)}>
+            <div className="hospital-avatar" style={{ background: '#0284c7', color: '#fff', overflow: 'hidden' }}>
+              {currentBranding.logo ? (
+                <img src={currentBranding.logo} alt="Logo" style={{ width: '100%', height: '100%', objectFit: 'contain' }} />
+              ) : activeBranch === 'All' ? (
+                '🌐'
+              ) : (
+                '🏥'
+              )}
+            </div>
+            <div style={{ flex: 1, overflow: 'hidden' }}>
+              <strong style={{ display: 'block', textOverflow: 'ellipsis', overflow: 'hidden', whiteSpace: 'nowrap', fontSize: '13px' }}>
+                {activeBranch === 'All' ? 'All Hospital Branches' : activeBranch}
+              </strong>
+              <span style={{ fontSize: '11px', color: '#0284c7', fontWeight: '700' }}>
+                {activeBranch === 'All' ? 'Global View' : 'Branch Scope'}
+              </span>
+            </div>
+            <ChevronDown size={16} />
+
+            {showBranchDropdown && (
+              <div
+                style={{
+                  position: 'absolute',
+                  top: '100%',
+                  left: 0,
+                  right: 0,
+                  background: '#ffffff',
+                  borderRadius: '10px',
+                  boxShadow: '0 10px 30px rgba(15,45,85,0.25)',
+                  border: '1px solid #dce7f5',
+                  zIndex: 300,
+                  marginTop: '6px',
+                  overflow: 'hidden',
+                }}
+                onClick={(e) => e.stopPropagation()}
+              >
+                <div style={{ padding: '8px 12px', fontSize: '10px', fontWeight: '800', color: '#64748b', background: '#f8fafc', borderBottom: '1px solid #edf2f7' }}>
+                  SELECT BRANCH SCOPE
+                </div>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setActiveBranch('All');
+                    setShowBranchDropdown(false);
+                    handleNavigate('/dashboard');
+                  }}
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '8px',
+                    width: '100%',
+                    padding: '10px 14px',
+                    border: 'none',
+                    background: activeBranch === 'All' ? '#f0f9ff' : 'transparent',
+                    color: activeBranch === 'All' ? '#0284c7' : '#1e293b',
+                    fontWeight: activeBranch === 'All' ? '700' : '500',
+                    textAlign: 'left',
+                    cursor: 'pointer',
+                    fontSize: '12px',
+                  }}
+                >
+                  <span>🌐</span> All Branches (Global View)
+                </button>
+                {branchesList.map((br) => (
+                  <button
+                    key={br.id || br.name}
+                    type="button"
+                    onClick={() => {
+                      setActiveBranch(br.name);
+                      setShowBranchDropdown(false);
+                      handleNavigate('/dashboard');
+                    }}
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '8px',
+                      width: '100%',
+                      padding: '10px 14px',
+                      border: 'none',
+                      background: activeBranch === br.name ? '#f0f9ff' : 'transparent',
+                      color: activeBranch === br.name ? '#0284c7' : '#1e293b',
+                      fontWeight: activeBranch === br.name ? '700' : '500',
+                      textAlign: 'left',
+                      cursor: 'pointer',
+                      fontSize: '12px',
+                    }}
+                  >
+                    <span>🏥</span> {br.name}
+                  </button>
+                ))}
+                <button
+                  type="button"
+                  onClick={() => { setShowBranchDropdown(false); handleNavigate('/branches'); }}
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '8px',
+                    width: '100%',
+                    padding: '10px 14px',
+                    borderTop: '1px solid #edf2f7',
+                    background: '#fafafa',
+                    color: '#1769d7',
+                    fontWeight: '700',
+                    textAlign: 'left',
+                    cursor: 'pointer',
+                    fontSize: '12px',
+                  }}
+                >
+                  <Plus size={14} /> Add New Branch...
+                </button>
+              </div>
+            )}
+          </div>
+        ) : (
+          <div className="hospital-switcher">
+            <div className="hospital-avatar" style={{ overflow: 'hidden' }}>
+              {currentBranding.logo ? (
+                <img src={currentBranding.logo} alt="Logo" style={{ width: '100%', height: '100%', objectFit: 'contain' }} />
+              ) : (
+                'K'
+              )}
+            </div>
+            <div>
+              <strong>{currentBranding.hospitalName}</strong>
+              <span>{userBranch}</span>
+            </div>
+            <ChevronDown size={16} />
+          </div>
+        )}
+        
+        <div className="nav-label">WORKSPACE</div>
+        
+        <nav className="main-nav" style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+          {navItems.map((item) => {
+            if (item.group && Array.isArray(item.items)) {
+              const groupName = item.group;
+              const GroupIcon = item.icon;
+              const isOpen = !!openGroups[groupName];
+              const isAnyChildActive = item.items.some((child) => isNavActive(child.path));
+
+              return (
+                <div key={groupName} className="nav-group-container" style={{ marginBottom: '2px' }}>
+                  <button
+                    type="button"
+                    className={`nav-group-header ${isAnyChildActive ? 'group-active' : ''}`}
+                    onClick={() => toggleGroup(groupName)}
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      width: '100%',
+                      gap: '12px',
+                      padding: '10px 12px',
+                      border: 0,
+                      borderRadius: '10px',
+                      color: isAnyChildActive ? '#1769d7' : '#5a6b82',
+                      background: isAnyChildActive ? '#edf4fe' : 'transparent',
+                      textAlign: 'left',
+                      fontSize: '13px',
+                      fontWeight: '700',
+                      cursor: 'pointer',
+                      transition: 'all 0.2s ease',
+                    }}
+                  >
+                    <GroupIcon size={18} style={{ color: isAnyChildActive ? '#1769d7' : '#8090a5' }} />
+                    <span style={{ flex: 1 }}>{groupName}</span>
+                    {isOpen ? <ChevronDown size={16} style={{ color: '#94a3b8' }} /> : <ChevronRight size={16} style={{ color: '#94a3b8' }} />}
+                  </button>
+
+                  {isOpen && (
+                    <div
+                      className="nav-group-children"
+                      style={{
+                        display: 'flex',
+                        flexDirection: 'column',
+                        gap: '3px',
+                        paddingLeft: '14px',
+                        marginTop: '3px',
+                        marginLeft: '12px',
+                        borderLeft: '2px solid #e2e8f0',
+                      }}
+                    >
+                      {item.items.map(({ label, path: itemPath, icon: Icon }) => {
+                        const active = isNavActive(itemPath);
+                        return (
+                          <button
+                            key={label}
+                            type="button"
+                            className={`nav-item ${active ? 'active' : ''}`}
+                            onClick={() => handleNavigate(itemPath)}
+                            style={{
+                              padding: '8px 10px',
+                              fontSize: '12px',
+                            }}
+                          >
+                            <Icon size={16} />
+                            <span>{label}</span>
+                            {(label === 'Laboratory' || label === 'Laboratory Workspace') && (
+                              <em>{scopedLabTests.filter((t) => t.status !== 'Result ready').length}</em>
+                            )}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
+              );
+            }
+
+            // Standalone nav item
+            const { label, path: itemPath, icon: Icon } = item;
+            const active = isNavActive(itemPath);
+            return (
+              <button
+                key={label}
+                type="button"
+                className={`nav-item ${active ? 'active' : ''}`}
+                onClick={() => handleNavigate(itemPath)}
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  width: '100%',
+                  gap: '12px',
+                  padding: '10px 12px',
+                  border: 0,
+                  borderRadius: '10px',
+                  color: active ? '#fff' : '#5a6b82',
+                  background: active ? '#1769d7' : 'transparent',
+                  textAlign: 'left',
+                  fontSize: '13px',
+                  fontWeight: '700',
+                  cursor: 'pointer',
+                  transition: 'all 0.2s ease',
+                }}
+              >
+                <Icon size={18} style={{ color: active ? '#fff' : '#8090a5' }} />
+                <span style={{ flex: 1, fontSize: '13px', fontWeight: '700' }}>{label}</span>
+                {(label === 'Laboratory' || label === 'Laboratory Workspace') && (
+                  <em>{scopedLabTests.filter((t) => t.status !== 'Result ready').length}</em>
+                )}
+              </button>
+            );
+          })}
+        </nav>
+        
+        <div className="sidebar-bottom">
+          <button 
+            className={`nav-item ${path === '/settings' ? 'active' : ''}`}
+            onClick={() => handleNavigate('/settings')}
+          >
+            <Settings size={18} />
+            <span>Settings</span>
+          </button>
+          
+          <button 
+            className="user-mini" 
+            onClick={handleSignOut} 
+            disabled={signingOut} 
+            aria-label="Sign out of Krishna Hospitals"
+          >
+            <div className="avatar avatar-blue">{initials}</div>
+            <div className="user-mini-info">
+              <strong>{userDisplayName}</strong>
+              <span>{roleLabel[profile.role]}</span>
+            </div>
+            <span className="signout-text">
+              {signingOut ? 'Signing out…' : 'Sign out'}
+            </span>
+            <LogOut size={17} />
+          </button>
+        </div>
+      </aside>
+      
+      {showMobileNav && (
+        <button 
+          className="mobile-overlay" 
+          onClick={() => setShowMobileNav(false)} 
+          aria-label="Close navigation" 
+        />
+      )}
+
+      {/* Main Content */}
+      <main className="main-area">
+        <header className="topbar">
+          <button 
+            className="icon-button mobile-menu" 
+            onClick={() => setShowMobileNav(true)} 
+            aria-label="Open menu"
+          >
+            <Menu size={22} />
+          </button>
+          
+          <div className="breadcrumb">
+            <span>Workspace</span>
+            <ChevronRight size={15} />
+            <strong>{getBreadcrumb()}</strong>
+          </div>
+          
+          <div className="topbar-actions">
+            {/* Search Input with Auto-Complete Dropdown Overlay */}
+            <div className="top-search" ref={searchContainerRef} style={{ position: 'relative' }}>
+              <Search size={17} />
+              <input 
+                placeholder={searchPlaceholder} 
+                value={query} 
+                onChange={(event) => {
+                  setQuery(event.target.value);
+                  setShowSearchDropdown(true);
+                }} 
+                onFocus={() => setShowSearchDropdown(true)}
+              />
+              {query && (
+                <button
+                  type="button"
+                  onClick={() => { setQuery(''); setShowSearchDropdown(false); }}
+                  style={{ border: 0, background: 'transparent', cursor: 'pointer', padding: '2px 6px', color: '#8b9bb0' }}
+                >
+                  <X size={14} />
+                </button>
+              )}
+
+              {/* Universal Search Auto-Complete Dropdown */}
+              {showSearchDropdown && query.trim().length > 0 && (
+                <div
+                  style={{
+                    position: 'absolute',
+                    top: 'calc(100% + 8px)',
+                    left: 0,
+                    right: 0,
+                    minWidth: '320px',
+                    maxWidth: '460px',
+                    background: '#ffffff',
+                    borderRadius: '12px',
+                    boxShadow: '0 16px 36px rgba(15, 45, 85, 0.22)',
+                    border: '1px solid #dce7f5',
+                    zIndex: 200,
+                    maxHeight: '380px',
+                    overflowY: 'auto',
+                    padding: '8px 0',
+                  }}
+                >
+                  {!hasSearchResults ? (
+                    <div style={{ padding: '16px', textAlign: 'center', fontSize: '12px', color: '#687c96' }}>
+                      No matching records found in this workspace for "<strong>{query}</strong>"
+                    </div>
+                  ) : (
+                    <>
+                      {/* Doctors Directory Section */}
+                      {searchResults.doctors.length > 0 && (
+                        <div style={{ borderBottom: '1px solid #f0f4f9', paddingBottom: '6px', marginBottom: '6px' }}>
+                          <div style={{ padding: '6px 14px', fontSize: '10px', fontWeight: '800', color: '#1769d7', letterSpacing: '0.5px' }}>
+                            DOCTORS DIRECTORY
+                          </div>
+                          {searchResults.doctors.map((d) => (
+                            <button
+                              key={d.id || d.name}
+                              type="button"
+                              onClick={() => handleNavigate('/doctors')}
+                              style={{
+                                display: 'flex',
+                                alignItems: 'center',
+                                justifyContent: 'space-between',
+                                width: '100%',
+                                padding: '8px 14px',
+                                border: 'none',
+                                background: 'transparent',
+                                textAlign: 'left',
+                                cursor: 'pointer',
+                              }}
+                              className="search-item-hover"
+                            >
+                              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                <Stethoscope size={15} color="#1769d7" />
+                                <div>
+                                  <strong style={{ fontSize: '12px', color: '#162d4a', display: 'block' }}>{d.name}</strong>
+                                  <span style={{ fontSize: '10px', color: '#687c96' }}>{d.department} · License: {d.licenseNo}</span>
+                                </div>
+                              </div>
+                              <span style={{ fontSize: '10px', color: '#1769d7', fontWeight: '700' }}>View Doctor</span>
+                            </button>
+                          ))}
+                        </div>
+                      )}
+
+                      {/* OP Records Section */}
+                      {searchResults.opRecords.length > 0 && (
+                        <div style={{ borderBottom: '1px solid #f0f4f9', paddingBottom: '6px', marginBottom: '6px' }}>
+                          <div style={{ padding: '6px 14px', fontSize: '10px', fontWeight: '800', color: '#1769d7', letterSpacing: '0.5px' }}>
+                            OP RECORDS & PATIENTS
+                          </div>
+                          {searchResults.opRecords.map((r) => (
+                            <button
+                              key={r.id}
+                              type="button"
+                              onClick={() => {
+                                handleViewPatientHistory({
+                                  name: r.patient,
+                                  patient: r.patient,
+                                  id: r.patientId || r.id || r.regNo || 'KH-1048',
+                                  regNo: r.regNo || r.id || '',
+                                  phone: r.phone || '',
+                                  gender: r.gender || '',
+                                  age: r.age || '',
+                                  address: r.address || '',
+                                  bloodGroup: r.bloodGroup || r.vitals?.bloodGroup || '',
+                                  lastVisit: `${r.date || 'Today'}, ${r.time || ''}`,
+                                  doctor: r.doctor || '',
+                                });
+                              }}
+                              style={{
+                                display: 'flex',
+                                alignItems: 'center',
+                                justifyContent: 'space-between',
+                                width: '100%',
+                                padding: '8px 14px',
+                                border: 'none',
+                                background: 'transparent',
+                                textAlign: 'left',
+                                cursor: 'pointer',
+                              }}
+                              className="search-item-hover"
+                            >
+                              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                <ClipboardList size={15} color="#1769d7" />
+                                <div>
+                                  <strong style={{ fontSize: '12px', color: '#162d4a', display: 'block' }}>{r.patient}</strong>
+                                  <span style={{ fontSize: '10px', color: '#687c96' }}>
+                                    {r.id || r.regNo} · Doctor: {r.doctor}{r.phone ? ` · 📞 ${r.phone}` : ''}
+                                  </span>
+                                </div>
+                              </div>
+                              <span style={{ fontSize: '10px', color: '#1769d7', display: 'flex', alignItems: 'center', gap: '3px', fontWeight: '700' }}>
+                                View History <ArrowRight size={11} />
+                              </span>
+                            </button>
+                          ))}
+                        </div>
+                      )}
+
+                      {/* Lab Test Reports Section */}
+                      {searchResults.labTests.length > 0 && (
+                        <div style={{ borderBottom: '1px solid #f0f4f9', paddingBottom: '6px', marginBottom: '6px' }}>
+                          <div style={{ padding: '6px 14px', fontSize: '10px', fontWeight: '800', color: '#0284c7', letterSpacing: '0.5px' }}>
+                            LABORATORY REPORTS
+                          </div>
+                          {searchResults.labTests.map((t) => (
+                            <button
+                              key={t.id || t.test}
+                              type="button"
+                              onClick={() => handleNavigate('/laboratory')}
+                              style={{
+                                display: 'flex',
+                                alignItems: 'center',
+                                justifyContent: 'space-between',
+                                width: '100%',
+                                padding: '8px 14px',
+                                border: 'none',
+                                background: 'transparent',
+                                textAlign: 'left',
+                                cursor: 'pointer',
+                              }}
+                              className="search-item-hover"
+                            >
+                              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                <FlaskConical size={15} color="#0284c7" />
+                                <div>
+                                  <strong style={{ fontSize: '12px', color: '#162d4a', display: 'block' }}>{t.test}</strong>
+                                  <span style={{ fontSize: '10px', color: '#687c96' }}>{t.patient} · Status: {t.status}</span>
+                                </div>
+                              </div>
+                              <span style={{ fontSize: '10px', color: '#0284c7', fontWeight: '700' }}>Open Lab</span>
+                            </button>
+                          ))}
+                        </div>
+                      )}
+
+                      {/* Staff Directory Section */}
+                      {searchResults.staff.length > 0 && (
+                        <div style={{ borderBottom: '1px solid #f0f4f9', paddingBottom: '6px', marginBottom: '6px' }}>
+                          <div style={{ padding: '6px 14px', fontSize: '10px', fontWeight: '800', color: '#0d9488', letterSpacing: '0.5px' }}>
+                            HOSPITAL STAFF
+                          </div>
+                          {searchResults.staff.map((s) => (
+                            <button
+                              key={s.id || s.name}
+                              type="button"
+                              onClick={() => handleNavigate('/staff')}
+                              style={{
+                                display: 'flex',
+                                alignItems: 'center',
+                                justifyContent: 'space-between',
+                                width: '100%',
+                                padding: '8px 14px',
+                                border: 'none',
+                                background: 'transparent',
+                                textAlign: 'left',
+                                cursor: 'pointer',
+                              }}
+                              className="search-item-hover"
+                            >
+                              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                <UserRound size={15} color="#0d9488" />
+                                <div>
+                                  <strong style={{ fontSize: '12px', color: '#162d4a', display: 'block' }}>{s.name}</strong>
+                                  <span style={{ fontSize: '10px', color: '#687c96' }}>{s.role} · {s.department}</span>
+                                </div>
+                              </div>
+                              <span style={{ fontSize: '10px', color: '#0d9488', fontWeight: '700' }}>View Staff</span>
+                            </button>
+                          ))}
+                        </div>
+                      )}
+
+                      {/* Actions & Navigation Section */}
+                      {searchResults.actions.length > 0 && (
+                        <div>
+                          <div style={{ padding: '6px 14px', fontSize: '10px', fontWeight: '800', color: '#6366f1', letterSpacing: '0.5px' }}>
+                            QUICK ACTIONS & NAVIGATION
+                          </div>
+                          {searchResults.actions.map((act) => (
+                            <button
+                              key={act.label}
+                              type="button"
+                              onClick={() => handleNavigate(act.path)}
+                              style={{
+                                display: 'flex',
+                                alignItems: 'center',
+                                gap: '10px',
+                                width: '100%',
+                                padding: '8px 14px',
+                                border: 'none',
+                                background: 'transparent',
+                                textAlign: 'left',
+                                cursor: 'pointer',
+                              }}
+                              className="search-item-hover"
+                            >
+                              <act.icon size={15} color="#6366f1" />
+                              <span style={{ fontSize: '12px', color: '#162d4a', fontWeight: '600' }}>{act.label}</span>
+                            </button>
+                          ))}
+                        </div>
+                      )}
+                    </>
+                  )}
+                </div>
+              )}
+            </div>
+            
+            <button 
+              className="avatar avatar-blue top-avatar"
+              onClick={() => handleNavigate('/settings')}
+              title="Open Settings"
+              aria-label="Open Settings"
+              style={{ cursor: 'pointer' }}
+            >
+              {initials}
+            </button>
+            
+            <button 
+              className="signout-button" 
+              onClick={handleSignOut} 
+              disabled={signingOut} 
+              aria-label="Sign out"
+            >
+              <LogOut size={16} />
+              <span>{signingOut ? 'Signing out…' : 'Sign out'}</span>
+            </button>
+          </div>
+        </header>
+
+        <div className="content-wrap">
+          {(path === '/dashboard' || path === '/') && (
+            <Dashboard 
+              profile={profile} 
+              onNavigate={(pageName, filterType) => {
+                if (filterType) {
+                  setSelectedRecordTypeFilter(filterType);
+                } else {
+                  setSelectedRecordTypeFilter('all');
+                }
+                const map = {
+                  'OP Records': '/op-records',
+                  'Laboratory': '/laboratory',
+                  'Finance': '/finance',
+                  'Doctors': '/doctors',
+                  'Staff': '/staff',
+                  'Settings': '/settings',
+                  'Branches': '/branches',
+                };
+                handleNavigate(map[pageName] || '/dashboard');
+              }} 
+              onAddPatient={() => handleNavigate('/patients/new')} 
+              onAddOPRecord={() => handleNavigate('/op-records/new')} 
+              onAddStaff={() => handleNavigate('/staff/new')}
+              onEnterResult={handleOpenEnterResult} 
+              onDeleteLabOrder={deleteLabOrder}
+              onUpdateLabOrder={updateLabOrder}
+              onViewPatientHistory={handleViewPatientHistory}
+              onRequestLabTest={handleOpenRequestLab}
+              opRecords={scopedOpRecords} 
+              labTests={scopedLabTests} 
+              staff={scopedStaff}
+              doctorsList={scopedDoctors}
+              expensesList={scopedExpenses}
+              pharmacySales={scopedPharmacySales}
+              onSavePharmacySale={(newSale) => setPharmacySales((prev) => [newSale, ...prev])}
+              branchesList={branchesList}
+              effectiveBranch={effectiveBranch}
+              notify={notify} 
+            />
+          )}
+
+          {path === '/branches' && (
+            <BranchesPage
+              branches={branchesList}
+              onAddBranch={(newBranch) => setBranchesList((prev) => [newBranch, ...prev])}
+              onUpdateBranch={(updatedBranch) => setBranchesList((prev) => prev.map((b) => (b.id === updatedBranch.id ? updatedBranch : b)))}
+              staffList={staff}
+              doctorsList={doctorsList}
+              patientsList={patients}
+              opRecordsList={opRecords}
+              onNotify={notify}
+            />
+          )}
+
+          {path === '/patients/new' && (
+            <RegisterPatientForm 
+              onSave={addPatient} 
+              onCancel={() => handleNavigate('/op-records')} 
+              notify={notify} 
+            />
+          )}
+
+          {path === '/patients/history' && (
+            <PatientHistoryPage 
+              patient={selectedPatientForHistory} 
+              opRecords={scopedOpRecords}
+              labTests={scopedLabTests}
+              patientHistoryMap={patientHistoryMap} 
+              onRequestLabTest={handleOpenRequestLab}
+              onBack={() => handleNavigate('/op-records')} 
+            />
+          )}
+
+          {path === '/op-records' && (
+            <OPRecordsPage 
+              records={scopedOpRecords}
+              upiHandles={currentBranding?.upiHandles}
+              branding={currentBranding}
+              isDoctor={profile?.role === 'Doctor'}
+              initialRecordTypeFilter={selectedRecordTypeFilter}
+              onAddOP={() => handleNavigate('/op-records/new')} 
+              onViewHistory={handleViewPatientHistory}
+              onRequestLabTest={handleOpenRequestLab}
+              onUpdateOPRecord={updateOPRecord}
+              onDeleteOPRecord={deleteOPRecord}
+              onNotify={notify} 
+            />
+          )}
+
+          {path === '/op-records/new' && (
+            <CreateOPRecordForm 
+              patients={scopedPatients} 
+              opRecords={scopedOpRecords}
+              doctorsList={scopedDoctors}
+              upiHandles={currentBranding?.upiHandles}
+              effectiveBranch={effectiveBranch}
+              branchesList={branchesList}
+              onSave={addOPRecord} 
+              onCancel={() => handleNavigate('/op-records')} 
+              notify={notify} 
+            />
+          )}
+
+          {path === '/laboratory' && (
+            <LaboratoryPage 
+              tests={scopedLabTests} 
+              isDoctor={profile?.role === 'Doctor'}
+              doctorName={profile?.full_name}
+              branding={currentBranding}
+              onEnterResult={handleOpenEnterResult} 
+              onUpdateLabOrder={updateLabOrder}
+              onDeleteLabOrder={deleteLabOrder}
+              onNotify={notify} 
+            />
+          )}
+
+          {path === '/laboratory/enter-result' && (
+            <EnterLabResultForm 
+              tests={scopedLabTests} 
+              opRecords={scopedOpRecords}
+              patients={scopedPatients}
+              masterServices={masterServices}
+              initialSelectedTest={selectedTestForResult} 
+              effectiveBranch={effectiveBranch}
+              branchesList={branchesList}
+              userRole={profile?.role}
+              userName={profile?.full_name}
+              onSave={saveLabResult} 
+              onCancel={() => {
+                setSelectedTestForResult(null);
+                if (profile?.role === 'Lab Assistant') {
+                  handleNavigate('/dashboard');
+                } else {
+                  handleNavigate('/laboratory');
+                }
+              }} 
+              notify={notify} 
+            />
+          )}
+
+          {(path === '/laboratory/inventory' || path === '/lab-inventory') && (
+            <LabInventoryPage
+              profile={profile}
+              effectiveBranch={effectiveBranch}
+              branchesList={branchesList}
+              masterServices={masterServices}
+              isSuperAdmin={isSuperAdmin}
+              onNotify={notify}
+            />
+          )}
+
+          {(path === '/pharmacy' || path === '/pharmacy/credits') && (
+            <PharmacyDashboard
+              profile={profile}
+              path={path}
+              onNavigate={handleNavigate}
+              onAddPharmacySale={() => handleNavigate('/pharmacy/new')}
+              pharmacySales={scopedPharmacySales}
+              branchesList={branchesList}
+              effectiveBranch={effectiveBranch}
+              onNotify={notify}
+            />
+          )}
+
+          {path === '/pharmacy/new' && (
+            <AddPharmacySaleForm
+              onSave={handleSavePharmacySale}
+              onCancel={() => handleNavigate('/pharmacy')}
+              notify={notify}
+              effectiveBranch={effectiveBranch}
+              branchesList={branchesList}
+            />
+          )}
+
+          {path === '/admin/services' && (
+            <LabServicesPage
+              masterServices={masterServices}
+              onSaveService={addMasterService}
+              onUpdateService={updateMasterService}
+              onDeleteService={deleteMasterService}
+              notify={notify}
+            />
+          )}
+
+          {path === '/expenses' && (
+            <ExpensesPage
+              expenses={scopedExpenses}
+              profile={profile}
+              effectiveBranch={effectiveBranch}
+              onAddExpense={addExpense}
+              onDeleteExpense={deleteExpense}
+              onNotify={notify}
+            />
+          )}
+
+          {path === '/marketing' && (
+            ['Super Admin', 'Admin', 'Front Desk'].includes(getRoleKey(profile?.role)) ? (
+              <MarketingPage notify={notify} effectiveBranch={effectiveBranch} />
+            ) : (
+              <div className="p-8 text-center bg-white rounded-xl shadow-sm border border-red-100 my-6">
+                <h3 className="text-lg font-bold text-red-600 mb-2">Access Restricted</h3>
+                <p className="text-gray-600">The WhatsApp Marketing module is strictly restricted to Super Admin, Admin, and Front Desk roles.</p>
+              </div>
+            )
+          )}
+
+          {path === '/templates' && (
+            ['Super Admin', 'Admin', 'Front Desk'].includes(getRoleKey(profile?.role)) ? (
+              <WhatsAppTemplatesPage notify={notify} effectiveBranch={effectiveBranch} />
+            ) : (
+              <div className="p-8 text-center bg-white rounded-xl shadow-sm border border-red-100 my-6">
+                <h3 className="text-lg font-bold text-red-600 mb-2">Access Restricted</h3>
+                <p className="text-gray-600">Meta Templates module is strictly restricted to Super Admin, Admin, and Front Desk roles.</p>
+              </div>
+            )
+          )}
+
+          {path === '/inbox' && (
+            ['Super Admin', 'Admin', 'Front Desk'].includes(getRoleKey(profile?.role)) ? (
+              <WhatsAppInboxPage notify={notify} effectiveBranch={effectiveBranch} />
+            ) : (
+              <div className="p-8 text-center bg-white rounded-xl shadow-sm border border-red-100 my-6">
+                <h3 className="text-lg font-bold text-red-600 mb-2">Access Restricted</h3>
+                <p className="text-gray-600">WhatsApp Inbox module is strictly restricted to Super Admin, Admin, and Front Desk roles.</p>
+              </div>
+            )
+          )}
+
+          {path === '/finance' && (
+            <FinancePage 
+              expensesList={scopedExpenses} 
+              opRecords={scopedOpRecords}
+              labTests={scopedLabTests}
+              pharmacySales={scopedPharmacySales}
+              effectiveBranch={effectiveBranch}
+              branchesList={branchesList}
+              isSuperAdmin={isSuperAdmin}
+              onNotify={notify} 
+            />
+          )}
+
+          {path === '/doctors' && (
+            <DoctorsPage 
+              doctors={scopedDoctors} 
+              effectiveBranch={effectiveBranch}
+              branchesList={branchesList}
+              notify={notify} 
+            />
+          )}
+
+          {path === '/staff' && (
+            <StaffPage 
+              staff={scopedStaff} 
+              effectiveBranch={effectiveBranch}
+              branchesList={branchesList}
+              onAddStaff={() => handleNavigate('/staff/new')} 
+              onUpdateStaff={updateStaffMember}
+              onDeleteStaff={deleteStaffMember}
+              onNotify={notify} 
+            />
+          )}
+
+          {path === '/staff/new' && (
+            <AddStaffForm 
+              onSave={addStaffMember} 
+              onCancel={() => handleNavigate('/staff')} 
+              effectiveBranch={effectiveBranch}
+              branchesList={branchesList}
+              notify={notify} 
+            />
+          )}
+
+          {path === '/settings' && (
+            <SettingsPage 
+              profile={profile}
+              currentBranding={currentBranding}
+              onSaveBranding={handleSaveBranding}
+              onNotify={notify} 
+            />
+          )}
+        </div>
+      </main>
+
+      {/* Doctor Prescribe / Request Lab Test Modal */}
+      {isRequestLabModalOpen && (
+        <RequestLabTestModal
+          initialPatient={patientForLabOrder}
+          masterServices={masterServices}
+          labTests={labTests}
+          opRecords={opRecords}
+          patients={patients}
+          doctorsList={scopedDoctors}
+          staffList={scopedStaff}
+          doctorName={profile?.role === 'Doctor' ? profile.full_name : ''}
+          isLabAssistant={profile?.role === 'Lab Assistant'}
+          userRole={profile?.role}
+          userName={profile?.full_name}
+          effectiveBranch={effectiveBranch}
+          branchesList={branchesList}
+          onSubmitOrder={handleSaveLabOrder}
+          onClose={() => setIsRequestLabModalOpen(false)}
+          notify={notify}
+        />
+      )}
+
+      {toast && (
+        <div className="toast">
+          <div className="toast-check">✓</div>
+          {toast}
+        </div>
+      )}
+    </div>
+  );
+}
