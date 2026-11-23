@@ -381,9 +381,17 @@ export function OPRecordsPage({
             value={pendingDueCount.toString()}
             change="Action Needed"
             trend="down"
-            detail="for selected period"
+            detail={paymentFilter === 'due' ? 'Active: Showing Pending Dues' : 'Click to show pending dues'}
             icon={<WalletCards />}
-            tone="amber"
+            tone={paymentFilter === 'due' ? 'amber' : 'slate'}
+            onClick={() => {
+              if (paymentFilter === 'due') {
+                setPaymentFilter('all');
+              } else {
+                setPaymentFilter('due');
+                setPatientTypeFilter('all');
+              }
+            }}
           />
         )}
       </div>
