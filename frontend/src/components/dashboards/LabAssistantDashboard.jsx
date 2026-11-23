@@ -30,7 +30,7 @@ function QuickAction({ icon, label, color, onClick }) {
   );
 }
 
-export function LabAssistantDashboard({ profile, onNavigate, onEnterResult, onDeleteLabOrder, labTests = initialLabTests, notify }) {
+export function LabAssistantDashboard({ profile, onNavigate, onEnterResult, onDeleteLabOrder, labTests = initialLabTests, branding, notify }) {
   const userFullName = profile?.full_name || profile?.fullName || profile?.name || 'Lab Staff';
   const firstName = (userFullName ? userFullName.split(' ')[0] : '') || 'User';
   const [filterState, setFilterState] = useState({ filterMode: 'all' });
@@ -59,7 +59,18 @@ export function LabAssistantDashboard({ profile, onNavigate, onEnterResult, onDe
     }
   };
 
+  const isSelfRecord = (t) => {
+    if (t.isSelfCreated === true) return true;
+    if (t.isSelfCreated === false) return false;
+    const from = (t.assignedFrom || '').toLowerCase();
+    const creator = (t.createdBy || '').toLowerCase();
+    if (from === 'lab' || from === 'self' || creator === 'self' || creator === 'lab assistant') return true;
+    return false;
+  };
+
   const isHospitalAssigned = (t) => {
+    if (isSelfRecord(t)) return false;
+    if (t.isSelfCreated === false) return true;
     const creator = (t.createdBy || '').toLowerCase();
     const from = (t.assignedFrom || '').toLowerCase();
     const doc = (t.doctor || t.orderingDoctor || '').toLowerCase();
@@ -74,6 +85,7 @@ export function LabAssistantDashboard({ profile, onNavigate, onEnterResult, onDe
   };
 
   const isDoctorPrescribed = (t) => {
+    if (isSelfRecord(t)) return false;
     if (isHospitalAssigned(t)) return false;
     const doc = (t.doctor || t.orderingDoctor || '').trim();
     const lowerDoc = doc.toLowerCase();
@@ -391,6 +403,7 @@ export function LabAssistantDashboard({ profile, onNavigate, onEnterResult, onDe
       {activePdfModalTest && (
         <PathologyLabReportPDFModal
           test={activePdfModalTest}
+          branding={branding}
           onClose={() => setActivePdfModalTest(null)}
           onNotify={notify}
         />

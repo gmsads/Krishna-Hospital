@@ -143,7 +143,18 @@ export function LaboratoryPage({ tests = initialLabTests, isDoctor = false, doct
 
   const settlementSummaryStr = isSettlementFree ? 'Free / Complimentary' : settlementSummaryParts.join(' + ');
 
+  const isSelfRecord = (t) => {
+    if (t.isSelfCreated === true) return true;
+    if (t.isSelfCreated === false) return false;
+    const from = (t.assignedFrom || '').toLowerCase();
+    const creator = (t.createdBy || '').toLowerCase();
+    if (from === 'lab' || from === 'self' || creator === 'self' || creator === 'lab assistant') return true;
+    return false;
+  };
+
   const isHospitalAssigned = (t) => {
+    if (isSelfRecord(t)) return false;
+    if (t.isSelfCreated === false) return true;
     const creator = (t.createdBy || '').toLowerCase();
     const from = (t.assignedFrom || '').toLowerCase();
     const doc = (t.doctor || t.orderingDoctor || '').toLowerCase();
@@ -157,8 +168,9 @@ export function LaboratoryPage({ tests = initialLabTests, isDoctor = false, doct
     );
   };
 
-  // Helper to reliably check if a test was prescribed by a Doctor vs created manually by Lab Assistant
+  // Helper to reliably check if a test was prescribed by a Doctor vs created manually via Enter Lab Report
   const isDoctorPrescribed = (t) => {
+    if (isSelfRecord(t)) return false;
     if (isHospitalAssigned(t)) return false;
     const doc = (t.doctor || t.orderingDoctor || '').trim();
     const lowerDoc = doc.toLowerCase();

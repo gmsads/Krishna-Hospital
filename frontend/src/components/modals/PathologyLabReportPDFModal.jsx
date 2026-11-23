@@ -259,11 +259,16 @@ export function PathologyLabReportPDFModal({ test, branding, onClose, onNotify }
                 <div>Patient Name: <strong style={{ color: '#0f2d55' }}>{test.patient || 'Patient'}</strong></div>
                 <div>OP / Registration No: <strong>{test.opNumber || 'OPD-0001'}</strong></div>
                 <div>Hospital Branch: <strong>{test.branch || 'Central Campus'}</strong></div>
+                {(test.age || test.gender) && <div>Age / Gender: <strong>{[test.age, test.gender].filter(Boolean).join(' / ')}</strong></div>}
+                {test.area && <div>Area: <strong>{test.area}</strong></div>}
+                {test.testingPersonName && <div>Testing Person: <strong>{test.testingPersonName}</strong></div>}
               </div>
               <div>
                 <div>Prescribing Doctor: <strong>{test.doctor || test.orderingDoctor || 'Dr. Unassigned'}</strong></div>
                 <div>Specimen Collected: <strong>{test.requested || 'Today, just now'}</strong></div>
                 <div>Report Date / Time: <strong>{new Date().toLocaleString()}</strong></div>
+                {(test.inTime || test.outTime) && <div>In / Out Time: <strong>{[test.inTime && `In: ${test.inTime}`, test.outTime && `Out: ${test.outTime}`].filter(Boolean).join(' | ')}</strong></div>}
+                {test.reportingPersonName && <div>Reporting Person: <strong>{test.reportingPersonName}</strong></div>}
               </div>
             </div>
 

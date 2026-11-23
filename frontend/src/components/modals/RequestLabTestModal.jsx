@@ -525,7 +525,7 @@ export function RequestLabTestModal({
     if (!finalDoctor) {
       finalDoctor = isHospitalStaff ? 'Hospital Staff' : 'Self Created / Walk-In';
     }
-    const isSelfCreated = !isHospitalStaff && (!finalDoctor || finalDoctor === 'Self Created / Walk-In');
+    const isSelfCreated = false;
 
     const existingOrderForOp = opNumber.trim() && !opNumber.trim().toUpperCase().startsWith('LAB-')
       ? labTests.find((t) => t.opNumber && t.opNumber.toLowerCase() === opNumber.trim().toLowerCase())
@@ -573,7 +573,7 @@ export function RequestLabTestModal({
       assignedLabAssistant: assignedLabAssistant.trim() || 'General Lab Staff',
       assignedStaff: assignedLabAssistant.trim() || 'General Lab Staff',
       createdBy: finalCreatedBy,
-      assignedFrom: isHospitalStaff ? 'Hospital' : (isLabAssistant ? 'Lab' : 'Doctor'),
+      assignedFrom: 'Hospital',
       isSelfCreated,
     };
 

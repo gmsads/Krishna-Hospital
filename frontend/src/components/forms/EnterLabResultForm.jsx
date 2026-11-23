@@ -160,6 +160,16 @@ export function EnterLabResultForm({
   const [patientOpNumber, setPatientOpNumber] = useState(initialSelectedTest?.opNumber || '');
   const [patientName, setPatientName] = useState(initialSelectedTest?.patientName || initialSelectedTest?.patient || '');
   const [phone, setPhone] = useState(initialSelectedTest?.phone || '');
+  const [age, setAge] = useState(initialSelectedTest?.age || '');
+  const [gender, setGender] = useState(initialSelectedTest?.gender || '');
+  const [selectedBranch, setSelectedBranch] = useState(
+    initialSelectedTest?.branch || (effectiveBranch !== 'All' ? effectiveBranch : (branchesList[0]?.name || 'Central Campus'))
+  );
+  const [area, setArea] = useState(initialSelectedTest?.area || '');
+  const [inTime, setInTime] = useState(initialSelectedTest?.inTime || '');
+  const [outTime, setOutTime] = useState(initialSelectedTest?.outTime || '');
+  const [testingPersonName, setTestingPersonName] = useState(initialSelectedTest?.testingPersonName || '');
+  const [reportingPersonName, setReportingPersonName] = useState(initialSelectedTest?.reportingPersonName || '');
   const [availableDoctors, setAvailableDoctors] = useState([]);
   const [doctor, setDoctor] = useState(
     (initialSelectedTest?.doctor && initialSelectedTest.doctor !== 'Self Created / Walk-In')
@@ -463,6 +473,14 @@ export function EnterLabResultForm({
         }
       }
       if (ph) setPhone(ph);
+      if (initialSelectedTest.age) setAge(initialSelectedTest.age);
+      if (initialSelectedTest.gender) setGender(initialSelectedTest.gender);
+      if (initialSelectedTest.branch) setSelectedBranch(initialSelectedTest.branch);
+      if (initialSelectedTest.area) setArea(initialSelectedTest.area);
+      if (initialSelectedTest.inTime) setInTime(initialSelectedTest.inTime);
+      if (initialSelectedTest.outTime) setOutTime(initialSelectedTest.outTime);
+      if (initialSelectedTest.testingPersonName) setTestingPersonName(initialSelectedTest.testingPersonName);
+      if (initialSelectedTest.reportingPersonName) setReportingPersonName(initialSelectedTest.reportingPersonName);
 
       if (initialSelectedTest.doctor || initialSelectedTest.orderingDoctor) {
         const d = initialSelectedTest.doctor || initialSelectedTest.orderingDoctor;
@@ -725,6 +743,10 @@ export function EnterLabResultForm({
       setAutoFetchSuccess(true);
     } else if (found) {
       if (found.patient || found.name) setPatientName(found.patient || found.name);
+      if (found.age) setAge(String(found.age));
+      if (found.gender) setGender(found.gender);
+      if (found.area || found.address) setArea(found.area || found.address);
+      if (found.branch) setSelectedBranch(found.branch);
       if (found.doctor && found.doctor !== 'Unassigned') setDoctor(found.doctor);
       const ph = found.phone || found.mobile || found.contact || '';
       if (ph) setPhone(ph);
@@ -825,15 +847,21 @@ export function EnterLabResultForm({
 
     const existingCreator = existingTest?.createdBy || initialSelectedTest?.createdBy;
     const existingFrom = existingTest?.assignedFrom || initialSelectedTest?.assignedFrom;
-    const isHospitalCreator = ['Admin', 'Super Admin', 'Front Desk', 'Hospital'].some((r) => (existingCreator || userRole || '').toLowerCase().includes(r.toLowerCase()));
+    const isEditingExisting = Boolean(existingTest || initialSelectedTest);
+    const existingIsSelf = existingTest?.isSelfCreated !== undefined
+      ? existingTest.isSelfCreated
+      : (initialSelectedTest?.isSelfCreated !== undefined
+        ? initialSelectedTest.isSelfCreated
+        : (existingFrom === 'Lab' || existingFrom === 'Self' || existingCreator === 'Self' || existingCreator === 'Lab Assistant'));
 
-    const finalCreatedBy = existingCreator || (isHospitalCreator ? (userRole || 'Admin') : (doctor.trim() ? 'Doctor' : 'Lab Assistant'));
-    const finalAssignedFrom = existingFrom || (isHospitalCreator ? 'Hospital' : (doctor.trim() ? 'Doctor' : 'Lab'));
-    const isSelfCreated = !isHospitalCreator && (!doctor.trim() || doctor.trim() === 'Self Created / Walk-In');
+    // Reports entered directly via Enter Lab Report are Self; existing Order Lab records keep Hospital
+    const finalCreatedBy = isEditingExisting ? (existingCreator || 'Hospital') : 'Self';
+    const finalAssignedFrom = isEditingExisting ? (existingFrom || (existingIsSelf ? 'Lab' : 'Hospital')) : 'Lab';
+    const isSelfCreated = isEditingExisting ? Boolean(existingIsSelf) : true;
 
     let assignedDoctor = doctor.trim();
     if (!assignedDoctor) {
-      assignedDoctor = isHospitalCreator ? 'Hospital Staff' : 'Self Created / Walk-In';
+      assignedDoctor = isSelfCreated ? 'Self Created / Walk-In' : 'Hospital Staff';
     }
 
     const finalLabNo = existingTest?.labOrderNo || resolvedLabNo || opNumber.trim();
@@ -849,6 +877,13 @@ export function EnterLabResultForm({
       patient: patientName.trim(),
       patientName: patientName.trim(),
       phone: phone.trim(),
+      age: age.trim(),
+      gender: gender.trim(),
+      area: area.trim(),
+      inTime: inTime.trim(),
+      outTime: outTime.trim(),
+      testingPersonName: testingPersonName.trim(),
+      reportingPersonName: reportingPersonName.trim(),
       doctor: assignedDoctor,
       orderingDoctor: assignedDoctor,
       test: combinedTestName,
@@ -880,7 +915,7 @@ export function EnterLabResultForm({
       clinicalNotes: notes.trim(),
       notes: notes.trim(),
       requested: existingTest?.requested || initialSelectedTest?.requested || 'Today, just now',
-      branch: existingTest?.branch || targetBranch,
+      branch: selectedBranch || existingTest?.branch || targetBranch,
       createdBy: finalCreatedBy,
       assignedFrom: finalAssignedFrom,
       isSelfCreated,
@@ -1046,6 +1081,121 @@ export function EnterLabResultForm({
                 <option value="Sample collected">Sample collected</option>
                 <option value="Awaiting sample">Awaiting sample</option>
               </select>
+            </div>
+          </div>
+
+          {/* Age, Gender, Branch & Area */}
+          <div className="form-row" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', gap: '10px', width: '100%', boxSizing: 'border-box' }}>
+            <div className="field">
+              <span style={{ color: '#4a5e7a', fontSize: '11px', fontWeight: '700' }}>Age</span>
+              <input
+                type="text"
+                value={age}
+                onChange={(e) => setAge(e.target.value)}
+                placeholder="e.g. 32"
+                style={{ padding: '9px 10px', border: '1px solid #dde7f1', borderRadius: '7px', background: '#fff', fontSize: '12px', width: '100%', boxSizing: 'border-box' }}
+              />
+            </div>
+
+            <div className="field">
+              <span style={{ color: '#4a5e7a', fontSize: '11px', fontWeight: '700' }}>Gender</span>
+              <select
+                value={gender}
+                onChange={(e) => setGender(e.target.value)}
+                style={{ padding: '9px 10px', border: '1px solid #dde7f1', borderRadius: '7px', background: '#fff', fontSize: '12px', width: '100%', boxSizing: 'border-box' }}
+              >
+                <option value="">Select Gender</option>
+                <option value="Male">Male</option>
+                <option value="Female">Female</option>
+                <option value="Other">Other</option>
+              </select>
+            </div>
+
+            <div className="field">
+              <span style={{ color: '#4a5e7a', fontSize: '11px', fontWeight: '700' }}>Branch</span>
+              {branchesList && branchesList.length > 0 ? (
+                <select
+                  value={selectedBranch}
+                  onChange={(e) => setSelectedBranch(e.target.value)}
+                  style={{ padding: '9px 10px', border: '1px solid #dde7f1', borderRadius: '7px', background: '#fff', fontSize: '12px', width: '100%', boxSizing: 'border-box' }}
+                >
+                  {branchesList.map((b) => {
+                    const bName = b.name || b.branchName;
+                    return (
+                      <option key={b.id || b._id || bName} value={bName}>
+                        {bName}
+                      </option>
+                    );
+                  })}
+                  {selectedBranch && !branchesList.some((b) => (b.name || b.branchName) === selectedBranch) && (
+                    <option value={selectedBranch}>{selectedBranch}</option>
+                  )}
+                </select>
+              ) : (
+                <input
+                  type="text"
+                  value={selectedBranch}
+                  onChange={(e) => setSelectedBranch(e.target.value)}
+                  placeholder="Enter branch name"
+                  style={{ padding: '9px 10px', border: '1px solid #dde7f1', borderRadius: '7px', background: '#fff', fontSize: '12px', width: '100%', boxSizing: 'border-box' }}
+                />
+              )}
+            </div>
+
+            <div className="field">
+              <span style={{ color: '#4a5e7a', fontSize: '11px', fontWeight: '700' }}>Area</span>
+              <input
+                type="text"
+                value={area}
+                onChange={(e) => setArea(e.target.value)}
+                placeholder="Enter area / locality"
+                style={{ padding: '9px 10px', border: '1px solid #dde7f1', borderRadius: '7px', background: '#fff', fontSize: '12px', width: '100%', boxSizing: 'border-box' }}
+              />
+            </div>
+          </div>
+
+          {/* In Time, Out Time, Testing Person Name & Reporting Person Name */}
+          <div className="form-row" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', gap: '10px', width: '100%', boxSizing: 'border-box' }}>
+            <div className="field">
+              <span style={{ color: '#4a5e7a', fontSize: '11px', fontWeight: '700' }}>In Time</span>
+              <input
+                type="time"
+                value={inTime}
+                onChange={(e) => setInTime(e.target.value)}
+                style={{ padding: '9px 10px', border: '1px solid #dde7f1', borderRadius: '7px', background: '#fff', fontSize: '12px', width: '100%', boxSizing: 'border-box' }}
+              />
+            </div>
+
+            <div className="field">
+              <span style={{ color: '#4a5e7a', fontSize: '11px', fontWeight: '700' }}>Out Time</span>
+              <input
+                type="time"
+                value={outTime}
+                onChange={(e) => setOutTime(e.target.value)}
+                style={{ padding: '9px 10px', border: '1px solid #dde7f1', borderRadius: '7px', background: '#fff', fontSize: '12px', width: '100%', boxSizing: 'border-box' }}
+              />
+            </div>
+
+            <div className="field">
+              <span style={{ color: '#4a5e7a', fontSize: '11px', fontWeight: '700' }}>Testing Person Name</span>
+              <input
+                type="text"
+                value={testingPersonName}
+                onChange={(e) => setTestingPersonName(e.target.value)}
+                placeholder="Enter testing person name"
+                style={{ padding: '9px 10px', border: '1px solid #dde7f1', borderRadius: '7px', background: '#fff', fontSize: '12px', width: '100%', boxSizing: 'border-box' }}
+              />
+            </div>
+
+            <div className="field">
+              <span style={{ color: '#4a5e7a', fontSize: '11px', fontWeight: '700' }}>Reporting Person Name</span>
+              <input
+                type="text"
+                value={reportingPersonName}
+                onChange={(e) => setReportingPersonName(e.target.value)}
+                placeholder="Enter reporting person name"
+                style={{ padding: '9px 10px', border: '1px solid #dde7f1', borderRadius: '7px', background: '#fff', fontSize: '12px', width: '100%', boxSizing: 'border-box' }}
+              />
             </div>
           </div>
 
@@ -1505,11 +1655,16 @@ export function EnterLabResultForm({
                 <div>Lab Order No: <strong>{opNumber}</strong></div>
                 <div>OP / Reg Number: <strong>{patientOpNumber || 'Walk-In'}</strong></div>
                 <div>Contact Phone: <strong>{phone || 'N/A'}</strong></div>
+                {(age || gender) && <div>Age / Gender: <strong>{[age, gender].filter(Boolean).join(' / ')}</strong></div>}
+                {area && <div>Area: <strong>{area}</strong></div>}
+                {testingPersonName && <div>Testing Person: <strong>{testingPersonName}</strong></div>}
               </div>
               <div>
                 <div>Prescribing Doctor: <strong>{doctor || 'Self / Hospital'}</strong></div>
                 <div>Status Flag: <strong style={{ color: '#15803d' }}>{status}</strong></div>
-                <div>Branch: <strong>{effectiveBranch === 'All' ? (branchesList[0]?.name || 'Central Campus') : effectiveBranch}</strong></div>
+                <div>Branch: <strong>{selectedBranch || (effectiveBranch === 'All' ? (branchesList[0]?.name || 'Central Campus') : effectiveBranch)}</strong></div>
+                {(inTime || outTime) && <div>In / Out Time: <strong>{[inTime && `In: ${inTime}`, outTime && `Out: ${outTime}`].filter(Boolean).join(' | ')}</strong></div>}
+                {reportingPersonName && <div>Reporting Person: <strong>{reportingPersonName}</strong></div>}
                 <div>Report Date: <strong>{new Date().toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })}</strong></div>
               </div>
             </div>

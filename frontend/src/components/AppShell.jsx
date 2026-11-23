@@ -172,6 +172,7 @@ const roleNav = {
     { label: 'Dashboard', path: '/dashboard', icon: LayoutDashboard },
     { label: 'All Records', path: '/op-records', icon: ClipboardList },
     { label: 'Lab Inventory', path: '/laboratory/inventory', icon: Boxes },
+    { label: 'Laboratory Workspace', path: '/laboratory', icon: FlaskConical },
     { label: 'Marketing', path: '/marketing', icon: MessageSquareShare },
     { label: 'Meta Templates', path: '/templates', icon: FileText },
     { label: 'WhatsApp Inbox', path: '/inbox', icon: MessageCircle },
@@ -406,7 +407,7 @@ export default function AppShell({ path = '/dashboard', navigate }) {
               amountPaid: paidNum.toString(),
               dueBalance: dueNum,
               paymentStatus: payStatus,
-              isSelfCreated: l.isSelfCreated !== undefined ? l.isSelfCreated : (!l.doctor || l.doctor.includes('Self') || l.doctor.includes('Walk-In') || l.doctor.includes('Unassigned')),
+              isSelfCreated: l.isSelfCreated !== undefined ? l.isSelfCreated : (l.assignedFrom === 'Lab' || l.assignedFrom === 'Self' || l.createdBy === 'Self' || l.createdBy === 'Lab Assistant' || !l.doctor || l.doctor.includes('Self') || l.doctor.includes('Walk-In') || l.doctor.includes('Unassigned')),
             };
           });
           setLabTests(mapped);
@@ -2024,6 +2025,7 @@ export default function AppShell({ path = '/dashboard', navigate }) {
               expensesList={scopedExpenses}
               pharmacySales={scopedPharmacySales}
               onSavePharmacySale={(newSale) => setPharmacySales((prev) => [newSale, ...prev])}
+              branding={currentBranding}
               branchesList={branchesList}
               effectiveBranch={effectiveBranch}
               notify={notify} 

@@ -62,7 +62,23 @@ export function AdminDashboard({
     if (!itemBranch && !itemBranchCode) return true;
     const ib = (itemBranch || '').trim().toLowerCase();
     const target = (bName || '').trim().toLowerCase();
-    return ib === target || ib.includes(target) || target.includes(ib);
+    const ic = (itemBranchCode || '').trim().toLowerCase();
+    const branchObj = (branchesList || []).find(
+      (b) => (b.name || b.branchName || '').trim().toLowerCase() === target || (b.code || '').trim().toLowerCase() === target
+    );
+    const targetCode = (branchObj?.code || '').trim().toLowerCase();
+    if (ib && (ib === target || ib.includes(target) || target.includes(ib))) return true;
+    if (ic && targetCode && ic === targetCode) return true;
+    if (ic && ic === target) return true;
+    return false;
+  };
+
+  const getItemDate = (item) => {
+    const { fullDate } = getNormalizedDateParts(item);
+    if (!fullDate) return null;
+    const [y, m, d] = fullDate.split('-').map(Number);
+    if (!y || !m || !d) return null;
+    return new Date(y, m - 1, d);
   };
 
   // REAL-TIME SCOPED DATA FILTERED STRICTLY BY BRANCH & DATE/MONTH/YEAR PERIOD
@@ -301,7 +317,8 @@ export function AdminDashboard({
     }
 
     if (effectiveBranch && effectiveBranch !== 'All') {
-      branchNames = branchNames.filter((b) => b === effectiveBranch);
+      branchNames = branchNames.filter((b) => isBranchMatch(b, '', effectiveBranch));
+      if (branchNames.length === 0) branchNames = [effectiveBranch];
     }
 
     const items = branchNames.map((bName) => {
@@ -356,7 +373,10 @@ export function AdminDashboard({
     });
 
     const globalTotalRevenue = items.reduce((sum, b) => sum + b.revenue, 0);
-    const globalTotalExpenses = items.reduce((sum, b) => sum + b.expenses, 0);
+    const globalTotalExpenses = scopedExps.reduce((acc, e) => {
+      const amt = parseFloat(String(e.amount ?? 0).replace(/[^0-9.]/g, '')) || 0;
+      return acc + amt;
+    }, 0);
     const globalNetProfit = globalTotalRevenue - globalTotalExpenses;
     const maxVal = items.length > 0 ? Math.max(...items.map((b) => Math.max(b.revenue, b.expenses)), 1000) : 1000;
 
@@ -475,7 +495,7 @@ export function AdminDashboard({
     {
       label: 'Branch Expenses',
       value: `₹ ${totalBranchExpenses.toLocaleString('en-IN')}`,
-      change: `${expensesList.length} Items`,
+      change: `${scopedExps.length} Items`,
       trend: 'down',
       detail: 'Branch expenditure',
       icon: <Receipt />,
@@ -539,7 +559,7 @@ export function AdminDashboard({
       />
 
       {/* SUPER ADMIN SPACIOUS SINGLE-LINE WIDGET CARD: VERTICAL BAR GRAPH */}
-      {isSuperAdmin && (
+      {(isSuperAdmin || profile?.role === 'Admin') && (
         <section style={{ width: '100%', marginBottom: '20px', padding: '18px 22px', background: '#ffffff', borderRadius: '14px', border: '1px solid #dce7f5', boxShadow: '0 4px 16px rgba(15, 45, 85, 0.06)' }}>
           {/* Card Header */}
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '8px', borderBottom: '1px solid #edf2f8', paddingBottom: '10px', marginBottom: '12px' }}>

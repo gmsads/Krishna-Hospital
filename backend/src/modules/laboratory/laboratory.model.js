@@ -22,6 +22,41 @@ const laboratorySchema = new mongoose.Schema(
       default: '',
       trim: true,
     },
+    age: {
+      type: String,
+      default: '',
+      trim: true,
+    },
+    gender: {
+      type: String,
+      default: '',
+      trim: true,
+    },
+    area: {
+      type: String,
+      default: '',
+      trim: true,
+    },
+    inTime: {
+      type: String,
+      default: '',
+      trim: true,
+    },
+    outTime: {
+      type: String,
+      default: '',
+      trim: true,
+    },
+    testingPersonName: {
+      type: String,
+      default: '',
+      trim: true,
+    },
+    reportingPersonName: {
+      type: String,
+      default: '',
+      trim: true,
+    },
     doctor: {
       type: String,
       default: 'Dr. Unassigned',
@@ -131,6 +166,10 @@ const laboratorySchema = new mongoose.Schema(
     assignedFrom: {
       type: String,
       default: '',
+    },
+    isSelfCreated: {
+      type: Boolean,
+      default: undefined,
     },
     branch: {
       type: String,
