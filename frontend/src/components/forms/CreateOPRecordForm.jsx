@@ -148,6 +148,7 @@ export function CreateOPRecordForm({
     }
   }, [availableDoctors, doctor]);
   const [referralDoctor, setReferralDoctor] = useState('');
+  const [reference, setReference] = useState('');
   const [visitValidity, setVisitValidity] = useState('15'); // Default Visit Validity: 15 Days
   const [refCommPercent, setRefCommPercent] = useState('0');
   const [charges, setCharges] = useState('200.00');
@@ -489,7 +490,8 @@ export function CreateOPRecordForm({
       spo2,
       department,
       doctor,
-      referralDoctor: referralDoctor.trim(),
+      referralDoctor: referralDoctor.trim() || reference.trim(),
+      reference: reference.trim(),
       visitValidity: `${visitValidity} Days`,
       refCommPercent: `${refCommPercent}%`,
       time: regTime,
@@ -958,6 +960,27 @@ export function CreateOPRecordForm({
                   return <option value="">No doctors registered in database</option>;
                 })()}
               </select>
+            </div>
+
+            {/* Reference (Doctor Name, Self, RMP Referral, Relative Reference, etc.) */}
+            <div className="field">
+              <span style={{ color: '#4a5e7a', fontSize: '10px', fontWeight: '700' }}>Reference</span>
+              <input
+                type="text"
+                list="op-reference-options"
+                value={reference}
+                onChange={(e) => setReference(e.target.value)}
+                placeholder="Doctor Name, Self, RMP Referral, Relative..."
+                style={{ padding: '8px 10px', border: '1px solid #dde7f1', borderRadius: '6px', background: '#fff', fontSize: '11px', width: '100%', boxSizing: 'border-box' }}
+              />
+              <datalist id="op-reference-options">
+                <option value="Self" />
+                <option value="RMP Referral" />
+                <option value="Relative Reference" />
+                {(availableDoctors.length > 0 ? availableDoctors : doctorsList).map((doc) => (
+                  <option key={doc.id || doc._id || doc.name} value={doc.name} />
+                ))}
+              </datalist>
             </div>
 
             {/* Fee (Gross ₹) Editable Input */}

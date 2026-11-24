@@ -1,18 +1,12 @@
-import React from 'react';
-import { Printer, Download, X, FileText, FlaskConical } from 'lucide-react';
+import React, { useState } from 'react';
+import { Printer, X, FileText, FlaskConical } from 'lucide-react';
 
 export function PathologyLabReportPDFModal({ test, branding, onClose, onNotify }) {
+  const [viewMode, setViewMode] = useState('results'); // 'results' | 'billing'
   if (!test) return null;
 
   const handlePrint = () => {
     window.print();
-  };
-
-  const handleDownloadPDF = () => {
-    onNotify && onNotify(`Downloading ${test.test} PDF report for ${test.patient}...`);
-    setTimeout(() => {
-      window.print();
-    }, 300);
   };
 
   // Helper to extract and organize all tests with their parameter rows
@@ -51,6 +45,18 @@ export function PathologyLabReportPDFModal({ test, branding, onClose, onNotify }
         }
       }
       return fallbackVal;
+    };
+
+    const getSubNormal = (paramName, fallbackRange) => {
+      if (availableRows.length > 0) {
+        const found = availableRows.find(
+          (r) => r.name && (r.name.toLowerCase().includes(paramName.toLowerCase()) || paramName.toLowerCase().includes(r.name.toLowerCase()))
+        );
+        if (found && found.normalRange && String(found.normalRange).trim()) {
+          return found.normalRange;
+        }
+      }
+      return fallbackRange;
     };
 
     const getBuiltinRowsForTest = (tName) => {
@@ -102,7 +108,7 @@ export function PathologyLabReportPDFModal({ test, branding, onClose, onNotify }
         ];
       }
       return [
-        { id: 1, name: tName, result: test.result || 'Normal / Within Limits', normalRange: 'Standard Reference', status: 'NORMAL' }
+        { id: 1, name: tName, result: test.result || 'Normal / Within Limits', normalRange: getSubNormal(tName, 'Standard Reference'), status: 'NORMAL' }
       ];
     };
 
@@ -115,14 +121,21 @@ export function PathologyLabReportPDFModal({ test, branding, onClose, onNotify }
                (!r.testSource && idx === 0)
       );
 
+      const matchingTestObj = Array.isArray(test.testsList)
+        ? test.testsList.find((tl) => typeof tl === 'object' && tl?.name && tl.name.trim().toLowerCase() === tName.toLowerCase())
+        : null;
+      const groupMethod = matchingTestObj?.method || (idx === 0 ? (test.method || '') : '');
+
       if (matchedRows.length > 0) {
         return {
           testName: tName,
+          method: groupMethod,
           rows: matchedRows.map((r, rI) => ({
             id: r.id || rI + 1,
             name: r.name || tName,
             result: r.result || 'Normal',
             normalRange: r.normalRange || 'Standard Reference',
+            method: r.method || groupMethod,
             status: 'NORMAL',
           })),
         };
@@ -131,6 +144,7 @@ export function PathologyLabReportPDFModal({ test, branding, onClose, onNotify }
       // If no matched rows in testRows, use builtin rows for this test
       return {
         testName: tName,
+        method: groupMethod,
         rows: getBuiltinRowsForTest(tName),
       };
     });
@@ -178,25 +192,94 @@ export function PathologyLabReportPDFModal({ test, branding, onClose, onNotify }
           }]
         : []);
 
+  // Itemized Test-wise Billing Breakdown
+  const billingItems = (() => {
+    if (Array.isArray(test.testsList) && test.testsList.length > 0) {
+      return test.testsList.map((t, idx) => {
+        if (typeof t === 'string') {
+          return {
+            name: t.trim() || `Lab Test ${idx + 1}`,
+            fee: test.testsList.length === 1 ? rawGross : null,
+          };
+        }
+        const parsedFee = parseFloat(String(t?.fee ?? t?.rate ?? t?.amount ?? '').replace(/[^0-9.]/g, ''));
+        return {
+          name: (t?.name || t?.test || `Lab Test ${idx + 1}`).trim(),
+          fee: !isNaN(parsedFee) ? parsedFee : (test.testsList.length === 1 ? rawGross : null),
+        };
+      });
+    }
+    const rawNames = (test.test || test.testName || '')
+      .split(' + ')
+      .map((s) => s.trim())
+      .filter(Boolean);
+    if (rawNames.length > 0) {
+      return rawNames.map((name) => ({
+        name,
+        fee: rawNames.length === 1 ? rawGross : null,
+      }));
+    }
+    return [{ name: 'Diagnostic Pathology Examination', fee: rawGross }];
+  })();
+
   return (
-    <div className="modal-overlay print-overlay" style={{ position: 'fixed', inset: 0, zIndex: 120, background: 'rgba(15, 45, 85, 0.55)', display: 'grid', placeItems: 'center', padding: '16px', overflowY: 'auto' }}>
-      <div className="modal print-modal" style={{ background: '#fff', borderRadius: '12px', padding: '28px', maxWidth: '720px', width: '100%', maxHeight: '92vh', overflowY: 'auto', boxShadow: '0 20px 40px rgba(16, 45, 85, 0.2)', border: '1px solid #cbd5e1', position: 'relative' }}>
+    <div className="modal-overlay print-overlay lab-report-no-scroll" style={{ position: 'fixed', inset: 0, zIndex: 120, background: 'rgba(15, 45, 85, 0.55)', display: 'grid', placeItems: 'center', padding: '16px', overflowY: 'auto', scrollbarWidth: 'none', msOverflowStyle: 'none' }}>
+      <style>{`
+        .lab-report-no-scroll::-webkit-scrollbar { display: none; }
+        @media print {
+          .lab-report-no-scroll { overflow: visible !important; max-height: none !important; height: auto !important; }
+        }
+      `}</style>
+      <div className="modal print-modal lab-report-no-scroll" style={{ background: '#fff', borderRadius: '12px', padding: '28px', maxWidth: '720px', width: '100%', maxHeight: '92vh', overflowY: 'auto', scrollbarWidth: 'none', msOverflowStyle: 'none', boxShadow: '0 20px 40px rgba(16, 45, 85, 0.2)', border: '1px solid #cbd5e1', position: 'relative' }}>
         
         {/* Action Header Controls (Hidden during print) */}
-        <div className="no-print" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid #e2e8f0', paddingBottom: '14px', marginBottom: '20px' }}>
+        <div className="no-print" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '10px', borderBottom: '1px solid #e2e8f0', paddingBottom: '14px', marginBottom: '20px' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
             <FileText size={20} color="#1769d7" />
             <h3 style={{ margin: 0, fontSize: '16px', color: '#162d4a', fontWeight: '800' }}>
-              Pathology Lab PDF Report
+              {viewMode === 'billing' ? 'Pathology Lab Billing' : 'Pathology Lab Results'}
             </h3>
           </div>
 
-          <div style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
-            <button className="secondary-button" onClick={handleDownloadPDF} style={{ fontSize: '12px', padding: '6px 12px', gap: '6px' }}>
-              <Download size={15} color="#1769d7" /> Save PDF
-            </button>
+          <div style={{ display: 'flex', gap: '8px', alignItems: 'center', flexWrap: 'wrap' }}>
+            {/* Separate Results vs Billing Toggle */}
+            <div style={{ display: 'flex', background: '#f1f5f9', padding: '3px', borderRadius: '8px', border: '1px solid #cbd5e1', gap: '3px' }}>
+              <button
+                type="button"
+                className="secondary-button"
+                onClick={() => setViewMode('results')}
+                style={{
+                  fontSize: '11px',
+                  padding: '5px 11px',
+                  border: 'none',
+                  borderRadius: '6px',
+                  background: viewMode === 'results' ? '#1769d7' : 'transparent',
+                  color: viewMode === 'results' ? '#ffffff' : '#475569',
+                  fontWeight: '700',
+                }}
+              >
+                🧪 Results
+              </button>
+              <button
+                type="button"
+                className="secondary-button"
+                onClick={() => setViewMode('billing')}
+                style={{
+                  fontSize: '11px',
+                  padding: '5px 11px',
+                  border: 'none',
+                  borderRadius: '6px',
+                  background: viewMode === 'billing' ? '#1769d7' : 'transparent',
+                  color: viewMode === 'billing' ? '#ffffff' : '#475569',
+                  fontWeight: '700',
+                }}
+              >
+                💳 Billing
+              </button>
+            </div>
+
             <button className="primary-button" onClick={handlePrint} style={{ fontSize: '12px', padding: '6px 14px', gap: '6px' }}>
-              <Printer size={15} /> Print Report
+              <Printer size={15} /> Print {viewMode === 'billing' ? 'Billing' : 'Results'}
             </button>
             <button className="icon-button" onClick={onClose} aria-label="Close report modal">
               <X size={18} />
@@ -207,8 +290,8 @@ export function PathologyLabReportPDFModal({ test, branding, onClose, onNotify }
         {/* EXACT SPECIFIED CLEAN PDF REPORT BODY WITH DYNAMIC LOGO, WATERMARK & SIGNATURE */}
         <div className="pdf-paper" style={{ background: '#ffffff', color: '#0f172a', fontFamily: 'Arial, sans-serif', padding: '10px', position: 'relative' }}>
           
-          {/* Faint Background Watermark Overlay */}
-          {branding?.watermark && (
+          {/* Faint Background Watermark Overlay (Billing View Only - Excluded on Pre-Printed Letterhead Results) */}
+          {viewMode === 'billing' && branding?.watermark && (
             <div
               style={{
                 position: 'absolute',
@@ -229,7 +312,8 @@ export function PathologyLabReportPDFModal({ test, branding, onClose, onNotify }
           )}
 
           <div style={{ position: 'relative', zIndex: 1 }}>
-            {/* Header with Logo on Left Side */}
+            {/* Header with Logo on Left Side (Billing View Only - Removed on Lab Results for Pre-Printed Letterhead Paper) */}
+            {viewMode === 'billing' && (
             <div style={{ borderBottom: '2px solid #0f2d55', paddingBottom: '12px', marginBottom: '16px' }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '6px' }}>
                 {/* Hospital Logo Emblem on Left */}
@@ -251,6 +335,7 @@ export function PathologyLabReportPDFModal({ test, branding, onClose, onNotify }
                 Phone: {branding?.phone || '+91 484 290 8000'} | Email: {branding?.email || 'lab@krishnahospital.org'} | Reg: {branding?.registrationNo || 'KMC-LAB-2024-88'}
               </p>
             </div>
+            )}
 
             {/* Demographics */}
             <div style={{ border: '1px solid #cbd5e1', borderRadius: '6px', padding: '12px', marginBottom: '16px', display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px', fontSize: '12px' }}>
@@ -265,20 +350,19 @@ export function PathologyLabReportPDFModal({ test, branding, onClose, onNotify }
               </div>
               <div>
                 <div>Prescribing Doctor: <strong>{test.doctor || test.orderingDoctor || 'Dr. Unassigned'}</strong></div>
-                <div>Specimen Collected: <strong>{test.requested || 'Today, just now'}</strong></div>
-                <div>Report Date / Time: <strong>{new Date().toLocaleString()}</strong></div>
+                <div>Report Date: <strong>{new Date().toLocaleDateString('en-IN')}</strong></div>
                 {(test.inTime || test.outTime) && <div>In / Out Time: <strong>{[test.inTime && `In: ${test.inTime}`, test.outTime && `Out: ${test.outTime}`].filter(Boolean).join(' | ')}</strong></div>}
                 {test.reportingPersonName && <div>Reporting Person: <strong>{test.reportingPersonName}</strong></div>}
               </div>
             </div>
 
-            {/* ALL MULTIPLE LAB TEST RESULTS & PARAMETER TABLES */}
-            {reportTestGroups.map((group, gIdx) => (
+            {/* ALL MULTIPLE LAB TEST RESULTS & PARAMETER TABLES (Results View Only) */}
+            {viewMode === 'results' && reportTestGroups.map((group, gIdx) => (
               <div key={gIdx} style={{ marginBottom: '18px' }}>
                 {/* Test Name & Method Header Banner */}
                 <div style={{ background: '#f1f5f9', border: '1px solid #cbd5e1', borderLeft: '4px solid #0f2d55', padding: '7px 12px', borderRadius: '4px', fontSize: '12px', fontWeight: '800', marginBottom: '8px', display: 'flex', justifyContent: 'space-between', color: '#0f2d55' }}>
                   <span>{reportTestGroups.length > 1 ? `${gIdx + 1}. ` : ''}TEST: {group.testName.toUpperCase()}</span>
-                  <span style={{ fontSize: '11px', color: '#475569', fontWeight: '700' }}>METHOD: AUTOMATED ANALYZER</span>
+                  <span style={{ fontSize: '11px', color: '#475569', fontWeight: '700' }}>METHOD: {(group.method || test.method || 'AUTOMATED ANALYZER').toUpperCase()}</span>
                 </div>
 
                 {/* Pathology Table for this test */}
@@ -287,7 +371,8 @@ export function PathologyLabReportPDFModal({ test, branding, onClose, onNotify }
                     <tr style={{ background: '#f8fafc', borderBottom: '2px solid #475569', textAlign: 'left' }}>
                       <th style={{ padding: '7px 10px', color: '#0f172a' }}>Investigation / Parameter</th>
                       <th style={{ padding: '7px 10px', color: '#0f172a' }}>Observed Result Value</th>
-                      <th style={{ padding: '7px 10px', color: '#0f172a' }}>Biological Reference Range</th>
+                      <th style={{ padding: '7px 10px', color: '#0f172a' }}>Normal / Reference Values</th>
+                      <th style={{ padding: '7px 10px', color: '#0f172a' }}>Methods</th>
                       <th style={{ padding: '7px 10px', color: '#0f172a' }}>Status Flag</th>
                     </tr>
                   </thead>
@@ -296,7 +381,8 @@ export function PathologyLabReportPDFModal({ test, branding, onClose, onNotify }
                       <tr key={row.id || idx} style={{ borderBottom: '1px solid #e2e8f0' }}>
                         <td style={{ padding: '7px 10px', fontWeight: '600' }}>{row.name}</td>
                         <td style={{ padding: '7px 10px', fontWeight: '700', color: '#1769d7' }}>{row.result || 'Normal'}</td>
-                        <td style={{ padding: '7px 10px', color: '#475569' }}>{row.normalRange || 'Standard Reference'}</td>
+                        <td style={{ padding: '7px 10px', color: '#475569', whiteSpace: 'pre-line' }}>{row.normalRange || 'Standard Reference'}</td>
+                        <td style={{ padding: '7px 10px', color: '#334155' }}>{row.method || group.method || test.method || '—'}</td>
                         <td style={{ padding: '7px 10px', fontWeight: '700', color: '#15803d' }}>NORMAL</td>
                       </tr>
                     ))}
@@ -305,7 +391,16 @@ export function PathologyLabReportPDFModal({ test, branding, onClose, onNotify }
               </div>
             ))}
 
-            {/* Official Billing & Payment Summary */}
+            {/* Additional External Lab Normal / Reference Values (Results View Only) */}
+            {viewMode === 'results' && test.normalValues && (
+              <div style={{ border: '1px solid #cbd5e1', borderRadius: '6px', padding: '10px 12px', background: '#f8fafc', marginBottom: '16px', fontSize: '11px', color: '#334155', whiteSpace: 'pre-line' }}>
+                <strong style={{ color: '#0f2d55', display: 'block', marginBottom: '4px' }}>Normal / Reference Values:</strong>
+                {test.normalValues}
+              </div>
+            )}
+
+            {/* Official Billing & Payment Summary (Billing View Only) */}
+            {viewMode === 'billing' && (
             <div style={{ border: '1px solid #cbd5e1', borderRadius: '6px', padding: '10px 14px', background: '#f8fafc', marginBottom: '16px', fontSize: '11px' }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid #e2e8f0', paddingBottom: '6px', marginBottom: '8px' }}>
                 <span style={{ fontWeight: '800', color: '#0f2d55', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
@@ -324,6 +419,46 @@ export function PathologyLabReportPDFModal({ test, branding, onClose, onNotify }
                   {paymentStatus}
                 </span>
               </div>
+
+              {/* Itemized Test-wise Charges Table */}
+              <table style={{ width: '100%', borderCollapse: 'collapse', marginBottom: '12px', fontSize: '12px', background: '#ffffff', border: '1px solid #cbd5e1', borderRadius: '4px' }}>
+                <thead>
+                  <tr style={{ background: '#f1f5f9', borderBottom: '2px solid #475569', textAlign: 'left' }}>
+                    <th style={{ padding: '7px 10px', color: '#0f172a', width: '48px' }}>#</th>
+                    <th style={{ padding: '7px 10px', color: '#0f172a' }}>Lab Test / Investigation</th>
+                    <th style={{ padding: '7px 10px', color: '#0f172a', textAlign: 'right' }}>Amount (₹)</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {billingItems.map((item, idx) => (
+                    <tr key={idx} style={{ borderBottom: '1px solid #e2e8f0' }}>
+                      <td style={{ padding: '7px 10px', color: '#64748b', fontWeight: '600' }}>{idx + 1}</td>
+                      <td style={{ padding: '7px 10px', fontWeight: '700', color: '#0f2d55' }}>{item.name}</td>
+                      <td style={{ padding: '7px 10px', textAlign: 'right', fontWeight: '700', color: '#0f172a' }}>
+                        {item.fee !== null ? `₹ ${item.fee.toLocaleString('en-IN', { minimumFractionDigits: 2 })}` : 'Included'}
+                      </td>
+                    </tr>
+                  ))}
+                  {discountAmt > 0 && (
+                    <tr style={{ borderBottom: '1px solid #e2e8f0', background: '#fef2f2' }}>
+                      <td colSpan={2} style={{ padding: '6px 10px', textAlign: 'right', fontWeight: '700', color: '#dc2626' }}>
+                        Discount ({discountPct}%)
+                      </td>
+                      <td style={{ padding: '6px 10px', textAlign: 'right', fontWeight: '700', color: '#dc2626' }}>
+                        - ₹ {discountAmt.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                      </td>
+                    </tr>
+                  )}
+                  <tr style={{ background: '#f8fafc', borderTop: '2px solid #0f2d55' }}>
+                    <td colSpan={2} style={{ padding: '8px 10px', textAlign: 'right', fontWeight: '800', color: '#0f2d55', fontSize: '12px' }}>
+                      TOTAL AMOUNT
+                    </td>
+                    <td style={{ padding: '8px 10px', textAlign: 'right', fontWeight: '900', color: '#0f2d55', fontSize: '13px' }}>
+                      ₹ {totalFee.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                    </td>
+                  </tr>
+                </tbody>
+              </table>
 
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(105px, 1fr))', gap: '10px', marginBottom: '8px' }}>
                 <div>
@@ -395,6 +530,7 @@ export function PathologyLabReportPDFModal({ test, branding, onClose, onNotify }
                 </div>
               )}
             </div>
+            )}
 
             {/* Signatures & Dynamic Authorized Signature Image */}
             <div style={{ borderTop: '1px solid #cbd5e1', paddingTop: '16px', display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', fontSize: '11px' }}>
@@ -403,7 +539,7 @@ export function PathologyLabReportPDFModal({ test, branding, onClose, onNotify }
                   <img src={branding.signature} alt="Digital Signature" style={{ height: '36px', width: 'auto', objectFit: 'contain', marginBottom: '4px' }} />
                 )}
                 <div style={{ fontWeight: '700', fontSize: '13px', color: '#0f2d55' }}>Rahul Krishnan</div>
-                <div style={{ color: '#334155' }}>Senior Medical Lab Technician (B.Sc MLT)</div>
+                <div style={{ color: '#334155' }}>Senior Medical Lab Technician</div>
                 <div style={{ color: '#64748b' }}>Verified & Approved</div>
               </div>
 

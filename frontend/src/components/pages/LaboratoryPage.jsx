@@ -8,6 +8,7 @@ export function LaboratoryPage({ tests = initialLabTests, isDoctor = false, doct
   const [activeModalTest, setActiveModalTest] = useState(null);
   const [activeInvoiceRecord, setActiveInvoiceRecord] = useState(null);
   const [activeSourceTab, setActiveSourceTab] = useState('All'); // 'All', 'Doctor Assigned', 'Self Created'
+  const [referenceFilter, setReferenceFilter] = useState('all');
 
   const handleDeleteTest = (test) => {
     if (onDeleteLabOrder) {
@@ -180,6 +181,16 @@ export function LaboratoryPage({ tests = initialLabTests, isDoctor = false, doct
     return true;
   };
 
+  const referenceOptions = useMemo(() => {
+    const defaults = ['Self', 'RMP Referral', 'Relative Reference'];
+    const found = new Set(defaults);
+    tests.forEach((t) => {
+      const refVal = (t.reference || '').trim();
+      if (refVal) found.add(refVal);
+    });
+    return Array.from(found);
+  }, [tests]);
+
   // Filter tests strictly assigned to this doctor when in Doctor mode, or by source tab
   const displayTests = useMemo(() => {
     let list = tests;
@@ -197,8 +208,16 @@ export function LaboratoryPage({ tests = initialLabTests, isDoctor = false, doct
       list = list.filter((t) => !isDoctorPrescribed(t) && !isHospitalAssigned(t));
     }
 
+    if (referenceFilter !== 'all') {
+      list = list.filter((t) => {
+        const refVal = (t.reference || '').trim();
+        if (referenceFilter === 'none') return !refVal;
+        return refVal.toLowerCase() === referenceFilter.toLowerCase();
+      });
+    }
+
     return list;
-  }, [tests, isDoctor, doctorName, activeSourceTab]);
+  }, [tests, isDoctor, doctorName, activeSourceTab, referenceFilter]);
 
   return (
     <>
@@ -284,6 +303,32 @@ export function LaboratoryPage({ tests = initialLabTests, isDoctor = false, doct
               </button>
             </div>
           )}
+
+          {/* Reference Filter Dropdown */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+            <select
+              value={referenceFilter}
+              onChange={(e) => setReferenceFilter(e.target.value)}
+              title="Filter by Reference"
+              style={{
+                fontSize: '12px',
+                padding: '6px 10px',
+                borderRadius: '8px',
+                border: referenceFilter !== 'all' ? '1.5px solid #1769d7' : '1px solid #cbd5e1',
+                background: referenceFilter !== 'all' ? '#eff6ff' : '#ffffff',
+                color: referenceFilter !== 'all' ? '#1769d7' : '#334155',
+                fontWeight: '600',
+                cursor: 'pointer',
+                outline: 'none',
+              }}
+            >
+              <option value="all">🔗 All References</option>
+              {referenceOptions.map((refOpt) => (
+                <option key={refOpt} value={refOpt}>{refOpt}</option>
+              ))}
+              <option value="none">No Reference</option>
+            </select>
+          </div>
         </div>
 
         <div className="lab-cards">
@@ -361,6 +406,17 @@ export function LaboratoryPage({ tests = initialLabTests, isDoctor = false, doct
                         🏥 {test.branch || 'Central Campus'} ({test.branchCode || (test.branch === 'City Extension' ? 'EXT-CITY' : test.branch === 'North Hospital' ? 'NORTH-MED' : 'HQ-CENTRAL')})
                       </span>
 
+                      {/* Reference Badge */}
+                      {test.reference ? (
+                        <span style={{ fontSize: '10px', background: '#f5f3ff', color: '#6d28d9', border: '1px solid #ddd6fe', padding: '1px 7px', borderRadius: '10px', fontWeight: '800' }}>
+                          🔗 Ref: {test.reference}
+                        </span>
+                      ) : (
+                        <span style={{ fontSize: '10px', background: '#f8fafc', color: '#94a3b8', border: '1px solid #e2e8f0', padding: '1px 7px', borderRadius: '10px', fontWeight: '700' }}>
+                          Ref: None
+                        </span>
+                      )}
+
                       {test.priority === 'Urgent / Stat' && (
                         <span style={{ fontSize: '10px', background: '#fef2f2', color: '#dc2626', border: '1px solid #fecaca', padding: '1px 6px', borderRadius: '10px', fontWeight: '800' }}>
                           URGENT / STAT
@@ -418,28 +474,15 @@ export function LaboratoryPage({ tests = initialLabTests, isDoctor = false, doct
 
                   <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap', alignItems: 'center' }}>
                     {/* Toggle: Show Collect Fee when dues are pending (Non-Doctor only) */}
-                    {!isDoctor && (
-                      dueFee > 0 ? (
-                        <button
-                          className="primary-button"
-                          style={{ padding: '6px 12px', fontSize: '11px', gap: '4px', background: '#ef4444', borderColor: '#dc2626' }}
-                          onClick={() => handleOpenLabPaymentModal(test)}
-                          title="Collect lab test fee payment"
-                        >
-                          <WalletCards size={13} /> Generate Bill & Collect Fee
-                        </button>
-                      ) : (
-                        test.status === 'Result ready' && (
-                          <button
-                            className="secondary-button"
-                            style={{ padding: '6px 12px', fontSize: '11px', gap: '4px', background: '#f0fdf4', borderColor: '#bbf7d0', color: '#15803d', fontWeight: '700' }}
-                            onClick={() => setActiveInvoiceRecord(test)}
-                            title="Print official lab tax invoice"
-                          >
-                            <Printer size={13} /> Print Invoice
-                          </button>
-                        )
-                      )
+                    {!isDoctor && dueFee > 0 && (
+                      <button
+                        className="primary-button"
+                        style={{ padding: '6px 12px', fontSize: '11px', gap: '4px', background: '#ef4444', borderColor: '#dc2626' }}
+                        onClick={() => handleOpenLabPaymentModal(test)}
+                        title="Collect lab test fee payment"
+                      >
+                        <WalletCards size={13} /> Generate Bill & Collect Fee
+                      </button>
                     )}
 
                     {test.status === 'Result ready' ? (

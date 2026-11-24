@@ -13,6 +13,7 @@ export function LabServicesPage({
 }) {
   const [serviceList, setServiceList] = useState(masterServices);
   const [testName, setTestName] = useState('');
+  const [method, setMethod] = useState('');
   const [description, setDescription] = useState('');
   const [rate, setRate] = useState('');
   const [subCategories, setSubCategories] = useState([]); // Array of { name: '', normalRange: '' }
@@ -25,6 +26,7 @@ export function LabServicesPage({
   // EDIT LAB SERVICE MODAL STATE
   const [editingService, setEditingService] = useState(null);
   const [editName, setEditName] = useState('');
+  const [editMethod, setEditMethod] = useState('');
   const [editDescription, setEditDescription] = useState('');
   const [editRate, setEditRate] = useState('');
   const [editSubCategories, setEditSubCategories] = useState([]);
@@ -60,6 +62,7 @@ export function LabServicesPage({
 
     const newService = {
       name: testName.trim(),
+      method: method.trim(),
       description: description.trim() || 'Pathology laboratory diagnostic test',
       rate: parseFloat(rate).toFixed(2),
       branch: defaultBranchName,
@@ -94,6 +97,7 @@ export function LabServicesPage({
     }
 
     setTestName('');
+    setMethod('');
     setDescription('');
     setRate('');
     setSubCategories([]);
@@ -102,6 +106,7 @@ export function LabServicesPage({
   const handleStartEdit = (srv) => {
     setEditingService(srv);
     setEditName(srv.name || '');
+    setEditMethod(srv.method || '');
     setEditDescription(srv.description || '');
     setEditRate(srv.rate ? srv.rate.toString() : '');
     setEditSubCategories(
@@ -137,6 +142,7 @@ export function LabServicesPage({
     const updated = {
       ...editingService,
       name: editName.trim(),
+      method: editMethod.trim(),
       description: editDescription.trim() || 'Pathology laboratory diagnostic test',
       rate: parseFloat(editRate).toFixed(2),
       subCategories: validSubCats,
@@ -187,16 +193,28 @@ export function LabServicesPage({
           </div>
 
           <form onSubmit={handleAddCategory} style={{ display: 'grid', gap: '16px' }}>
-            {/* Test Name */}
-            <div className="field">
-              <span style={{ color: '#1769d7', fontSize: '12px', fontWeight: '700' }}>Lab Test Name *</span>
-              <input
-                value={testName}
-                onChange={(e) => setTestName(e.target.value)}
-                placeholder="e.g. Thyroid Function Profile / HbA1c"
-                required
-                style={{ padding: '12px 14px', border: '1px solid #b8d5f7', borderRadius: '9px', fontSize: '13px', background: '#fff' }}
-              />
+            {/* Test Name & Method */}
+            <div style={{ display: 'grid', gridTemplateColumns: '1.4fr 1fr', gap: '10px' }}>
+              <div className="field">
+                <span style={{ color: '#1769d7', fontSize: '12px', fontWeight: '700' }}>Lab Test Name *</span>
+                <input
+                  value={testName}
+                  onChange={(e) => setTestName(e.target.value)}
+                  placeholder="e.g. Thyroid Function Profile / HbA1c"
+                  required
+                  style={{ padding: '12px 14px', border: '1px solid #b8d5f7', borderRadius: '9px', fontSize: '13px', background: '#fff' }}
+                />
+              </div>
+
+              <div className="field">
+                <span style={{ color: '#4a5e7a', fontSize: '12px', fontWeight: '700' }}>Method (Optional)</span>
+                <input
+                  value={method}
+                  onChange={(e) => setMethod(e.target.value)}
+                  placeholder="e.g. CLIA, ELISA, Photometry"
+                  style={{ padding: '12px 14px', border: '1px solid #dde7f1', borderRadius: '9px', fontSize: '13px', background: '#fff' }}
+                />
+              </div>
             </div>
 
             {/* Description */}
@@ -362,14 +380,26 @@ export function LabServicesPage({
             </div>
 
             <form onSubmit={handleSaveEdit} style={{ display: 'grid', gap: '14px' }}>
-              <div className="field">
-                <span style={{ fontSize: '11px', fontWeight: '700', color: '#1769d7' }}>Lab Test Name *</span>
-                <input
-                  value={editName}
-                  onChange={(e) => setEditName(e.target.value)}
-                  required
-                  style={{ padding: '10px 12px', border: '1px solid #b8d5f7', borderRadius: '7px', fontSize: '13px', background: '#fff' }}
-                />
+              <div style={{ display: 'grid', gridTemplateColumns: '1.4fr 1fr', gap: '10px' }}>
+                <div className="field">
+                  <span style={{ fontSize: '11px', fontWeight: '700', color: '#1769d7' }}>Lab Test Name *</span>
+                  <input
+                    value={editName}
+                    onChange={(e) => setEditName(e.target.value)}
+                    required
+                    style={{ padding: '10px 12px', border: '1px solid #b8d5f7', borderRadius: '7px', fontSize: '13px', background: '#fff' }}
+                  />
+                </div>
+
+                <div className="field">
+                  <span style={{ fontSize: '11px', fontWeight: '700', color: '#4a5e7a' }}>Method (Optional)</span>
+                  <input
+                    value={editMethod}
+                    onChange={(e) => setEditMethod(e.target.value)}
+                    placeholder="e.g. CLIA, ELISA"
+                    style={{ padding: '10px 12px', border: '1px solid #dde7f1', borderRadius: '7px', fontSize: '13px', background: '#fff' }}
+                  />
+                </div>
               </div>
 
               <div className="field">

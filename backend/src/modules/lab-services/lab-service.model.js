@@ -12,6 +12,11 @@ const labServiceSchema = new mongoose.Schema(
       required: [true, 'Lab test service name is required'],
       trim: true,
     },
+    method: {
+      type: String,
+      default: '',
+      trim: true,
+    },
     category: {
       type: String,
       default: 'General Pathology',

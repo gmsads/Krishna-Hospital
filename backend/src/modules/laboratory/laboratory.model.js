@@ -57,6 +57,11 @@ const laboratorySchema = new mongoose.Schema(
       default: '',
       trim: true,
     },
+    reference: {
+      type: String,
+      default: '',
+      trim: true,
+    },
     doctor: {
       type: String,
       default: 'Dr. Unassigned',
@@ -65,6 +70,11 @@ const laboratorySchema = new mongoose.Schema(
     testName: {
       type: String,
       required: [true, 'Test name is required'],
+      trim: true,
+    },
+    method: {
+      type: String,
+      default: '',
       trim: true,
     },
     category: {
@@ -134,6 +144,11 @@ const laboratorySchema = new mongoose.Schema(
       default: '',
     },
     result: {
+      type: String,
+      default: '',
+      trim: true,
+    },
+    normalValues: {
       type: String,
       default: '',
       trim: true,

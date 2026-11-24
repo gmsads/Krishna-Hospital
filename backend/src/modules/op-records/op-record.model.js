@@ -85,6 +85,7 @@ const opRecordSchema = new mongoose.Schema(
     department: { type: String, default: 'General Medicine' },
     doctor: { type: String, default: 'Dr. Meera Nair' },
     referralDoctor: { type: String, default: '' },
+    reference: { type: String, default: '', trim: true },
     visitValidity: { type: String, default: '15' },
     refCommPercent: { type: String, default: '0' },
     charges: { type: String, default: '200.00' },

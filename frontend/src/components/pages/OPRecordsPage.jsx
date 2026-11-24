@@ -35,6 +35,7 @@ export function OPRecordsPage({
   const [paymentFilter, setPaymentFilter] = useState('all');
   const [recordTypeFilter, setRecordTypeFilter] = useState(initialRecordTypeFilter);
   const [patientTypeFilter, setPatientTypeFilter] = useState('all'); // 'all', 'new', 'returning'
+  const [referenceFilter, setReferenceFilter] = useState('all');
 
   // COLLECT PAYMENT SETTLEMENT MODAL STATE
   const [paymentModalRecord, setPaymentModalRecord] = useState(null);
@@ -263,8 +264,43 @@ export function OPRecordsPage({
     return { visitNumber, isNew, isReturning };
   };
 
-  // Base records matching Date, Payment status, and Record type
-  const basePeriodRecords = useMemo(() => {
+  // Single source of truth for payment, balance due, and pending status across counts, filters & table
+  const getRecordPaymentInfo = (r) => {
+    const isCancelled = r.paymentStatus === 'Cancelled' || r.isCancelled || r.status === 'Cancelled';
+    if (isCancelled) {
+      return { isCancelled: true, total: 0, paid: 0, due: 0, isDue: false };
+    }
+
+    const parsedNet = r.netAmount !== undefined && r.netAmount !== null && r.netAmount !== ''
+      ? Number(r.netAmount)
+      : NaN;
+    const parsedAmt = parseFloat(String(r.amount ?? r.charges ?? '0').replace(/[^0-9.]/g, ''));
+    const total = !isNaN(parsedNet) ? parsedNet : (!isNaN(parsedAmt) ? parsedAmt : 0);
+
+    const parsedPaid = r.paidAmount !== undefined && r.paidAmount !== null && r.paidAmount !== ''
+      ? Number(r.paidAmount)
+      : (r.amountPaid !== undefined && r.amountPaid !== null && r.amountPaid !== ''
+        ? parseFloat(String(r.amountPaid).replace(/[^0-9.]/g, ''))
+        : NaN);
+    const paid = !isNaN(parsedPaid) ? parsedPaid : (r.paymentStatus === 'Paid' ? total : 0);
+
+    const due = Math.max(0, Math.round((total - paid) * 100) / 100);
+    const isDue = due > 0 || (r.paymentStatus === 'Pay Later (Pending)' && total > 0 && paid < total);
+    return { isCancelled: false, total, paid, due, isDue };
+  };
+
+  // Unique Reference options from records + standard referral sources
+  const referenceOptions = useMemo(() => {
+    const set = new Set(['Self', 'RMP Referral', 'Relative Reference']);
+    records.forEach((r) => {
+      const ref = (r.reference || r.referralDoctor || '').trim();
+      if (ref) set.add(ref);
+    });
+    return Array.from(set);
+  }, [records]);
+
+  // Records matching Date, Record type, and Reference (before paymentFilter, so Pending Dues count stays consistent across payment tabs)
+  const dateAndTypeRecords = useMemo(() => {
     return records.filter((r) => {
       const recDate = (r.regDate && r.regDate !== 'Today' ? r.regDate : '') || (r.date && r.date !== 'Today' ? r.date : '');
       const { year, month, fullDate } = getNormalizedDateParts(r);
@@ -280,23 +316,31 @@ export function OPRecordsPage({
         dateMatch = Boolean((year && year === selectedYear) || (recDate && recDate.startsWith(selectedYear)));
       }
 
-      const isCancelled = r.paymentStatus === 'Cancelled' || r.isCancelled || r.status === 'Cancelled';
-      const total = isCancelled ? 0 : (r.netAmount !== undefined ? r.netAmount : (parseFloat((r.amount || '300').replace(/[^0-9.]/g, '')) || 300));
-      const paid = isCancelled ? 0 : (parseFloat(r.paidAmount || (r.paymentStatus === 'Paid' ? total : 0)) || 0);
-      const isDue = !isCancelled && ((total - paid) > 0 || r.paymentStatus === 'Pay Later (Pending)' || r.paymentMethod === 'Pay Later (Post-Pay)');
-      
-      let paymentMatch = true;
-      if (paymentFilter === 'paid') paymentMatch = !isDue && !isCancelled;
-      if (paymentFilter === 'due') paymentMatch = isDue;
-
       let typeMatch = true;
       if (recordTypeFilter !== 'all') {
         typeMatch = (r.recordType || 'OP').toUpperCase().startsWith(recordTypeFilter.toUpperCase());
       }
 
-      return dateMatch && paymentMatch && typeMatch;
+      let refMatch = true;
+      if (referenceFilter !== 'all') {
+        const recRef = (r.reference || r.referralDoctor || '').trim().toLowerCase();
+        refMatch = referenceFilter === 'none' ? !recRef : recRef === referenceFilter.toLowerCase();
+      }
+
+      return dateMatch && typeMatch && refMatch;
     });
-  }, [records, filterMode, selectedDate, selectedMonth, selectedYear, paymentFilter, recordTypeFilter, todayStr]);
+  }, [records, filterMode, selectedDate, selectedMonth, selectedYear, recordTypeFilter, referenceFilter, todayStr]);
+
+  // Base records matching Date, Payment status, and Record type
+  const basePeriodRecords = useMemo(() => {
+    if (paymentFilter === 'all') return dateAndTypeRecords;
+    return dateAndTypeRecords.filter((r) => {
+      const { isCancelled, isDue } = getRecordPaymentInfo(r);
+      if (paymentFilter === 'paid') return !isDue && !isCancelled;
+      if (paymentFilter === 'due') return isDue;
+      return true;
+    });
+  }, [dateAndTypeRecords, paymentFilter]);
 
   // Real accurate database counts for Fresh OPs vs Returning Visits
   const newRegistrationsCount = useMemo(() => {
@@ -320,13 +364,8 @@ export function OPRecordsPage({
 
   const totalOPsAttended = filteredRecords.length;
   const pendingDueCount = useMemo(() => {
-    return basePeriodRecords.filter((r) => {
-      if (r.paymentStatus === 'Cancelled' || r.isCancelled || r.status === 'Cancelled') return false;
-      const total = parseFloat((r.amount || '300').replace(/[^0-9.]/g, '')) || 300;
-      const paid = parseFloat(r.paidAmount || (r.paymentStatus === 'Paid' ? total : 0)) || 0;
-      return (total - paid) > 0 || r.paymentStatus === 'Pay Later (Pending)' || r.paymentMethod === 'Pay Later (Post-Pay)';
-    }).length;
-  }, [basePeriodRecords]);
+    return dateAndTypeRecords.filter((r) => getRecordPaymentInfo(r).isDue).length;
+  }, [dateAndTypeRecords]);
 
   return (
     <>
@@ -462,6 +501,30 @@ export function OPRecordsPage({
               </button>
             </div>
 
+            {/* Reference Filter Dropdown */}
+            <select
+              value={referenceFilter}
+              onChange={(e) => setReferenceFilter(e.target.value)}
+              style={{
+                padding: '6px 10px',
+                border: '1px solid #b8d5f7',
+                borderRadius: '8px',
+                fontSize: '11px',
+                fontWeight: '700',
+                background: referenceFilter !== 'all' ? '#eff6ff' : '#fff',
+                color: referenceFilter !== 'all' ? '#1769d7' : '#4a5e7a',
+              }}
+              title="Filter records by Reference source"
+            >
+              <option value="all">🔗 All References</option>
+              {referenceOptions.map((refOpt) => (
+                <option key={refOpt} value={refOpt}>
+                  Ref: {refOpt}
+                </option>
+              ))}
+              <option value="none">No Reference</option>
+            </select>
+
             <div style={{ display: 'flex', background: '#fff', padding: '3px', borderRadius: '8px', border: '1px solid #cce0f5', flexWrap: 'wrap' }}>
               <button
                 type="button"
@@ -581,24 +644,21 @@ export function OPRecordsPage({
           <table>
             <thead>
               <tr>
-                <th>Reg / OP No</th>
-                <th>Type & Specifications</th>
-                <th>Patient</th>
-                <th>Doctor</th>
-                <th>Hospital Branch</th>
-                <th>Payment Status</th>
-                <th>Time / Date</th>
-                {!isDoctor && <th>Balance Due</th>}
-                <th style={{ textAlign: 'right' }}>Actions</th>
+                <th style={{ whiteSpace: 'nowrap' }}>Reg / OP No</th>
+                <th style={{ whiteSpace: 'nowrap' }}>Type & Specifications</th>
+                <th style={{ whiteSpace: 'nowrap' }}>Patient</th>
+                <th style={{ whiteSpace: 'nowrap' }}>Doctor</th>
+                <th style={{ whiteSpace: 'nowrap' }}>Reference</th>
+                <th style={{ whiteSpace: 'nowrap' }}>Hospital Branch</th>
+                <th style={{ whiteSpace: 'nowrap' }}>Payment Status</th>
+                <th style={{ whiteSpace: 'nowrap' }}>Time / Date</th>
+                {!isDoctor && <th style={{ whiteSpace: 'nowrap' }}>Balance Due</th>}
+                <th style={{ textAlign: 'right', whiteSpace: 'nowrap' }}>Actions</th>
               </tr>
             </thead>
             <tbody>
               {filteredRecords.map((record, idx) => {
-                const isCancelledRecord = record.paymentStatus === 'Cancelled' || record.isCancelled || record.status === 'Cancelled';
-                const total = isCancelledRecord ? 0 : (record.netAmount !== undefined ? record.netAmount : (parseFloat((record.amount || '300').replace(/[^0-9.]/g, '')) || 300));
-                const paid = isCancelledRecord ? 0 : (parseFloat(record.paidAmount || (record.paymentStatus === 'Paid' ? total : 0)) || 0);
-                const due = isCancelledRecord ? 0 : Math.max(0, total - paid);
-                const hasDue = !isCancelledRecord && (due > 0 || record.paymentStatus === 'Pay Later (Pending)' || record.paymentMethod === 'Pay Later (Post-Pay)');
+                const { isCancelled: isCancelledRecord, total, paid, due, isDue: hasDue } = getRecordPaymentInfo(record);
                 const recType = (record.recordType || 'OP').trim();
                 const visitInfo = getPatientVisitInfo(record);
 
@@ -671,6 +731,15 @@ export function OPRecordsPage({
                     </td>
                     <td>{record.doctor}</td>
                     <td>
+                      {(record.reference || record.referralDoctor) ? (
+                        <span style={{ fontSize: '11px', fontWeight: '700', color: '#7e22ce', background: '#faf5ff', border: '1px solid #e9d5ff', padding: '2px 8px', borderRadius: '12px', whiteSpace: 'nowrap' }}>
+                          🔗 {record.reference || record.referralDoctor}
+                        </span>
+                      ) : (
+                        <span style={{ fontSize: '11px', color: '#94a3b8' }}>—</span>
+                      )}
+                    </td>
+                    <td>
                       <span style={{ fontSize: '11px', fontWeight: '700', color: '#0284c7', background: '#f0f9ff', border: '1px solid #bae6fd', padding: '2px 8px', borderRadius: '12px' }}>
                         🏥 {record.branch || 'Central Campus'} ({bCode})
                       </span>
@@ -715,9 +784,10 @@ export function OPRecordsPage({
                         )}
                       </td>
                     )}
-                    <td style={{ textAlign: 'right', display: 'flex', gap: '6px', justifyContent: 'flex-end', alignItems: 'center' }}>
+                    <td style={{ textAlign: 'right', whiteSpace: 'nowrap', verticalAlign: 'middle' }}>
+                      <div style={{ display: 'inline-flex', gap: '6px', justifyContent: 'flex-end', alignItems: 'center', flexWrap: 'nowrap' }}>
                       {isCancelledRecord ? (
-                        <span style={{ fontSize: '11px', fontWeight: '700', color: '#ef4444', background: '#fef2f2', border: '1px solid #fecaca', padding: '4px 8px', borderRadius: '6px' }}>
+                        <span style={{ fontSize: '11px', fontWeight: '700', color: '#ef4444', background: '#fef2f2', border: '1px solid #fecaca', padding: '5px 10px', borderRadius: '6px', minWidth: '114px', textAlign: 'center', display: 'inline-block', boxSizing: 'border-box', flexShrink: 0 }}>
                           Cancelled OP
                         </span>
                       ) : hasDue ? (
@@ -727,7 +797,9 @@ export function OPRecordsPage({
                           style={{
                             padding: '5px 12px',
                             fontSize: '11px',
-                            gap: '4px',
+                            gap: '5px',
+                            minWidth: '114px',
+                            flexShrink: 0,
                             background: '#ef4444',
                             borderColor: '#dc2626',
                             color: '#ffffff',
@@ -738,7 +810,7 @@ export function OPRecordsPage({
                           onClick={() => handleOpenSettlementModal(record)}
                           title="Collect payment (Full or Partial)"
                         >
-                          <WalletCards size={13} color="#fff" /> Collect
+                          <WalletCards size={13} color="#fff" style={{ flexShrink: 0 }} /> Collect
                         </button>
                       ) : (
                         <button
@@ -747,7 +819,9 @@ export function OPRecordsPage({
                           style={{
                             padding: '5px 12px',
                             fontSize: '11px',
-                            gap: '4px',
+                            gap: '5px',
+                            minWidth: '114px',
+                            flexShrink: 0,
                             background: '#15803d',
                             borderColor: '#15803d',
                             color: '#ffffff',
@@ -757,12 +831,12 @@ export function OPRecordsPage({
                           onClick={() => setActiveInvoiceRecord(record)}
                           title="Create and Print Official Tax Invoice"
                         >
-                          <Printer size={13} color="#fff" /> Print Invoice
+                          <Printer size={13} color="#fff" style={{ flexShrink: 0 }} /> Print Invoice
                         </button>
                       )}
                       <button
                         className="secondary-button"
-                        style={{ padding: '5px 10px', fontSize: '11px', gap: '4px', background: '#f4f8fe', borderColor: '#b8d5f7', color: '#1769d7', fontWeight: '700' }}
+                        style={{ padding: '5px 10px', fontSize: '11px', gap: '4px', flexShrink: 0, background: '#f4f8fe', borderColor: '#b8d5f7', color: '#1769d7', fontWeight: '700' }}
                         onClick={() => onRequestLabTest && onRequestLabTest({
                           name: record.patient || record.patientName,
                           patient: record.patient || record.patientName,
@@ -773,11 +847,11 @@ export function OPRecordsPage({
                         })}
                         title="Order Lab Test for Patient"
                       >
-                        <FlaskConical size={13} /> Order Lab
+                        <FlaskConical size={13} style={{ flexShrink: 0 }} /> Order Lab
                       </button>
                       <button
                         className="secondary-button"
-                        style={{ padding: '5px 10px', fontSize: '11px', gap: '5px' }}
+                        style={{ padding: '5px 10px', fontSize: '11px', gap: '5px', flexShrink: 0 }}
                         onClick={() => {
                           const targetPatient = {
                             name: record.patient,
@@ -798,7 +872,7 @@ export function OPRecordsPage({
                         }}
                         title="View complete patient multi-visit history"
                       >
-                        <History size={14} color="#1769d7" /> View History
+                        <History size={14} color="#1769d7" style={{ flexShrink: 0 }} /> View History
                       </button>
                       <button
                         type="button"
@@ -807,6 +881,7 @@ export function OPRecordsPage({
                           padding: '5px 10px',
                           fontSize: '11px',
                           gap: '4px',
+                          flexShrink: 0,
                           background: '#eff6ff',
                           borderColor: '#bfdbfe',
                           color: '#1d4ed8',
@@ -816,11 +891,11 @@ export function OPRecordsPage({
                         onClick={() => setEditingRecord(record)}
                         title="Edit OP Record Details"
                       >
-                        <Edit2 size={13} color="#1d4ed8" /> Edit
+                        <Edit2 size={13} color="#1d4ed8" style={{ flexShrink: 0 }} /> Edit
                       </button>
                       <button
                         className="icon-button"
-                        style={{ width: '30px', height: '30px', border: '1px solid #fecaca', background: '#fef2f2', borderRadius: '6px' }}
+                        style={{ width: '30px', height: '30px', flexShrink: 0, border: '1px solid #fecaca', background: '#fef2f2', borderRadius: '6px' }}
                         onClick={async () => {
                           const token = localStorage.getItem('kh_auth_token');
                           const recordMongoId = record._id || record.id;
@@ -841,8 +916,9 @@ export function OPRecordsPage({
                         }}
                         title="Delete Record from Database"
                       >
-                        <Trash2 size={14} color="#dc2626" />
+                        <Trash2 size={14} color="#dc2626" style={{ flexShrink: 0 }} />
                       </button>
+                      </div>
                     </td>
                   </tr>
                 );

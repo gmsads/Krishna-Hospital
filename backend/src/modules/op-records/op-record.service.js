@@ -56,6 +56,7 @@ export const createOPRecord = async (recordData) => {
     department: recordData.department || 'General Medicine',
     doctor: recordData.doctor || 'Dr. Unassigned',
     referralDoctor: recordData.referralDoctor || '',
+    reference: recordData.reference || recordData.referralDoctor || '',
     visitValidity: recordData.visitValidity || '15',
     refCommPercent: recordData.refCommPercent || '0',
     charges: grossChargesVal.toString(),

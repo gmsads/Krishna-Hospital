@@ -166,10 +166,12 @@ export function EnterLabResultForm({
     initialSelectedTest?.branch || (effectiveBranch !== 'All' ? effectiveBranch : (branchesList[0]?.name || 'Central Campus'))
   );
   const [area, setArea] = useState(initialSelectedTest?.area || '');
-  const [inTime, setInTime] = useState(initialSelectedTest?.inTime || '');
-  const [outTime, setOutTime] = useState(initialSelectedTest?.outTime || '');
+  const formatTimeHHMM = (d) => `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
+  const [inTime, setInTime] = useState(() => initialSelectedTest?.inTime || formatTimeHHMM(new Date()));
+  const [outTime, setOutTime] = useState(() => initialSelectedTest?.outTime || formatTimeHHMM(new Date(Date.now() + 10 * 60 * 1000)));
   const [testingPersonName, setTestingPersonName] = useState(initialSelectedTest?.testingPersonName || '');
   const [reportingPersonName, setReportingPersonName] = useState(initialSelectedTest?.reportingPersonName || '');
+  const [reference, setReference] = useState(initialSelectedTest?.reference || '');
   const [availableDoctors, setAvailableDoctors] = useState([]);
   const [doctor, setDoctor] = useState(
     (initialSelectedTest?.doctor && initialSelectedTest.doctor !== 'Self Created / Walk-In')
@@ -228,6 +230,13 @@ export function EnterLabResultForm({
     return masterServices[0]?.name || '';
   })();
   const [testName, setTestName] = useState(initialMainTest);
+  const [testMethod, setTestMethod] = useState(() => {
+    if (initialSelectedTest?.method) return initialSelectedTest.method;
+    const foundSrv = masterServices.find(
+      (s) => s.name === initialMainTest || (s.name && s.name.toLowerCase() === (initialMainTest || '').toLowerCase())
+    );
+    return foundSrv?.method || '';
+  });
 
   // Additional ordered tests in this lab order (e.g. CBC + Blood Sugar + Lipid Profile)
   const [additionalTests, setAdditionalTests] = useState(() => {
@@ -244,6 +253,10 @@ export function EnterLabResultForm({
     return [];
   });
   const [selectedExtraTest, setSelectedExtraTest] = useState('');
+  const [primaryTestSearch, setPrimaryTestSearch] = useState('');
+  const [showPrimaryDropdown, setShowPrimaryDropdown] = useState(false);
+  const [extraTestSearch, setExtraTestSearch] = useState('');
+  const [showExtraDropdown, setShowExtraDropdown] = useState(false);
 
   // Dynamic Multi-Row Sub-Parameter State (e.g. T1, T2, T3, T4, TSH)
   const [testRows, setTestRows] = useState(() =>
@@ -251,6 +264,7 @@ export function EnterLabResultForm({
   );
 
   const [notes, setNotes] = useState(initialSelectedTest?.notes || '');
+  const [normalValues, setNormalValues] = useState(initialSelectedTest?.normalValues || '');
 
   // Auto-sync sub-parameter rows and test name when masterServices loads from API
   React.useEffect(() => {
@@ -481,6 +495,8 @@ export function EnterLabResultForm({
       if (initialSelectedTest.outTime) setOutTime(initialSelectedTest.outTime);
       if (initialSelectedTest.testingPersonName) setTestingPersonName(initialSelectedTest.testingPersonName);
       if (initialSelectedTest.reportingPersonName) setReportingPersonName(initialSelectedTest.reportingPersonName);
+      if (initialSelectedTest.reference) setReference(initialSelectedTest.reference);
+      if (initialSelectedTest.method) setTestMethod(initialSelectedTest.method);
 
       if (initialSelectedTest.doctor || initialSelectedTest.orderingDoctor) {
         const d = initialSelectedTest.doctor || initialSelectedTest.orderingDoctor;
@@ -570,6 +586,7 @@ export function EnterLabResultForm({
     setTestRows([...mainRows, ...extraRows]);
 
     const foundSrv = masterServices.find(s => s.name === selectedName);
+    setTestMethod(foundSrv?.method || '');
     const baseRate = foundSrv && foundSrv.rate ? (parseFloat(foundSrv.rate) || 0) : 0;
     const extraTotalFee = additionalTests.reduce((sum, t) => sum + (parseFloat(t.fee) || 0), 0);
     const totalGross = baseRate + extraTotalFee;
@@ -588,27 +605,29 @@ export function EnterLabResultForm({
   };
 
   // Add Another Test / Service to the Order (e.g. CBC + Sugar + Lipid)
-  const handleAddExtraTest = () => {
-    if (!selectedExtraTest) return;
-    if (selectedExtraTest === testName || additionalTests.some((t) => t.name === selectedExtraTest)) {
-      notify && notify(`${selectedExtraTest} is already added to this lab order.`);
+  const handleAddExtraTest = (explicitName) => {
+    const testToAdd = typeof explicitName === 'string' && explicitName ? explicitName : selectedExtraTest;
+    if (!testToAdd) return;
+    if (testToAdd === testName || additionalTests.some((t) => t.name === testToAdd)) {
+      notify && notify(`${testToAdd} is already added to this lab order.`);
       return;
     }
 
-    const srv = masterServices.find((s) => s.name === selectedExtraTest);
+    const srv = masterServices.find((s) => s.name === testToAdd);
     const addedFee = parseFloat(srv?.rate) || 0;
     const newTestObj = {
-      name: selectedExtraTest,
+      name: testToAdd,
       fee: addedFee,
+      method: srv?.method || '',
     };
 
     setAdditionalTests((prev) => [...prev, newTestObj]);
 
     // Append new sub-parameter rows for this additional test
-    const newRows = getInitialRowsForTest(selectedExtraTest, masterServices).map((row, idx) => ({
+    const newRows = getInitialRowsForTest(testToAdd, masterServices).map((row, idx) => ({
       ...row,
       id: Date.now() + idx + Math.random(),
-      testSource: selectedExtraTest,
+      testSource: testToAdd,
     }));
 
     setTestRows((prev) => [...prev, ...newRows]);
@@ -631,7 +650,16 @@ export function EnterLabResultForm({
     }
 
     setSelectedExtraTest('');
-    notify && notify(`✓ Added ${selectedExtraTest} (₹${addedFee}) to this lab record!`);
+    setExtraTestSearch('');
+    setShowExtraDropdown(false);
+    notify && notify(`✓ Added ${testToAdd} (₹${addedFee}) to this lab record!`);
+  };
+
+  // Update Method for an added Extra Test
+  const handleExtraTestMethodChange = (idx, value) => {
+    setAdditionalTests((prev) =>
+      prev.map((item, i) => (i === idx ? { ...item, method: value } : item))
+    );
   };
 
   // Remove an added Extra Test from the Order
@@ -664,7 +692,7 @@ export function EnterLabResultForm({
   const handleAddRow = () => {
     setTestRows((prev) => [
       ...prev,
-      { id: Date.now(), name: '', result: '', normalRange: '' },
+      { id: Date.now(), name: '', result: '', normalRange: '', testSource: testName || '' },
     ]);
   };
 
@@ -717,6 +745,7 @@ export function EnterLabResultForm({
       if (matchedTest.phone || found?.phone || found?.mobile) setPhone(matchedTest.phone || found?.phone || found?.mobile);
       if (matchedTest.doctor && matchedTest.doctor !== 'Self Created / Walk-In') setDoctor(matchedTest.doctor);
       if (matchedTest.opNumber) setPatientOpNumber(matchedTest.opNumber);
+      if (matchedTest.normalValues !== undefined) setNormalValues(matchedTest.normalValues || '');
       const rawTName = matchedTest.test || matchedTest.testName || '';
       if (rawTName) {
         if (rawTName.includes(' + ')) {
@@ -747,6 +776,7 @@ export function EnterLabResultForm({
       if (found.gender) setGender(found.gender);
       if (found.area || found.address) setArea(found.area || found.address);
       if (found.branch) setSelectedBranch(found.branch);
+      if (found.reference || found.referralDoctor) setReference(found.reference || found.referralDoctor);
       if (found.doctor && found.doctor !== 'Unassigned') setDoctor(found.doctor);
       const ph = found.phone || found.mobile || found.contact || '';
       if (ph) setPhone(ph);
@@ -805,7 +835,7 @@ export function EnterLabResultForm({
     // All tests in this order
     const primaryRate = parseFloat(masterServices.find(s => s.name === testName.trim())?.rate) || grossFeeNum;
     const allTestsList = [
-      { name: testName.trim(), fee: primaryRate },
+      { name: testName.trim(), fee: primaryRate, method: testMethod.trim() },
       ...additionalTests,
     ];
     const combinedTestName = allTestsList.map((t) => t.name).join(' + ');
@@ -884,10 +914,12 @@ export function EnterLabResultForm({
       outTime: outTime.trim(),
       testingPersonName: testingPersonName.trim(),
       reportingPersonName: reportingPersonName.trim(),
+      reference: reference.trim(),
       doctor: assignedDoctor,
       orderingDoctor: assignedDoctor,
       test: combinedTestName,
       testName: combinedTestName,
+      method: testMethod.trim(),
       testsList: allTestsList,
       grossFee: grossFeeNum,
       discount: discountNum,
@@ -906,6 +938,7 @@ export function EnterLabResultForm({
       upiHandle: selectedMethods.UPI ? selectedUpiHandle : '',
       splitBreakdown,
       result: resolvedResultValue,
+      normalValues: normalValues.trim(),
       testRows,
       results: {
         testRows,
@@ -989,6 +1022,8 @@ export function EnterLabResultForm({
     }
     setIsVerificationModalOpen(true);
   };
+
+  const isResultEntryStage = status === 'Result ready' || status === 'Completed';
 
   return (
     <>
@@ -1197,28 +1232,170 @@ export function EnterLabResultForm({
                 style={{ padding: '9px 10px', border: '1px solid #dde7f1', borderRadius: '7px', background: '#fff', fontSize: '12px', width: '100%', boxSizing: 'border-box' }}
               />
             </div>
+
+            <div className="field">
+              <span style={{ color: '#4a5e7a', fontSize: '11px', fontWeight: '700' }}>Reference</span>
+              <input
+                type="text"
+                list="lab-reference-options"
+                value={reference}
+                onChange={(e) => setReference(e.target.value)}
+                placeholder="Doctor Name, Self, RMP Referral, Relative..."
+                style={{ padding: '9px 10px', border: '1px solid #dde7f1', borderRadius: '7px', background: '#fff', fontSize: '12px', width: '100%', boxSizing: 'border-box' }}
+              />
+              <datalist id="lab-reference-options">
+                <option value="Self" />
+                <option value="RMP Referral" />
+                <option value="Relative Reference" />
+                {availableDoctors.map((doc) => (
+                  <option key={doc.id || doc._id || doc.name} value={doc.name} />
+                ))}
+              </datalist>
+            </div>
           </div>
 
-          {/* Main Lab Test Selection (From Admin Master Catalogue) */}
-          <div className="field">
-            <span style={{ color: '#1769d7', fontSize: '12px', fontWeight: '700' }}>Primary Lab Test Name (Admin Master Catalogue) *</span>
-            <select
-              value={testName}
-              onChange={(e) => handleMainTestChange(e.target.value)}
-              required
-              style={{ padding: '12px 14px', border: '1px solid #b8d5f7', borderRadius: '9px', fontSize: '13px', background: '#fff', fontWeight: '700', color: '#1769d7' }}
-            >
-              {masterServices.length === 0 ? (
-                <option value="">No lab services available (Add in Admin)</option>
-              ) : (
-                masterServices.map((srv) => (
-                  <option key={srv.id || srv.name} value={srv.name}>
-                    {srv.name} (Master Rate: ₹ {srv.rate})
-                  </option>
-                ))
+          {/* Main Lab Test Selection (Single Searchable Dropdown) & Method (Beside Test Name) */}
+          <div className="form-row" style={{ display: 'grid', gridTemplateColumns: '1.5fr 1fr', gap: '10px', width: '100%', boxSizing: 'border-box', alignItems: 'start' }}>
+            <div className="field" style={{ position: 'relative' }}>
+              <span style={{ color: '#1769d7', fontSize: '12px', fontWeight: '700' }}>Primary Lab Test Name</span>
+              <div style={{ position: 'relative', width: '100%' }}>
+                <input
+                  type="text"
+                  value={showPrimaryDropdown ? primaryTestSearch : (testName || '')}
+                  onChange={(e) => {
+                    setPrimaryTestSearch(e.target.value);
+                    setShowPrimaryDropdown(true);
+                  }}
+                  onFocus={() => {
+                    setPrimaryTestSearch('');
+                    setShowPrimaryDropdown(true);
+                  }}
+                  onBlur={() => setTimeout(() => setShowPrimaryDropdown(false), 180)}
+                  placeholder="Search or select lab test..."
+                  required={!testName}
+                  style={{ padding: '12px 32px 12px 14px', border: '1px solid #b8d5f7', borderRadius: '9px', fontSize: '13px', background: '#fff', fontWeight: '700', color: '#1769d7', width: '100%', boxSizing: 'border-box' }}
+                />
+                <span
+                  onMouseDown={(e) => {
+                    e.preventDefault();
+                    setPrimaryTestSearch('');
+                    setShowPrimaryDropdown((prev) => !prev);
+                  }}
+                  style={{ position: 'absolute', right: '12px', top: '50%', transform: 'translateY(-50%)', color: '#1769d7', fontSize: '12px', cursor: 'pointer', userSelect: 'none' }}
+                >
+                  ▾
+                </span>
+              </div>
+              {showPrimaryDropdown && (
+                <div
+                  style={{
+                    position: 'absolute',
+                    top: '68px',
+                    left: 0,
+                    right: 0,
+                    zIndex: 40,
+                    background: '#ffffff',
+                    border: '1px solid #b8d5f7',
+                    borderRadius: '8px',
+                    boxShadow: '0 8px 20px rgba(15, 45, 85, 0.14)',
+                    maxHeight: '220px',
+                    overflowY: 'auto',
+                  }}
+                >
+                  {masterServices.length === 0 ? (
+                    <div style={{ padding: '10px 12px', fontSize: '12px', color: '#64748b' }}>
+                      No lab services available (Add in Admin)
+                    </div>
+                  ) : (
+                    <>
+                      {masterServices
+                        .filter((srv) => !primaryTestSearch.trim() || (srv.name || '').toLowerCase().includes(primaryTestSearch.trim().toLowerCase()))
+                        .map((srv) => (
+                          <div
+                            key={srv.id || srv.name}
+                            onMouseDown={(e) => {
+                              e.preventDefault();
+                              handleMainTestChange(srv.name);
+                              setPrimaryTestSearch('');
+                              setShowPrimaryDropdown(false);
+                            }}
+                            style={{
+                              padding: '9px 12px',
+                              cursor: 'pointer',
+                              fontSize: '12px',
+                              borderBottom: '1px solid #f1f5f9',
+                              display: 'flex',
+                              justifyContent: 'space-between',
+                              alignItems: 'center',
+                              background: srv.name === testName ? '#eff6ff' : '#ffffff',
+                            }}
+                          >
+                            <strong style={{ color: '#0f2d55' }}>{srv.name}</strong>
+                            <span style={{ color: '#1769d7', fontWeight: '700', fontSize: '11px' }}>₹ {srv.rate}</span>
+                          </div>
+                        ))}
+                      {masterServices.filter((srv) => !primaryTestSearch.trim() || (srv.name || '').toLowerCase().includes(primaryTestSearch.trim().toLowerCase())).length === 0 && (
+                        <div style={{ padding: '10px 12px', fontSize: '12px', color: '#64748b' }}>
+                          No matching tests found.
+                        </div>
+                      )}
+                    </>
+                  )}
+                </div>
               )}
-            </select>
+            </div>
+
+            <div className="field">
+              <span style={{ color: '#4a5e7a', fontSize: '12px', fontWeight: '700' }}>Method (Optional)</span>
+              <input
+                type="text"
+                value={testMethod}
+                onChange={(e) => setTestMethod(e.target.value)}
+                placeholder="e.g. CLIA, ELISA, Photometry"
+                style={{ padding: '12px 14px', border: '1px solid #dde7f1', borderRadius: '9px', fontSize: '13px', background: '#fff' }}
+              />
+            </div>
           </div>
+
+          {/* Additional Added Tests & Their Methods (Directly Below Primary Lab Test Name) */}
+          {additionalTests.map((ext, extIdx) => (
+            <div
+              key={ext.name || extIdx}
+              className="form-row"
+              style={{ display: 'grid', gridTemplateColumns: '1.5fr 1fr auto', gap: '10px', alignItems: 'end', width: '100%', boxSizing: 'border-box' }}
+            >
+              <div className="field">
+                <span style={{ color: '#15803d', fontSize: '11px', fontWeight: '700' }}>Additional Lab Test {extIdx + 2}</span>
+                <input
+                  type="text"
+                  value={`${ext.name} (₹ ${ext.fee})`}
+                  readOnly
+                  style={{ padding: '11px 14px', border: '1px solid #bbf7d0', borderRadius: '9px', fontSize: '13px', background: '#f0fdf4', fontWeight: '700', color: '#15803d', width: '100%', boxSizing: 'border-box' }}
+                />
+              </div>
+
+              <div className="field">
+                <span style={{ color: '#4a5e7a', fontSize: '11px', fontWeight: '700' }}>Method (Optional)</span>
+                <input
+                  type="text"
+                  value={ext.method || ''}
+                  onChange={(e) => handleExtraTestMethodChange(extIdx, e.target.value)}
+                  placeholder="e.g. CLIA, ELISA, Photometry"
+                  style={{ padding: '11px 14px', border: '1px solid #dde7f1', borderRadius: '9px', fontSize: '13px', background: '#fff', width: '100%', boxSizing: 'border-box' }}
+                />
+              </div>
+
+              <button
+                type="button"
+                className="icon-button"
+                onClick={() => handleRemoveExtraTest(ext.name)}
+                title={`Remove ${ext.name}`}
+                style={{ width: '36px', height: '42px', padding: 0, display: 'grid', placeItems: 'center' }}
+              >
+                <Trash2 size={15} color="#dc2626" />
+              </button>
+            </div>
+          ))}
 
           {/* Active Ordered Tests & Add Extra Test Section */}
           <div style={{ background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: '8px', padding: '10px 12px', display: 'grid', gap: '8px', width: '100%', boxSizing: 'border-box' }}>
@@ -1287,35 +1464,104 @@ export function EnterLabResultForm({
               ))}
             </div>
 
-            {/* Add Extra Test Dropdown & Small Button */}
-            <div style={{ display: 'flex', gap: '6px', alignItems: 'center', flexWrap: 'wrap' }}>
-              <select
-                value={selectedExtraTest}
-                onChange={(e) => setSelectedExtraTest(e.target.value)}
-                style={{
-                  flex: '1 1 200px',
-                  padding: '6px 10px',
-                  fontSize: '11px',
-                  borderRadius: '6px',
-                  border: '1px solid #cbd5e1',
-                  background: '#ffffff',
-                  fontWeight: '600',
-                  color: '#334155',
-                }}
-              >
-                <option value="">Select test to add...</option>
-                {masterServices
-                  .filter((s) => s.name !== testName && !additionalTests.some((t) => t.name === s.name))
-                  .map((s) => (
-                    <option key={s.id || s.name} value={s.name}>
-                      + {s.name} (₹{s.rate})
-                    </option>
-                  ))}
-              </select>
+            {/* Add Extra Test Single Searchable Dropdown */}
+            <div style={{ display: 'flex', gap: '6px', alignItems: 'center', flexWrap: 'wrap', position: 'relative' }}>
+              <div style={{ flex: '1 1 240px', position: 'relative' }}>
+                <input
+                  type="text"
+                  value={extraTestSearch}
+                  onChange={(e) => {
+                    setExtraTestSearch(e.target.value);
+                    setSelectedExtraTest('');
+                    setShowExtraDropdown(true);
+                  }}
+                  onFocus={() => setShowExtraDropdown(true)}
+                  onBlur={() => setTimeout(() => setShowExtraDropdown(false), 180)}
+                  placeholder="Search or select extra test to add..."
+                  style={{
+                    width: '100%',
+                    boxSizing: 'border-box',
+                    padding: '7px 28px 7px 10px',
+                    fontSize: '11px',
+                    borderRadius: '6px',
+                    border: '1px solid #cbd5e1',
+                    background: '#ffffff',
+                    fontWeight: '600',
+                    color: '#334155',
+                  }}
+                />
+                <span
+                  onMouseDown={(e) => {
+                    e.preventDefault();
+                    setShowExtraDropdown((prev) => !prev);
+                  }}
+                  style={{ position: 'absolute', right: '10px', top: '50%', transform: 'translateY(-50%)', color: '#64748b', fontSize: '11px', cursor: 'pointer', userSelect: 'none' }}
+                >
+                  ▾
+                </span>
+                {showExtraDropdown && (
+                  <div
+                    style={{
+                      position: 'absolute',
+                      top: '33px',
+                      left: 0,
+                      right: 0,
+                      zIndex: 40,
+                      background: '#ffffff',
+                      border: '1px solid #b8d5f7',
+                      borderRadius: '6px',
+                      boxShadow: '0 8px 18px rgba(15, 45, 85, 0.14)',
+                      maxHeight: '190px',
+                      overflowY: 'auto',
+                    }}
+                  >
+                    {masterServices
+                      .filter(
+                        (s) =>
+                          s.name !== testName &&
+                          !additionalTests.some((t) => t.name === s.name) &&
+                          (!extraTestSearch.trim() || (s.name || '').toLowerCase().includes(extraTestSearch.trim().toLowerCase()))
+                      )
+                      .map((s) => (
+                        <div
+                          key={s.id || s.name}
+                          onMouseDown={(e) => {
+                            e.preventDefault();
+                            setSelectedExtraTest(s.name);
+                            setExtraTestSearch(s.name);
+                            setShowExtraDropdown(false);
+                          }}
+                          style={{
+                            padding: '7px 10px',
+                            cursor: 'pointer',
+                            fontSize: '11px',
+                            borderBottom: '1px solid #f1f5f9',
+                            display: 'flex',
+                            justifyContent: 'space-between',
+                            alignItems: 'center',
+                          }}
+                        >
+                          <strong style={{ color: '#0f2d55' }}>+ {s.name}</strong>
+                          <span style={{ color: '#15803d', fontWeight: '700' }}>₹{s.rate}</span>
+                        </div>
+                      ))}
+                    {masterServices.filter(
+                      (s) =>
+                        s.name !== testName &&
+                        !additionalTests.some((t) => t.name === s.name) &&
+                        (!extraTestSearch.trim() || (s.name || '').toLowerCase().includes(extraTestSearch.trim().toLowerCase()))
+                    ).length === 0 && (
+                      <div style={{ padding: '8px 10px', fontSize: '11px', color: '#64748b' }}>
+                        No matching extra tests available.
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
               <button
                 type="button"
                 className="secondary-button"
-                onClick={handleAddExtraTest}
+                onClick={() => handleAddExtraTest()}
                 disabled={!selectedExtraTest}
                 style={{
                   padding: '5px 12px',
@@ -1480,7 +1726,8 @@ export function EnterLabResultForm({
             </div>
           </div>
 
-          {/* DYNAMIC MULTI-ROW SUB-PARAMETER BUILDER (T1, T2, T3, T4, TSH, Hb, etc.) - ALWAYS VISIBLE SO FINDINGS ARE NEVER HIDDEN */}
+          {/* DYNAMIC MULTI-ROW SUB-PARAMETER BUILDER - SHOWN ONLY IN RESULT ENTRY PROCESS */}
+          {isResultEntryStage && (
           <div style={{ background: '#f4f8fe', padding: '18px', borderRadius: '10px', border: '1px solid #d4e4f7', display: 'grid', gap: '14px', width: '100%', boxSizing: 'border-box' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '8px', borderBottom: '1px solid #d3e2f5', paddingBottom: '8px' }}>
               <strong style={{ fontSize: '12px', color: '#1769d7' }}>
@@ -1548,14 +1795,15 @@ export function EnterLabResultForm({
                     />
                   </div>
 
-                  {/* 3. Normal Range */}
+                  {/* 3. Normal Values / Reference Values (Editable) */}
                   <div className="field">
-                    <span style={{ fontSize: '10px', fontWeight: '700', color: '#576c85' }}>Reference Range</span>
-                    <input
+                    <span style={{ fontSize: '10px', fontWeight: '700', color: '#576c85' }}>Normal Values / Reference Values</span>
+                    <textarea
+                      rows={1}
                       value={row.normalRange || ''}
                       onChange={(e) => handleRowChange(index, 'normalRange', e.target.value)}
-                      placeholder="e.g. 0.8 - 2.0"
-                      style={{ padding: '8px 10px', fontSize: '12px', borderRadius: '6px', border: '1px solid #dde7f1' }}
+                      placeholder="e.g. 0.8 - 2.0 ng/mL"
+                      style={{ padding: '8px 10px', fontSize: '12px', borderRadius: '6px', border: '1px solid #dde7f1', fontFamily: 'inherit', resize: 'vertical', minHeight: '35px', boxSizing: 'border-box', width: '100%' }}
                     />
                   </div>
 
@@ -1574,7 +1822,22 @@ export function EnterLabResultForm({
                 </div>
               ))}
             </div>
+
+            {/* Additional Editable Normal Values / Reference Values (External Lab Reports) */}
+            <div className="field" style={{ borderTop: '1px solid #d3e2f5', paddingTop: '12px' }}>
+              <span style={{ color: '#0f2d55', fontSize: '11px', fontWeight: '700' }}>
+                Additional Normal Values / Reference Values (Optional — External Lab Ranges)
+              </span>
+              <textarea
+                value={normalValues}
+                onChange={(e) => setNormalValues(e.target.value)}
+                placeholder="Enter or modify additional normal / reference values from external laboratory reports (e.g. Male: 13.0 - 17.0 g/dL, Female: 12.0 - 15.5 g/dL)..."
+                rows={2}
+                style={{ padding: '10px 12px', border: '1px solid #c7d9f1', borderRadius: '8px', fontSize: '12px', fontFamily: 'inherit', background: '#fff', width: '100%', boxSizing: 'border-box' }}
+              />
+            </div>
           </div>
+          )}
 
           {/* Pathology Remarks & Notes */}
           <div className="field">
@@ -1702,7 +1965,7 @@ export function EnterLabResultForm({
                         <tr style={{ background: '#f8fafc', borderBottom: '1px solid #e2e8f0', textAlign: 'left' }}>
                           <th style={{ padding: '6px 10px', color: '#475569', fontSize: '11px' }}>Parameter</th>
                           <th style={{ padding: '6px 10px', color: '#475569', fontSize: '11px' }}>Observed Result</th>
-                          <th style={{ padding: '6px 10px', color: '#475569', fontSize: '11px' }}>Reference Range</th>
+                          <th style={{ padding: '6px 10px', color: '#475569', fontSize: '11px' }}>Normal / Reference Values</th>
                           <th style={{ padding: '6px 10px', color: '#475569', fontSize: '11px' }}>Status</th>
                         </tr>
                       </thead>
@@ -1720,7 +1983,7 @@ export function EnterLabResultForm({
                               <td style={{ padding: '6px 10px', fontWeight: '800', color: r.result ? '#15803d' : '#94a3b8' }}>
                                 {r.result || 'Pending / Blank'}
                               </td>
-                              <td style={{ padding: '6px 10px', color: '#64748b', fontSize: '11px' }}>{r.normalRange || 'Standard'}</td>
+                              <td style={{ padding: '6px 10px', color: '#64748b', fontSize: '11px', whiteSpace: 'pre-line' }}>{r.normalRange || 'Standard'}</td>
                               <td style={{ padding: '6px 10px' }}>
                                 <span style={{ fontSize: '10px', fontWeight: '800', padding: '1px 6px', borderRadius: '4px', background: r.result ? '#dcfce7' : '#f1f5f9', color: r.result ? '#15803d' : '#64748b' }}>
                                   {r.result ? 'Entered' : 'Empty'}
@@ -1750,6 +2013,13 @@ export function EnterLabResultForm({
                 <div>Payment Mode: <strong>{paymentSummaryStr || 'Cash'}</strong></div>
               </div>
             </div>
+
+            {/* Additional Normal Values / Reference Values */}
+            {normalValues && (
+              <div style={{ background: '#f8fafc', border: '1px solid #cbd5e1', padding: '8px 12px', borderRadius: '6px', fontSize: '11px', marginBottom: '12px', whiteSpace: 'pre-line' }}>
+                <strong>Normal / Reference Values:</strong> {normalValues}
+              </div>
+            )}
 
             {/* Remarks / Clinical Notes */}
             {notes && (

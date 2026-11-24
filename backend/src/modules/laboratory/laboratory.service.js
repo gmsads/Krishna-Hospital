@@ -88,6 +88,7 @@ export const createLabOrder = async (orderData) => {
         existingOrder._id,
         {
           testName: mergedTestNameStr,
+          method: orderData.method !== undefined ? orderData.method : (existingOrder.method || ''),
           testsList: mergedTestsList,
           grossFee: grossVal,
           discount: discountVal,
@@ -110,9 +111,11 @@ export const createLabOrder = async (orderData) => {
           outTime: orderData.outTime !== undefined ? orderData.outTime : (existingOrder.outTime || ''),
           testingPersonName: orderData.testingPersonName !== undefined ? orderData.testingPersonName : (existingOrder.testingPersonName || ''),
           reportingPersonName: orderData.reportingPersonName !== undefined ? orderData.reportingPersonName : (existingOrder.reportingPersonName || ''),
+          reference: orderData.reference !== undefined ? orderData.reference : (existingOrder.reference || ''),
           branch: branchToUse || existingOrder.branch || '',
           branchCode: branchCodeToUse || existingOrder.branchCode || '',
           result: orderData.result || orderData.results?.summaryResult || existingOrder.result || '',
+          normalValues: orderData.normalValues !== undefined ? orderData.normalValues : (existingOrder.normalValues || ''),
           testRows: mergedRows,
           results: {
             testRows: mergedRows,
@@ -136,8 +139,10 @@ export const createLabOrder = async (orderData) => {
       outTime: orderData.outTime || '',
       testingPersonName: orderData.testingPersonName || '',
       reportingPersonName: orderData.reportingPersonName || '',
+      reference: orderData.reference || '',
       doctor: orderData.orderingDoctor || orderData.doctor || 'Self Created / Walk-In',
       testName: orderData.testName ? orderData.testName.trim() : (orderData.test || 'Blood Test'),
+      method: orderData.method ? orderData.method.trim() : '',
       testsList: Array.isArray(orderData.testsList) ? orderData.testsList : [],
       category: orderData.category || 'General Pathology',
       priority: orderData.priority || 'Routine',
@@ -156,6 +161,7 @@ export const createLabOrder = async (orderData) => {
       clinicalNotes: orderData.clinicalNotes || orderData.notes || '',
       notes: orderData.notes || orderData.clinicalNotes || '',
       result: orderData.result || orderData.results?.summaryResult || orderData.results?.result || '',
+      normalValues: orderData.normalValues || '',
       testRows: Array.isArray(orderData.testRows) ? orderData.testRows : (orderData.results?.testRows || []),
       results: orderData.results || {
         testRows: Array.isArray(orderData.testRows) ? orderData.testRows : [],

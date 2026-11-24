@@ -18,6 +18,7 @@ export const createLabService = async (serviceData) => {
   const newService = await LabService.create({
     serviceId: srvIdToUse,
     name: serviceData.name.trim(),
+    method: serviceData.method ? serviceData.method.trim() : '',
     category: serviceData.category || 'General Pathology',
     description: serviceData.description || 'Pathology laboratory diagnostic test',
     rate: parseFloat(serviceData.rate || '350').toFixed(2),
