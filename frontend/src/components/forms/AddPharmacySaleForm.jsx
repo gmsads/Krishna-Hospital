@@ -22,7 +22,7 @@ export function AddPharmacySaleForm({ onSave, notify, effectiveBranch = 'All', b
 
   // Phone number auto-lookup for existing customer/party name & address
   const handlePhoneChange = (e) => {
-    const val = e.target.value;
+    const val = e.target.value.replace(/\D/g, '').slice(0, 10);
     setPartyPhone(val);
 
     const cleanNum = val.replace(/\D/g, '');

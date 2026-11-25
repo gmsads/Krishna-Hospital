@@ -267,9 +267,14 @@ export function AddStaffForm({ onSave, onCancel, notify, effectiveBranch = 'Cent
             <div className="field">
               <span style={{ color: '#4a5e7a', fontSize: '12px', fontWeight: '700' }}>Phone Number *</span>
               <input
+                type="tel"
+                inputMode="numeric"
+                maxLength={10}
+                pattern="[0-9]{10}"
+                title="Enter a valid 10-digit phone number"
                 value={phone}
-                onChange={(e) => setPhone(e.target.value)}
-                placeholder="+91 98470 00000"
+                onChange={(e) => setPhone(e.target.value.replace(/\D/g, '').slice(0, 10))}
+                placeholder="10-digit phone number"
                 required
                 style={{ padding: '12px 14px', border: '1px solid #dde7f1', borderRadius: '9px', fontSize: '13px', background: '#fff' }}
               />

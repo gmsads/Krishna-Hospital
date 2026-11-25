@@ -165,9 +165,14 @@ export function RegisterPatientForm({ patientsList = initialPatients, onSave, on
           <div className="field">
             <span style={{ color: '#1769d7', fontSize: '12px', fontWeight: '700' }}>Phone Number (Type to check existing patient) *</span>
             <input
+              type="tel"
+              inputMode="numeric"
+              maxLength={10}
+              pattern="[0-9]{10}"
+              title="Enter a valid 10-digit phone number"
               value={phone}
-              onChange={(e) => handlePhoneChange(e.target.value)}
-              placeholder="+91 98470 00000"
+              onChange={(e) => handlePhoneChange(e.target.value.replace(/\D/g, '').slice(0, 10))}
+              placeholder="10-digit phone number"
               required
               style={{ padding: '12px 14px', border: '1px solid #b8d5f7', borderRadius: '9px', fontSize: '13px', background: '#f4f8fe', fontWeight: '700', color: '#1769d7' }}
             />

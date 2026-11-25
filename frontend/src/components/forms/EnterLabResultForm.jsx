@@ -159,7 +159,7 @@ export function EnterLabResultForm({
   const [opNumber, setOpNumber] = useState(initialLabNo || initialSelectedTest?.opNumber || 'LAB-0001');
   const [patientOpNumber, setPatientOpNumber] = useState(initialSelectedTest?.opNumber || '');
   const [patientName, setPatientName] = useState(initialSelectedTest?.patientName || initialSelectedTest?.patient || '');
-  const [phone, setPhone] = useState(initialSelectedTest?.phone || '');
+  const [phone, setPhone] = useState(initialSelectedTest?.phone ? String(initialSelectedTest.phone).replace(/\D/g, '').slice(-10) : '');
   const [age, setAge] = useState(initialSelectedTest?.age || '');
   const [gender, setGender] = useState(initialSelectedTest?.gender || '');
   const [selectedBranch, setSelectedBranch] = useState(
@@ -183,11 +183,13 @@ export function EnterLabResultForm({
   const [status, setStatus] = useState(initialSelectedTest?.status || 'Sample collected');
   const [autoFetchSuccess, setAutoFetchSuccess] = useState(false);
   const [isVerificationModalOpen, setIsVerificationModalOpen] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const submitLockRef = React.useRef(false);
 
   // Auto-fetch branch-scoped next Lab Record Number starting from LAB-0001 from backend
   React.useEffect(() => {
     if (!initialSelectedTest) {
-      const targetBranch = effectiveBranch === 'All' ? (branchesList[0]?.name || 'Central Campus') : effectiveBranch;
+      const targetBranch = effectiveBranch === 'All' ? (selectedBranch || branchesList[0]?.name || 'Central Campus') : effectiveBranch;
       const branchQuery = targetBranch ? `?branch=${encodeURIComponent(targetBranch)}` : '';
 
       fetch(`/api/v1/laboratory/next-labno${branchQuery}`)
@@ -199,7 +201,7 @@ export function EnterLabResultForm({
         })
         .catch((err) => console.warn('Could not fetch next labno from backend:', err.message));
     }
-  }, [effectiveBranch, branchesList, initialSelectedTest]);
+  }, [effectiveBranch, selectedBranch, branchesList, initialSelectedTest]);
 
   // Fetch doctors dynamically from database for assigned branch
   React.useEffect(() => {
@@ -742,7 +744,7 @@ export function EnterLabResultForm({
     if (matchedTest) {
       setSelectedTestId(matchedTest._id || matchedTest.id || matchedTest.labOrderNo || '');
       if (matchedTest.patientName || matchedTest.patient) setPatientName(matchedTest.patientName || matchedTest.patient);
-      if (matchedTest.phone || found?.phone || found?.mobile) setPhone(matchedTest.phone || found?.phone || found?.mobile);
+      if (matchedTest.phone || found?.phone || found?.mobile) setPhone(String(matchedTest.phone || found?.phone || found?.mobile).replace(/\D/g, '').slice(-10));
       if (matchedTest.doctor && matchedTest.doctor !== 'Self Created / Walk-In') setDoctor(matchedTest.doctor);
       if (matchedTest.opNumber) setPatientOpNumber(matchedTest.opNumber);
       if (matchedTest.normalValues !== undefined) setNormalValues(matchedTest.normalValues || '');
@@ -798,10 +800,17 @@ export function EnterLabResultForm({
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+    if (submitLockRef.current) return;
     if (!opNumber.trim() || !patientName.trim() || !testName.trim()) {
       notify && notify('Please fill in Lab record number, patient name, and main test name.');
       return;
     }
+    if (String(phone || '').replace(/\D/g, '').length !== 10) {
+      notify && notify('Please enter a valid 10-digit phone number.');
+      return;
+    }
+    submitLockRef.current = true;
+    setIsSubmitting(true);
 
     const feeNum = netPayableNum;
     const isFree = !!selectedMethods['Free'];
@@ -976,7 +985,7 @@ export function EnterLabResultForm({
         const savedRecord = {
           ...payload,
           ...data.data,
-          id: payload.originalId || data.data.labOrderNo || data.data._id || payload.id,
+          id: isExisting ? (payload.originalId || data.data.labOrderNo || data.data._id || payload.id) : (data.data.labOrderNo || data.data._id || payload.id),
           originalId: payload.originalId,
           originalLabOrderNo: payload.originalLabOrderNo,
           labOrderNo: data.data.labOrderNo || payload.labOrderNo,
@@ -1003,6 +1012,9 @@ export function EnterLabResultForm({
       }
     } catch (err) {
       console.warn('Backend Lab Result direct DB save fallback:', err.message);
+    } finally {
+      submitLockRef.current = false;
+      setIsSubmitting(false);
     }
 
     onSave(payload);
@@ -1075,9 +1087,14 @@ export function EnterLabResultForm({
             <div className="field">
               <span style={{ color: '#4a5e7a', fontSize: '11px', fontWeight: '700' }}>Phone Number *</span>
               <input
+                type="tel"
+                inputMode="numeric"
+                maxLength={10}
+                pattern="[0-9]{10}"
+                title="Enter a valid 10-digit phone number"
                 value={phone}
-                onChange={(e) => setPhone(e.target.value)}
-                placeholder="+91 98470 00000"
+                onChange={(e) => setPhone(e.target.value.replace(/\D/g, '').slice(0, 10))}
+                placeholder="10-digit phone number"
                 required
                 style={{ padding: '9px 10px', border: '1px solid #dde7f1', borderRadius: '7px', background: '#fff', fontSize: '12px', width: '100%', boxSizing: 'border-box' }}
               />
@@ -1872,8 +1889,8 @@ export function EnterLabResultForm({
             >
               <Eye size={17} /> Preview &amp; Verify Results ({currentTestsList.length} Tests)
             </button>
-            <button type="submit" className="primary-button" style={{ padding: '12px 28px', flex: '1 1 auto', justifyContent: 'center' }}>
-              <Save size={17} /> Save Lab Result
+            <button type="submit" disabled={isSubmitting} className="primary-button" style={{ padding: '12px 28px', flex: '1 1 auto', justifyContent: 'center', opacity: isSubmitting ? 0.65 : 1, cursor: isSubmitting ? 'not-allowed' : 'pointer' }}>
+              <Save size={17} /> {isSubmitting ? 'Saving...' : 'Save Lab Result'}
             </button>
             <button type="button" className="secondary-button" onClick={onCancel} style={{ padding: '12px 20px', flex: '1 1 auto', justifyContent: 'center' }}>
               Cancel
@@ -2040,14 +2057,15 @@ export function EnterLabResultForm({
               </button>
               <button
                 type="button"
+                disabled={isSubmitting}
                 className="primary-button"
                 onClick={(e) => {
                   setIsVerificationModalOpen(false);
                   handleSubmit(e);
                 }}
-                style={{ padding: '8px 22px', background: '#15803d', borderColor: '#15803d', fontWeight: '800' }}
+                style={{ padding: '8px 22px', background: '#15803d', borderColor: '#15803d', fontWeight: '800', opacity: isSubmitting ? 0.65 : 1, cursor: isSubmitting ? 'not-allowed' : 'pointer' }}
               >
-                <Save size={15} /> Confirm &amp; Save All Results
+                <Save size={15} /> {isSubmitting ? 'Saving...' : 'Confirm & Save All Results'}
               </button>
             </div>
           </div>

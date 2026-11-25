@@ -1,9 +1,16 @@
 import mongoose from 'mongoose';
 import { Laboratory } from './laboratory.model.js';
 
+const buildBranchQuery = (branch) => {
+  if (!branch || branch === 'All') return {};
+  const escaped = branch.trim().replace(/[-\/\\^$*+?.()|[\]{}]/g, '\\$&');
+  return { branch: new RegExp(`^${escaped}$`, 'i') };
+};
+
 export const generateNextLabNo = async (branch) => {
-  const allOrders = await Laboratory.find({}, { labOrderNo: 1 }).lean();
-  let maxNum = allOrders.length;
+  const branchQuery = buildBranchQuery(branch);
+  const allOrders = await Laboratory.find(branchQuery, { labOrderNo: 1 }).lean();
+  let maxNum = 0;
   allOrders.forEach((o) => {
     const match = String(o.labOrderNo || '').match(/LAB-(\d+)/i);
     if (match) {
@@ -11,10 +18,22 @@ export const generateNextLabNo = async (branch) => {
       if (!isNaN(n) && n > maxNum) maxNum = n;
     }
   });
-  return `LAB-${String(maxNum + 1).padStart(4, '0')}`;
+  let candidate = `LAB-${String(maxNum + 1).padStart(4, '0')}`;
+  while (await Laboratory.exists({ ...branchQuery, labOrderNo: new RegExp(`^${candidate}$`, 'i') })) {
+    maxNum += 1;
+    candidate = `LAB-${String(maxNum + 1).padStart(4, '0')}`;
+  }
+  return candidate;
 };
 
-export const createLabOrder = async (orderData) => {
+let labCreateQueue = Promise.resolve();
+const runLabSerialized = (fn) => {
+  const next = labCreateQueue.then(fn, fn);
+  labCreateQueue = next.catch(() => {});
+  return next;
+};
+
+export const createLabOrder = async (orderData) => runLabSerialized(async () => {
   const branchToUse = orderData.branch || '';
   const branchCodeToUse = orderData.branchCode || (branchToUse ? branchToUse.toUpperCase().replace(/\s+/g, '-').slice(0, 10) : '');
 
@@ -37,10 +56,17 @@ export const createLabOrder = async (orderData) => {
     }
   }
 
-  let labOrderNoToUse = existingOrder?.labOrderNo || orderData.labOrderNo || orderData.id || orderData.testId;
+  let labOrderNoToUse = (existingOrder?.labOrderNo || orderData.labOrderNo || orderData.id || orderData.testId || '').trim();
 
   if (!labOrderNoToUse || labOrderNoToUse.length < 3) {
     labOrderNoToUse = await generateNextLabNo(branchToUse);
+  } else if (!existingOrder) {
+    const branchQuery = buildBranchQuery(branchToUse);
+    const escapedLab = labOrderNoToUse.replace(/[-\/\\^$*+?.()|[\]{}]/g, '\\$&');
+    const duplicateLabExists = await Laboratory.exists({ ...branchQuery, labOrderNo: new RegExp(`^${escapedLab}$`, 'i') });
+    if (duplicateLabExists) {
+      labOrderNoToUse = await generateNextLabNo(branchToUse);
+    }
   }
 
     const grossVal = parseFloat(String(orderData.grossFee || orderData.testFee || orderData.amount || '1200').replace(/[^0-9.]/g, '')) || 1200;
@@ -175,7 +201,7 @@ export const createLabOrder = async (orderData) => {
     });
 
   return newOrder;
-};
+});
 
 export const getAllLabOrders = async (branchFilter = null) => {
   const query = {};

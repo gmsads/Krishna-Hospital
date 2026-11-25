@@ -316,10 +316,14 @@ export function EditOPRecordModal({ record, onClose, onSave, onNotify }) {
                   </span>
                   <input
                     type="tel"
+                    inputMode="numeric"
+                    maxLength={10}
+                    pattern="[0-9]{10}"
+                    title="Enter a valid 10-digit phone number"
                     value={phone}
-                    onChange={(e) => setPhone(e.target.value)}
+                    onChange={(e) => setPhone(e.target.value.replace(/\D/g, '').slice(0, 10))}
                     required
-                    placeholder="+91 9876543210"
+                    placeholder="10-digit phone number"
                     style={{ padding: '8px 10px', fontSize: '12px', border: '1px solid #cbd5e1', borderRadius: '6px', width: '100%', boxSizing: 'border-box' }}
                   />
                 </div>

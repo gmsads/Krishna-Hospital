@@ -643,8 +643,14 @@ export function SettingsPage({ profile, currentBranding, onSaveBranding, onNotif
             <label className="field">
               <span style={{ color: '#4a5e7a', fontSize: '11px', fontWeight: '700' }}>Phone Number</span>
               <input
+                type="tel"
+                inputMode="numeric"
+                maxLength={10}
+                pattern="[0-9]{10}"
+                title="Enter a valid 10-digit phone number"
                 value={phone}
-                onChange={(e) => setPhone(e.target.value)}
+                onChange={(e) => setPhone(e.target.value.replace(/\D/g, '').slice(0, 10))}
+                placeholder="10-digit phone number"
                 style={{ padding: '10px 12px', border: '1px solid #dfe7f0', borderRadius: '7px', fontSize: '13px' }}
               />
             </label>

@@ -47,6 +47,8 @@ export function CreateOPRecordForm({
   const [dob, setDob] = useState('');
   const [address, setAddress] = useState('');
   const [phone, setPhone] = useState('');
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const submitLockRef = React.useRef(false);
   const [availableDoctors, setAvailableDoctors] = useState(doctorsList || []);
 
   // Sync availableDoctors whenever doctorsList prop changes
@@ -382,7 +384,7 @@ export function CreateOPRecordForm({
     if (found) {
       const name = found.name || found.patient || found.patientName || '';
       if (name) setPatientName(name);
-      if (type !== 'phone' && found.phone) setPhone(found.phone);
+      if (type !== 'phone' && found.phone) setPhone(String(found.phone).replace(/\D/g, '').slice(-10));
       if (found.gender) setGender(found.gender);
       if (found.age) {
         const ageStr = String(found.age);
@@ -410,8 +412,9 @@ export function CreateOPRecordForm({
   };
 
   const handlePhoneInputChange = (val) => {
-    setPhone(val);
-    handleAutoFetchCheck(val, 'phone');
+    const cleanPhone = String(val || '').replace(/\D/g, '').slice(0, 10);
+    setPhone(cleanPhone);
+    handleAutoFetchCheck(cleanPhone, 'phone');
   };
 
   const handlePatientSelect = (name) => {
@@ -421,10 +424,17 @@ export function CreateOPRecordForm({
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+    if (submitLockRef.current) return;
     if (!patientName.trim()) {
       notify && notify('Please enter patient name');
       return;
     }
+    if (String(phone || '').replace(/\D/g, '').length !== 10) {
+      notify && notify('Please enter a valid 10-digit mobile number');
+      return;
+    }
+    submitLockRef.current = true;
+    setIsSubmitting(true);
 
     let finalRecordType = recordType;
     if (recordType === 'IP') {
@@ -559,6 +569,9 @@ export function CreateOPRecordForm({
       }
     } catch (err) {
       console.warn('Backend OP Record registration offline fallback:', err.message);
+    } finally {
+      submitLockRef.current = false;
+      setIsSubmitting(false);
     }
 
     onSave(savedObj);
@@ -756,9 +769,14 @@ export function CreateOPRecordForm({
               <div className="field">
                 <span style={{ color: '#1769d7', fontSize: '10px', fontWeight: '700' }}>Mobile / Phone No (Auto-fetch) *</span>
                 <input
+                  type="tel"
+                  inputMode="numeric"
+                  maxLength={10}
+                  pattern="[0-9]{10}"
+                  title="Enter a valid 10-digit mobile number"
                   value={phone}
                   onChange={(e) => handlePhoneInputChange(e.target.value)}
-                  placeholder="e.g. +91 98765 43210"
+                  placeholder="10-digit mobile number"
                   required
                   style={{ padding: '8px 10px', border: '1px solid #b8d5f7', borderRadius: '6px', background: '#f4f8fe', fontWeight: '700', color: '#1769d7', fontSize: '12px', width: '100%', boxSizing: 'border-box' }}
                 />
@@ -1163,8 +1181,8 @@ export function CreateOPRecordForm({
             <button type="button" className="secondary-button" onClick={onCancel} style={{ padding: '8px 14px', fontSize: '12px' }}>
               Cancel
             </button>
-            <button type="submit" className="primary-button" style={{ gap: '6px', padding: '8px 16px', fontSize: '12px' }}>
-              <Plus size={15} /> Save OP Record
+            <button type="submit" disabled={isSubmitting} className="primary-button" style={{ gap: '6px', padding: '8px 16px', fontSize: '12px', opacity: isSubmitting ? 0.65 : 1, cursor: isSubmitting ? 'not-allowed' : 'pointer' }}>
+              <Plus size={15} /> {isSubmitting ? 'Saving...' : 'Save OP Record'}
             </button>
           </div>
         </section>

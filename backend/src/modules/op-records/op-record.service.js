@@ -1,19 +1,52 @@
 import { OPRecord } from './op-record.model.js';
 
-export const generateNextRegNo = async (branch) => {
-  const query = branch && branch !== 'All' ? { branch: new RegExp(`^${branch.trim()}$`, 'i') } : {};
-  const count = await OPRecord.countDocuments(query);
-  return `Reg-2026-${String(count + 1).padStart(4, '0')}`;
+const buildBranchQuery = (branch) => {
+  if (!branch || branch === 'All') return {};
+  const escaped = branch.trim().replace(/[-\/\\^$*+?.()|[\]{}]/g, '\\$&');
+  return { branch: new RegExp(`^${escaped}$`, 'i') };
 };
 
-export const createOPRecord = async (recordData) => {
+export const generateNextRegNo = async (branch) => {
+  const branchQuery = buildBranchQuery(branch);
+  const allRecords = await OPRecord.find(branchQuery, { regNo: 1 }).lean();
+  let maxNum = 0;
+  allRecords.forEach((r) => {
+    const match = String(r.regNo || '').match(/(\d+)$/);
+    if (match) {
+      const n = parseInt(match[1], 10);
+      if (!isNaN(n) && n > maxNum) maxNum = n;
+    }
+  });
+  let candidate = `Reg-2026-${String(maxNum + 1).padStart(4, '0')}`;
+  while (await OPRecord.exists({ ...branchQuery, regNo: new RegExp(`^${candidate}$`, 'i') })) {
+    maxNum += 1;
+    candidate = `Reg-2026-${String(maxNum + 1).padStart(4, '0')}`;
+  }
+  return candidate;
+};
+
+let opCreateQueue = Promise.resolve();
+const runOpSerialized = (fn) => {
+  const next = opCreateQueue.then(fn, fn);
+  opCreateQueue = next.catch(() => {});
+  return next;
+};
+
+export const createOPRecord = async (recordData) => runOpSerialized(async () => {
   const branchToUse = recordData.branch || '';
   const branchCodeToUse = recordData.branchCode || (branchToUse ? branchToUse.toUpperCase().replace(/\s+/g, '-').slice(0, 10) : '');
+  const branchQuery = buildBranchQuery(branchToUse);
 
-  let regNoToUse = recordData.regNo || recordData.opNumber || recordData.id;
+  let regNoToUse = (recordData.regNo || recordData.opNumber || recordData.id || '').trim();
 
   if (!regNoToUse || regNoToUse.length < 5 || regNoToUse.includes('OPD-')) {
     regNoToUse = await generateNextRegNo(branchToUse);
+  } else {
+    const escapedReg = regNoToUse.replace(/[-\/\\^$*+?.()|[\]{}]/g, '\\$&');
+    const duplicateExists = await OPRecord.exists({ ...branchQuery, regNo: new RegExp(`^${escapedReg}$`, 'i') });
+    if (duplicateExists) {
+      regNoToUse = await generateNextRegNo(branchToUse);
+    }
   }
   const grossChargesVal = parseFloat(String(recordData.grossCharges || recordData.charges || '200').replace(/[^0-9.]/g, '')) || 200;
   const rawDiscVal = parseFloat(String(recordData.discount || '0').replace(/[^0-9.]/g, '')) || 0;
@@ -76,7 +109,7 @@ export const createOPRecord = async (recordData) => {
   });
 
   return newRecord;
-};
+});
 
 export const getAllOPRecords = async (branchFilter = null) => {
   const query = {};

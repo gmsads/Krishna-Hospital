@@ -1665,7 +1665,11 @@ export function PharmacyDashboard({
                   type="tel"
                   placeholder="+91 98470 00000"
                   value={creditFormData.partyPhone}
-                  onChange={(e) => handleCreditPhoneChange(e.target.value)}
+                  onChange={(e) => handleCreditPhoneChange(e.target.value.replace(/\D/g, '').slice(0, 10))}
+                  inputMode="numeric"
+                  maxLength={10}
+                  pattern="[0-9]{10}"
+                  title="Enter a valid 10-digit phone number"
                   style={{ padding: '10px 12px', border: '1px solid #cbd5e1', borderRadius: '7px', fontSize: '13px' }}
                 />
               </div>

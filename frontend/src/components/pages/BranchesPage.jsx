@@ -410,9 +410,14 @@ export function BranchesPage({
                 <div className="field">
                   <span style={{ fontSize: '11px', fontWeight: '700', color: '#4a5e7a' }}>Branch Phone</span>
                   <input
+                    type="tel"
+                    inputMode="numeric"
+                    maxLength={10}
+                    pattern="[0-9]{10}"
+                    title="Enter a valid 10-digit phone number"
                     value={phone}
-                    onChange={(e) => setPhone(e.target.value)}
-                    placeholder="+91 98470 00000"
+                    onChange={(e) => setPhone(e.target.value.replace(/\D/g, '').slice(0, 10))}
+                    placeholder="10-digit phone number"
                     style={{ padding: '10px 12px', border: '1px solid #dde7f1', borderRadius: '7px' }}
                   />
                 </div>
