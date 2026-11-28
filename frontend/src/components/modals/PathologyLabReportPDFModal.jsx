@@ -226,8 +226,74 @@ export function PathologyLabReportPDFModal({ test, branding, onClose, onNotify }
     <div className="modal-overlay print-overlay lab-report-no-scroll" style={{ position: 'fixed', inset: 0, zIndex: 120, background: 'rgba(15, 45, 85, 0.55)', display: 'grid', placeItems: 'center', padding: '16px', overflowY: 'auto', scrollbarWidth: 'none', msOverflowStyle: 'none' }}>
       <style>{`
         .lab-report-no-scroll::-webkit-scrollbar { display: none; }
+        @page {
+          size: A5 portrait;
+          margin: 0;
+        }
         @media print {
-          .lab-report-no-scroll { overflow: visible !important; max-height: none !important; height: auto !important; }
+          html, body, #root, .app-shell, .main-area, .content-wrap {
+            width: 148mm !important;
+            height: auto !important;
+            min-height: 0 !important;
+            max-height: none !important;
+            margin: 0 !important;
+            padding: 0 !important;
+            overflow: visible !important;
+            background: transparent !important;
+          }
+          .sidebar, .topbar, .page-heading, .panel, .stat-grid, .dashboard-grid, .lower-grid, .summary-strip, .role-tabs {
+            display: none !important;
+          }
+          .lab-report-no-scroll {
+            position: static !important;
+            overflow: visible !important;
+            max-height: none !important;
+            height: auto !important;
+            width: 100% !important;
+            padding: 0 !important;
+            margin: 0 !important;
+            background: transparent !important;
+          }
+          .lab-a5-print {
+            width: 148mm !important;
+            max-width: 148mm !important;
+            box-sizing: border-box !important;
+            padding: ${viewMode === 'results' ? '54mm 8mm 18mm 8mm' : '8mm 8mm 10mm 8mm'} !important;
+            margin: 0 !important;
+            background: transparent !important;
+            font-size: 9.5px !important;
+            line-height: 1.3 !important;
+          }
+          .lab-a5-print h1 {
+            font-size: 14px !important;
+          }
+          .lab-a5-print table {
+            width: 100% !important;
+            min-width: 0 !important;
+            font-size: 9px !important;
+            margin-bottom: 6px !important;
+          }
+          .lab-a5-print th,
+          .lab-a5-print td {
+            padding: 4px 5px !important;
+            font-size: 9px !important;
+          }
+          .lab-a5-print .lab-a5-demo {
+            padding: 6px 8px !important;
+            margin-bottom: 8px !important;
+            gap: 4px 8px !important;
+            font-size: 9.5px !important;
+          }
+          .lab-a5-print .lab-a5-banner {
+            padding: 4px 8px !important;
+            font-size: 9.5px !important;
+            margin-bottom: 5px !important;
+          }
+          .lab-a5-print .lab-a5-footer {
+            margin-top: 10px !important;
+            padding-top: 8px !important;
+            font-size: 8.5px !important;
+          }
         }
       `}</style>
       <div className="modal print-modal lab-report-no-scroll" style={{ background: '#fff', borderRadius: '12px', padding: '28px', maxWidth: '720px', width: '100%', maxHeight: '92vh', overflowY: 'auto', scrollbarWidth: 'none', msOverflowStyle: 'none', boxShadow: '0 20px 40px rgba(16, 45, 85, 0.2)', border: '1px solid #cbd5e1', position: 'relative' }}>
@@ -288,7 +354,7 @@ export function PathologyLabReportPDFModal({ test, branding, onClose, onNotify }
         </div>
 
         {/* EXACT SPECIFIED CLEAN PDF REPORT BODY WITH DYNAMIC LOGO, WATERMARK & SIGNATURE */}
-        <div className="pdf-paper" style={{ background: '#ffffff', color: '#0f172a', fontFamily: 'Arial, sans-serif', padding: '10px', position: 'relative' }}>
+        <div className="pdf-paper lab-a5-print" style={{ background: '#ffffff', color: '#0f172a', fontFamily: 'Arial, sans-serif', padding: '10px', position: 'relative' }}>
           
           {/* Faint Background Watermark Overlay (Billing View Only - Excluded on Pre-Printed Letterhead Results) */}
           {viewMode === 'billing' && branding?.watermark && (
@@ -338,7 +404,7 @@ export function PathologyLabReportPDFModal({ test, branding, onClose, onNotify }
             )}
 
             {/* Demographics */}
-            <div style={{ border: '1px solid #cbd5e1', borderRadius: '6px', padding: '12px', marginBottom: '16px', display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px', fontSize: '12px' }}>
+            <div className="lab-a5-demo" style={{ border: '1px solid #cbd5e1', borderRadius: '6px', padding: '12px', marginBottom: '16px', display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px', fontSize: '12px' }}>
               <div>
                 <div>Report ID: <strong>{test.id || 'LAB-400'}</strong></div>
                 <div>Patient Name: <strong style={{ color: '#0f2d55' }}>{test.patient || 'Patient'}</strong></div>
@@ -360,7 +426,7 @@ export function PathologyLabReportPDFModal({ test, branding, onClose, onNotify }
             {viewMode === 'results' && reportTestGroups.map((group, gIdx) => (
               <div key={gIdx} style={{ marginBottom: '18px' }}>
                 {/* Test Name & Method Header Banner */}
-                <div style={{ background: '#f1f5f9', border: '1px solid #cbd5e1', borderLeft: '4px solid #0f2d55', padding: '7px 12px', borderRadius: '4px', fontSize: '12px', fontWeight: '800', marginBottom: '8px', display: 'flex', justifyContent: 'space-between', color: '#0f2d55' }}>
+                <div className="lab-a5-banner" style={{ background: '#f1f5f9', border: '1px solid #cbd5e1', borderLeft: '4px solid #0f2d55', padding: '7px 12px', borderRadius: '4px', fontSize: '12px', fontWeight: '800', marginBottom: '8px', display: 'flex', justifyContent: 'space-between', color: '#0f2d55' }}>
                   <span>{reportTestGroups.length > 1 ? `${gIdx + 1}. ` : ''}TEST: {group.testName.toUpperCase()}</span>
                   <span style={{ fontSize: '11px', color: '#475569', fontWeight: '700' }}>METHOD: {(group.method || test.method || 'AUTOMATED ANALYZER').toUpperCase()}</span>
                 </div>
@@ -533,7 +599,7 @@ export function PathologyLabReportPDFModal({ test, branding, onClose, onNotify }
             )}
 
             {/* Signatures & Dynamic Authorized Signature Image */}
-            <div style={{ borderTop: '1px solid #cbd5e1', paddingTop: '16px', display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', fontSize: '11px' }}>
+            <div className="lab-a5-footer" style={{ borderTop: '1px solid #cbd5e1', paddingTop: '16px', display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', fontSize: '11px' }}>
               <div>
                 {branding?.signature && (
                   <img src={branding.signature} alt="Digital Signature" style={{ height: '36px', width: 'auto', objectFit: 'contain', marginBottom: '4px' }} />

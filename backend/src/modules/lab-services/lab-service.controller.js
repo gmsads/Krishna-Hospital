@@ -13,6 +13,20 @@ export const create = asyncHandler(async (req, res) => {
   return ApiResponse.success(res, newService, 'Lab service added successfully', 201);
 });
 
+export const bulkCreate = asyncHandler(async (req, res) => {
+  const { items, branch, branchCode } = req.body || {};
+  if (!Array.isArray(items) || items.length === 0) {
+    return ApiResponse.error(res, 'No lab test rows provided for bulk upload', 400);
+  }
+  const result = await labServiceService.bulkCreateLabServices(items, branch, branchCode);
+  return ApiResponse.success(
+    res,
+    result,
+    `Uploaded ${result.inserted.length} lab test(s) successfully${result.skippedCount > 0 ? ` (${result.skippedCount} duplicate/invalid skipped)` : ''}`,
+    201
+  );
+});
+
 export const getNextServiceId = asyncHandler(async (req, res) => {
   const nextId = await labServiceService.generateNextServiceId();
   return ApiResponse.success(res, { nextServiceId: nextId }, 'Next Service ID generated successfully', 200);

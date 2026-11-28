@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
-import { FlaskConical, Plus, Trash2, Edit3, CheckCircle2, X, Layers } from 'lucide-react';
+import { FlaskConical, Plus, Trash2, Edit3, CheckCircle2, X, Layers, Upload } from 'lucide-react';
+import * as XLSX from 'xlsx';
 import { initialMasterLabServices } from '../data/initialData';
 
 export function LabServicesPage({
@@ -17,6 +18,8 @@ export function LabServicesPage({
   const [description, setDescription] = useState('');
   const [rate, setRate] = useState('');
   const [subCategories, setSubCategories] = useState([]); // Array of { name: '', normalRange: '' }
+  const [uploadingExcel, setUploadingExcel] = useState(false);
+  const excelInputRef = React.useRef(null);
 
   // Sync serviceList with masterServices prop
   React.useEffect(() => {
@@ -174,6 +177,124 @@ export function LabServicesPage({
     notify && notify(`✓ Lab Service "${updated.name}" updated successfully!`);
   };
 
+  const handleExcelUpload = async (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    e.target.value = '';
+
+    setUploadingExcel(true);
+    try {
+      const buffer = await file.arrayBuffer();
+      const workbook = XLSX.read(buffer, { type: 'array' });
+      const firstSheetName = workbook.SheetNames[0];
+      if (!firstSheetName) {
+        notify && notify('Excel file has no sheets.');
+        return;
+      }
+
+      const sheet = workbook.Sheets[firstSheetName];
+      const rows = XLSX.utils.sheet_to_json(sheet, { header: 1, defval: '' });
+
+      let headerRowIdx = -1;
+      let nameIdx = 1;
+      let codeIdx = 2;
+      let rateIdx = 3;
+      let methodIdx = -1;
+
+      for (let i = 0; i < Math.min(rows.length, 25); i++) {
+        const row = rows[i] || [];
+        const normalized = row.map((c) => String(c ?? '').trim().toLowerCase());
+        const foundName = normalized.findIndex((c) =>
+          c.includes('investigation name') || c.includes('test name') || c === 'name' || c === 'investigation'
+        );
+        if (foundName !== -1) {
+          headerRowIdx = i;
+          nameIdx = foundName;
+          const foundCode = normalized.findIndex((c) => c === 'code' || c.includes('test code'));
+          const foundRate = normalized.findIndex((c) =>
+            c.includes('charge') || c.includes('amt') || c.includes('amount') || c.includes('rate') || c.includes('price') || c.includes('fee')
+          );
+          const foundMethod = normalized.findIndex((c) => c.includes('method'));
+          codeIdx = foundCode !== -1 ? foundCode : (foundName + 1);
+          rateIdx = foundRate !== -1 ? foundRate : (foundName + 2);
+          methodIdx = foundMethod;
+          break;
+        }
+      }
+
+      const startIdx = headerRowIdx !== -1 ? headerRowIdx + 1 : 0;
+      const parsedItems = [];
+
+      for (let i = startIdx; i < rows.length; i++) {
+        const row = rows[i] || [];
+        const rowJoined = row.map((c) => String(c ?? '').trim()).join(' ');
+        if (!rowJoined || /page\s+\d+\s+of\s+\d+/i.test(rowJoined)) continue;
+
+        const rawName = String(row[nameIdx] ?? '').trim();
+        if (!rawName) continue;
+        if (/^(investigation\s*name|test\s*name|sl\.?\s*no|name)$/i.test(rawName)) continue;
+
+        const rawCode = codeIdx >= 0 ? String(row[codeIdx] ?? '').trim() : '';
+        const rawRate = rateIdx >= 0 ? String(row[rateIdx] ?? '0').trim() : '0';
+        const rawMethod = methodIdx >= 0 ? String(row[methodIdx] ?? '').trim() : '';
+        const numRate = parseFloat(rawRate.replace(/[^0-9.]/g, ''));
+        const rateStr = isNaN(numRate) ? '0.00' : numRate.toFixed(2);
+
+        parsedItems.push({
+          name: rawName,
+          code: rawCode,
+          method: rawMethod,
+          rate: rateStr,
+          description: rawCode ? `Code: ${rawCode}` : 'Pathology laboratory diagnostic test',
+        });
+      }
+
+      if (parsedItems.length === 0) {
+        notify && notify('No valid lab test rows found in the uploaded file.');
+        return;
+      }
+
+      const defaultBranchName = effectiveBranch === 'All'
+        ? (branchesList[0]?.name || 'Central Campus')
+        : effectiveBranch;
+      const matchingBranchObj = branchesList.find((b) => b.name === defaultBranchName);
+      const assignedCode = matchingBranchObj?.code || 'HQ-CENTRAL';
+
+      const token = localStorage.getItem('kh_auth_token');
+      const res = await fetch('/api/v1/lab-services/bulk', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
+        body: JSON.stringify({
+          items: parsedItems,
+          branch: defaultBranchName,
+          branchCode: assignedCode,
+        }),
+      });
+
+      const data = await res.json();
+      if (res.ok && data.success && data.data) {
+        const insertedList = Array.isArray(data.data.inserted) ? data.data.inserted : [];
+        const skipped = data.data.skippedCount || 0;
+        if (onSaveService) {
+          insertedList.forEach((srv) => {
+            onSaveService({ ...srv, id: srv.serviceId || srv.id || srv._id });
+          });
+        }
+        notify && notify(`✓ Uploaded ${insertedList.length} lab test(s) from Excel${skipped > 0 ? ` (${skipped} duplicates skipped)` : ''}!`);
+      } else {
+        notify && notify(data.message || 'Failed to upload lab tests from Excel.');
+      }
+    } catch (err) {
+      console.error('Excel upload error:', err);
+      notify && notify('Could not read Excel/CSV file. Please upload a valid .xlsx, .xls, or .csv file.');
+    } finally {
+      setUploadingExcel(false);
+    }
+  };
+
   return (
     <>
       <div className="page-heading">
@@ -181,6 +302,25 @@ export function LabServicesPage({
           <div className="eyebrow">Admin Master Catalogue</div>
           <h1>Lab Service Categories</h1>
           <p>Define hospital lab test categories, descriptions, charges, and optional sub-categories (e.g. Thyroid T1, T2, T3, T4, TSH).</p>
+        </div>
+        <div className="heading-actions">
+          <input
+            ref={excelInputRef}
+            type="file"
+            accept=".xlsx,.xls,.csv"
+            onChange={handleExcelUpload}
+            style={{ display: 'none' }}
+          />
+          <button
+            type="button"
+            className="primary-button"
+            disabled={uploadingExcel}
+            onClick={() => excelInputRef.current && excelInputRef.current.click()}
+            style={{ gap: '6px', background: '#15803d', borderColor: '#15803d', opacity: uploadingExcel ? 0.7 : 1 }}
+            title="Upload Lab Test Names & Charges from Excel (.xlsx, .xls) or CSV (.csv)"
+          >
+            <Upload size={16} /> {uploadingExcel ? 'Uploading Excel...' : 'Upload Excel / CSV'}
+          </button>
         </div>
       </div>
 
